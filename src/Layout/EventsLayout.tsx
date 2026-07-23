@@ -1,6 +1,6 @@
 import { Suspense, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass } from 'lucide-react';
 
 // TODO: replace with your real logo import, same as CatalogueLayout
 // import sellarLogo from '../assets/sellar-logo-heading.png';
@@ -8,6 +8,7 @@ import { LayoutDashboard, PlusCircle, Users, UserCircle } from 'lucide-react';
 const NAV_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={18} /> },
+  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} /> },
   { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} /> },
   { to: '/events/account', label: 'Account', icon: <UserCircle size={18} /> },
 ];

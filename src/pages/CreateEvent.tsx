@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import FormField, { TextInput, TextArea, SelectInput } from '../components/ui/FormField';
+import FormField from '../components/ui/FormField';
+import {
+  FloatingLabelInput,
+  FloatingLabelSelect,
+  FloatingLabelTextArea,
+} from '../components/ui/AuthUIComponents'
 import ImageUploadBox from '../components/ui/ImageUploadBox';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
@@ -114,44 +119,36 @@ const CreateEvent: React.FC = () => {
               <CardTitle className="text-base font-semibold text-gray-900">Event details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <FormField
-                label="Cover image"
-                htmlFor="cover-image"
-                hint={isCompressingImage ? 'Compressing image…' : undefined}
-              >
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">Cover image</p>
                 <ImageUploadBox
                   preview={form.coverImagePreview}
                   onChange={handleCoverImageChange}
                 />
-              </FormField>
+                {isCompressingImage && (
+                  <p className="text-xs text-gray-500 mt-1">Compressing image…</p>
+                )}
+              </div>
 
-              <FormField label="Event title" htmlFor="title">
-                <TextInput
-                  id="title"
-                  placeholder="e.g. Open Mic Comedy Night"
-                  value={form.title}
-                  onChange={(e) => update('title', e.target.value)}
-                />
-              </FormField>
+              <FloatingLabelInput
+                id="title"
+                label="Event title"
+                value={form.title}
+                onChange={(e) => update('title', e.target.value)}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Category" htmlFor="category">
-                  <SelectInput
-                    id="category"
-                    value={form.category}
-                    onChange={(e) => {
-                      const value = e.target.value as EventFormState['category'];
-                      update('category', value);
-                      if (value !== 'Other') update('customCategory', '');
-                    }}
-                  >
-                    {EVENT_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </SelectInput>
-                </FormField>
+                <FloatingLabelSelect
+                  id="category"
+                  label="Category"
+                  value={form.category}
+                  options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  onChange={(e) => {
+                    const value = e.target.value as EventFormState['category'];
+                    update('category', value);
+                    if (value !== 'Other') update('customCategory', '');
+                  }}
+                />
 
                 <FormField label="Format" htmlFor="format">
                   <div className="flex rounded-md border border-gray-300 p-1 bg-white">
@@ -178,65 +175,67 @@ const CreateEvent: React.FC = () => {
               </div>
 
               {isOtherCategory && (
-                <FormField label="Custom category" htmlFor="custom-category" hint="Tell us what kind of event this is">
-                  <TextInput
+                <div>
+                  <FloatingLabelInput
                     id="custom-category"
-                    placeholder="e.g. Poetry Slam"
+                    label="Custom category"
                     value={form.customCategory}
                     onChange={(e) => update('customCategory', e.target.value)}
                   />
-                </FormField>
+                  <p className="text-xs text-gray-500 mt-1">Tell us what kind of event this is</p>
+                </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Start date" htmlFor="date">
-                  <TextInput
-                    id="date"
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      update('date', value);
-                      // keep end date valid if it's now before the new start date
-                      if (form.endDate && form.endDate < value) update('endDate', value);
-                    }}
-                  />
-                </FormField>
-                <FormField label="End date" htmlFor="end-date">
-                  <TextInput
-                    id="end-date"
-                    type="date"
-                    min={form.date || undefined}
-                    value={form.endDate}
-                    onChange={(e) => update('endDate', e.target.value)}
-                  />
-                </FormField>
+              <div className="grid grid-cols-2 gap-3">
+                <FloatingLabelInput
+                  id="date"
+                  label="Start date"
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    update('date', value);
+                    // keep end date valid if it's now before the new start date
+                    if (form.endDate && form.endDate < value) update('endDate', value);
+                  }}
+                />
+                <FloatingLabelInput
+                  id="end-date"
+                  label="End date"
+                  type="date"
+                  min={form.date || undefined}
+                  value={form.endDate}
+                  onChange={(e) => update('endDate', e.target.value)}
+                />
               </div>
 
-              <FormField label="Time" htmlFor="time">
-                <TextInput id="time" type="time" value={form.time} onChange={(e) => update('time', e.target.value)} />
-              </FormField>
+              <FloatingLabelInput
+                id="time"
+                label="Time"
+                type="time"
+                value={form.time}
+                onChange={(e) => update('time', e.target.value)}
+              />
 
               {!form.isOnline && (
-                <FormField label="Venue" htmlFor="venue" hint="Full address helps attendees find it on the day">
-                  <TextInput
+                <div>
+                  <FloatingLabelInput
                     id="venue"
-                    placeholder="e.g. Cafe Blend, Gomti Nagar, Lucknow"
+                    label="Venue"
                     value={form.venue}
                     onChange={(e) => update('venue', e.target.value)}
                   />
-                </FormField>
+                  <p className="text-xs text-gray-500 mt-1">Full address helps attendees find it on the day</p>
+                </div>
               )}
 
-              <FormField label="Description" htmlFor="description">
-                <TextArea
-                  id="description"
-                  rows={4}
-                  placeholder="What should attendees know about this event?"
-                  value={form.description}
-                  onChange={(e) => update('description', e.target.value)}
-                />
-              </FormField>
+              <FloatingLabelTextArea
+                id="description"
+                label="Description"
+                rows={4}
+                value={form.description}
+                onChange={(e) => update('description', e.target.value)}
+              />
             </CardContent>
           </Card>
 

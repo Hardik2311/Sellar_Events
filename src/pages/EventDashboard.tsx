@@ -35,6 +35,8 @@ const EventDashboardContent: React.FC = () => {
     <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="flex shrink-0 items-center justify-between border-b border-slate-300 bg-gray-100 p-2">
+        <div className="w-20" />
+
         <div className="flex-1 text-center flex flex-col items-center justify-center">
           <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
           <p className="text-sm text-slate-500">Your business</p>
@@ -57,9 +59,8 @@ const EventDashboardContent: React.FC = () => {
           <p className="text-sm text-slate-500 flex items-center">Last updated: just now</p>
           <button
             onClick={handleRefresh}
-            className={`p-1 rounded-full hover:bg-slate-200 text-slate-600 transition-all ${
-              loading ? 'animate-spin' : ''
-            }`}
+            className={`p-1 rounded-full hover:bg-slate-200 text-slate-600 transition-all ${loading ? 'animate-spin' : ''
+              }`}
           >
             {loading ? <Loader2 size={14} /> : <RefreshCw size={14} />}
           </button>
