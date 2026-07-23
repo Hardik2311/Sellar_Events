@@ -41,25 +41,34 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
           </span>
 
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <TextInput
-              placeholder="Tier name (e.g. General)"
-              value={tier.name}
-              onChange={(e) => updateTier(tier.id, { name: e.target.value })}
-            />
-            <TextInput
-              type="number"
-              min={0}
-              placeholder="Price (₹)"
-              value={tier.price || ''}
-              onChange={(e) => updateTier(tier.id, { price: Number(e.target.value) || 0 })}
-            />
-            <TextInput
-              type="number"
-              min={1}
-              placeholder="Quantity"
-              value={tier.quantity || ''}
-              onChange={(e) => updateTier(tier.id, { quantity: Number(e.target.value) || 0 })}
-            />
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Tier name</label>
+              <TextInput
+                placeholder="e.g. General"
+                value={tier.name}
+                onChange={(e) => updateTier(tier.id, { name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Price (₹)</label>
+              <TextInput
+                type="number"
+                min={0}
+                placeholder="e.g. 500"
+                value={tier.price || ''}
+                onChange={(e) => updateTier(tier.id, { price: Number(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+              <TextInput
+                type="number"
+                min={1}
+                placeholder="e.g. 100"
+                value={tier.quantity || ''}
+                onChange={(e) => updateTier(tier.id, { quantity: Number(e.target.value) || 0 })}
+              />
+            </div>
           </div>
 
           <button

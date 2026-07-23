@@ -34,20 +34,23 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({ tiers,
             const percent = tier.total > 0 ? Math.min(100, Math.round((tier.sold / tier.total) * 100)) : 0;
             return (
               <div key={tier.id}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-3">
-                    <span className="flex-shrink-0 h-6 w-6 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center text-xs font-bold">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="shrink-0 h-6 w-6 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center text-xs font-bold">
                       {index + 1}
                     </span>
-                    <span className="text-sm text-gray-700">{tier.name}</span>
+                    <span className="text-sm text-gray-700 truncate">{tier.name}</span>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap shrink-0">
                     ₹{tier.price} · {tier.sold}/{tier.total}
                   </span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden ml-9">
-                  <div className="h-full rounded-full bg-[#F97316] transition-all" style={{ width: `${percent}%` }} />
-                </div>
+                <div className="flex items-center gap-3">
+                  <span className="shrink-0 w-6" aria-hidden="true" />
+                  <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-[#F97316] transition-all" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>  
               </div>
             );
           })
