@@ -12,7 +12,6 @@ import {
   FiMessageCircle,
   FiMapPin,
   FiMap,
-  FiHash,
   FiCheckCircle,
 } from 'react-icons/fi';
 import { Building2Icon, PinIcon } from 'lucide-react';
@@ -301,9 +300,8 @@ const Signup: React.FC = () => {
                 />
 
                 <div
-                  className={`gap-4 ${
-                    formData.eventCategory === 'Other' ? 'flex flex-col md:flex-row' : 'grid grid-cols-1'
-                  }`}
+                  className={`gap-4 ${formData.eventCategory === 'Other' ? 'flex flex-col md:flex-row' : 'grid grid-cols-1'
+                    }`}
                 >
                   <FloatingLabelSelect
                     id="eventCategory"

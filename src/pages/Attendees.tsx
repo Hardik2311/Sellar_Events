@@ -19,7 +19,7 @@ import type { ExportColumn } from '../components/ExportMenu';
 type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'name_asc', label: ' A to Z '},
+  { value: 'name_asc', label: ' A to Z ' },
   { value: 'name_desc', label: 'Z to A' },
   { value: 'checked_in', label: 'Checked in' },
   { value: 'pending', label: 'Pending / not arrived' },
@@ -109,8 +109,6 @@ const Attendees: React.FC = () => {
         return [...searchedAttendees].sort((a, b) => b.name.localeCompare(a.name));
       case 'checked_in':
         return searchedAttendees.filter((a) => a.status === 'checked_in');
-      case 'pending':
-        return searchedAttendees.filter((a) => a.status === 'pending');
       case 'cancelled':
         return searchedAttendees.filter((a) => a.status === 'cancelled');
       default:
