@@ -16,7 +16,7 @@ import {
 // rendering a 404-shaped page.
 const useEvent = (id?: string) => useMemo(() => MOCK_EVENTS.find((e) => e.id === id), [id]);
 
-const EventDetail: React.FC = () => {
+const CustomerEventDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const event = useEvent(id);
@@ -28,9 +28,9 @@ const EventDetail: React.FC = () => {
     return (
       <div className="flex min-h-screen w-full flex-col items-center justify-center gap-3 bg-gray-100 p-6 text-center">
         <Ticket size={28} className="text-gray-300" />
-        <p className="text-sm font-medium text-slate-700">This event doesn\u2019t exist or isn\u2019t published yet.</p>
+        <p className="text-sm font-medium text-slate-700">This event doesn&rsquo;t exist or isn&rsquo;t published yet.</p>
         <button
-          onClick={() => navigate('/events/discover')}
+          onClick={() => navigate('/discover')}
           className="rounded-md bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c]"
         >
           Back to events
@@ -58,14 +58,15 @@ const EventDetail: React.FC = () => {
   const allSoldOut = event.tiers.every((t) => t.sold >= t.quantity);
 
   // TODO — backend wiring:
-  // Send { eventId: event.id, items: quantities } to a checkout/session
-  // endpoint and redirect to the payment flow.
+  // Ideally create a checkout/session on the server here and navigate using
+  // its session id instead of raw router state (router state is lost on
+  // refresh).
   const handleGetTickets = () => {
-    console.log('Proceed to checkout:', { eventId: event.id, quantities, totalPrice });
+    navigate(`/checkout/${event.id}`, { state: { quantities } });
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-gray-100">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 bg-gradient-to-br ${gradient}`}>
         {event.coverImage && (
@@ -203,7 +204,7 @@ const EventDetail: React.FC = () => {
 
       {/* ── Sticky checkout bar ─────────────────────────────────────── */}
       {!allSoldOut && (
-        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-48 border-t border-gray-200 bg-white p-3 flex justify-center gap-3 z-30">
+        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex justify-center gap-3 z-30">
           <div className="flex w-full max-w-3xl items-center gap-3">
             <div className="flex-1">
               <p className="text-xs text-slate-500">
@@ -227,4 +228,4 @@ const EventDetail: React.FC = () => {
   );
 };
 
-export default EventDetail;
+export default CustomerEventDetail;

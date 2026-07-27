@@ -26,24 +26,27 @@ exports.createUser = functions.https.onCall(async (data, context) => {
         );
     }
 
-    // TODO: Add logic here to verify context.auth.uid actually belongs to tenantId
-
     try {
-        // Isolate data by scoping it under a specific tenant document
-        const tenantRef = db.collection("tenants").doc(tenantId);
+    const tenantRef = db.collection("tenants").doc(tenantId);
 
-        const newUser = {
-            name: data.name,
-            email: data.email,
-            role: data.role || "staff",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
+    const newUser = {
+      name: data.name,
+      email: data.email,
+      role: data.role || "staff",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-        // Save the user inside the tenant's subcollection
-        await tenantRef.collection("users").add(newUser);
+    // uid ko hi doc ID banaya taaki rules mein match easy ho 
+    await tenantRef.collection("users").doc(context.auth.uid).set(newUser);
 
-        return { success: true, message: "User created successfully" };
-    } catch (error) {
-        throw new functions.https.HttpsError("internal", error.message);
-    }
+    // Custom claims — rules isse tenant + role check karengi
+    await admin.auth().setCustomUserClaims(context.auth.uid, {
+      tenantId,
+      role: newUser.role,
+    });
+
+    return { success: true, message: "User created successfully" };
+  } catch (error) {
+    throw new functions.https.HttpsError("internal", error.message);
+  }
 });

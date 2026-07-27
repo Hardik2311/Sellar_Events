@@ -1,30 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
 import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings } from 'react-icons/fi';
-
-// ─── Mock user data (swap for real auth/Firestore later) ───────────────────
-interface UserProfile {
-    name: string;
-    email: string;
-    role: string;
-    profilePicture: string;
-}
-
-const mockUser: UserProfile = {
-    name: 'Aditya Sharma',
-    email: 'aditya@sellarevents.com',
-    role: 'Event Organizer',
-    profilePicture: '', // leave empty to show the placeholder icon
-};
+import { useAuth } from '../context/AuthContext';
+import { auth } from '../lib/firebase';
 
 const Account: React.FC = () => {
     const navigate = useNavigate();
-    const [profileData] = useState<UserProfile>(mockUser);
+    const { user, profile } = useAuth();
 
-    const handleLogout = () => {
-        // TODO: wire up real logout once auth is added
-        console.log('Logout clicked');
-        navigate('/');
+    const handleLogout = async () => {
+        await signOut(auth);
+        navigate('/login');
     };
 
     const handleEditProfile = () => {
@@ -46,10 +33,10 @@ const Account: React.FC = () => {
             {/* ── Profile section ── */}
             <div className="flex flex-col py-6 items-center">
                 <div className="relative mb-2">
-                    {profileData.profilePicture ? (
+                    {false ? (
                         <img
                             className="w-32 h-32 rounded-full object-cover border border-white shadow-lg bg-white"
-                            src={profileData.profilePicture}
+                            src=""
                             alt="Profile"
                         />
                     ) : (
@@ -69,10 +56,10 @@ const Account: React.FC = () => {
                     </button>
                 </div>
 
-                <h2 className="text-2xl font-semibold text-slate-900">{profileData.name}</h2>
-                <p className="text-base text-gray-500">{profileData.email}</p>
+                <h2 className="text-2xl font-semibold text-slate-900">{profile?.fullName}</h2>
+                <p className="text-base text-gray-500">{profile?.email}</p>
                 <span className="mt-2 inline-block rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-600">
-                    {profileData.role}
+                    {profile?.role}
                 </span>
             </div>
 

@@ -33,6 +33,12 @@ export interface PublicEvent {
   organizerName: string;
   coverImage: string | null;
   tiers: PublicTicketTier[];
+  // Organizer-controlled publish state. Only 'published' events should ever
+  // reach the customer-facing pages — filter by this once the API is wired.
+  // (If you already have `EventStatus` defined in your dashboard types file,
+  // import that here instead of redeclaring the union, so there's one
+  // source of truth.)
+  status: 'draft' | 'published' | 'completed' | 'cancelled';
   // Explicitly curated by the organizer/admin — not derived from sales or
   // date. Falls back to "soonest upcoming event" if nothing is flagged.
   featured?: boolean;
@@ -52,6 +58,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: false,
     organizerName: 'Blend Live',
     coverImage: null,
+    status: 'published',
     featured: true,
     tiers: [
       { id: 't1', name: 'General', price: 199, quantity: 150, sold: 120 },
@@ -71,6 +78,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: false,
     organizerName: 'Campus Beats',
     coverImage: null,
+    status: 'published',
     tiers: [{ id: 't1', name: 'General', price: 499, quantity: 500, sold: 340 }],
   },
   {
@@ -86,6 +94,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: true,
     organizerName: 'Studio North',
     coverImage: null,
+    status: 'draft',
     tiers: [{ id: 't1', name: 'Seat', price: 0, quantity: 200, sold: 188 }],
   },
   {
@@ -100,6 +109,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: false,
     organizerName: 'Blend Live',
     coverImage: null,
+    status: 'published',
     tiers: [{ id: 't1', name: 'General', price: 249, quantity: 80, sold: 80 }],
   },
   {
@@ -115,6 +125,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: true,
     organizerName: 'Startup Founders Collective',
     coverImage: null,
+    status: 'completed',
     tiers: [{ id: 't1', name: 'General', price: 0, quantity: 300, sold: 96 }],
   },
   {
@@ -130,6 +141,7 @@ export const MOCK_EVENTS: PublicEvent[] = [
     isOnline: false,
     organizerName: 'Ganga Foundation',
     coverImage: null,
+    status: 'published',
     tiers: [{ id: 't1', name: 'Entry', price: 99, quantity: 1000, sold: 410 }],
   },
 ];

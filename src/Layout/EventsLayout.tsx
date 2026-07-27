@@ -31,7 +31,7 @@ const EventsLayout = () => {
   return (
     <div className="h-dvh w-screen flex flex-col md:flex-row overflow-hidden bg-gray-100">
       {/* --- DESKTOP SIDEBAR --- */}
-      <aside className="hidden md:flex flex-col w-48 bg-white border-r border-slate-200 h-full flex-shrink-0 z-20">
+      <aside className="hidden md:flex flex-col w-48 bg-white border-r border-slate-200 h-full shrink-0 z-20">
         <div className="p-6 border-b border-slate-100">
           <p className="font-bold text-lg text-slate-800">Events</p>
         </div>

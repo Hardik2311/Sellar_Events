@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import {
   FloatingLabelInput,
   CustomButton,
@@ -14,6 +16,7 @@ import {
  * No image assets required — the hero panel is a CSS gradient.
  */
 const Login: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,22 +33,33 @@ const Login: React.FC = () => {
     }
 
     setLoading(true);
-    // TODO: replace with real login call, e.g.
-    // try {
-    //   await loginUser(email, password);
-    //   navigate(ROUTES.HOME);
-    // } catch (err) { setError(...) } finally { setLoading(false); }
-    setTimeout(() => {
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/events');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      if (
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/user-not-found'
+      ) {
+        setError('Invalid email or password.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please try again later.');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
-      console.log('Mock login submit:', { email, password });
-    }, 600);
+    }
   };
 
   return (
     <>
       {/* ================= MOBILE VIEW ================= */}
       <div className="relative h-screen w-screen flex flex-col lg:hidden">
-        <AuthHeroPanel className="w-full h-64 flex-shrink-0" />
+        <AuthHeroPanel className="w-full h-64 shrink-0" />
 
         <div className="w-full bg-white p-6 py-8 shadow-t-lg rounded-t-2xl flex-1 z-20 -mt-6 overflow-y-auto">
           <div className="w-full max-w-sm mx-auto">
@@ -82,7 +96,7 @@ const Login: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-[26px] text-gray-400"
+                  className="absolute right-3 top-6.5 text-gray-400"
                 >
                   {showPassword ? <FiEye size={20} /> : <FiEyeOff size={20} />}
                 </button>
@@ -120,15 +134,6 @@ const Login: React.FC = () => {
                   </CustomButton>
                 </Link>
               </div>
-
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-600">
-                  Planning to host events regularly?{' '}
-                  <Link to="/signup" className="font-semibold text-blue-600 hover:underline">
-                    Create an organizer account
-                  </Link>
-                </p>
-              </div>
             </form>
           </div>
         </div>
@@ -140,7 +145,7 @@ const Login: React.FC = () => {
           <AuthHeroPanel className="w-1/2 h-full" />
 
           <div className="w-1/2 flex items-center justify-center bg-white">
-            <div className="flex-grow overflow-hidden flex flex-col justify-center">
+            <div className="grow overflow-hidden flex flex-col justify-center">
               <div className="w-full max-w-md mx-auto px-4">
                 <h1 className="text-4xl font-bold mb-1 text-left">Login</h1>
                 <p className="text-sm text-gray-500 mb-6">
@@ -212,15 +217,6 @@ const Login: React.FC = () => {
                         Sign Up
                       </CustomButton>
                     </Link>
-                  </div>
-
-                  <div className="mt-4 text-center">
-                    <p className="text-sm text-gray-600">
-                      Planning to host events regularly?{' '}
-                      <Link to="/signup" className="font-semibold text-blue-600 hover:underline">
-                        Create an organizer account
-                      </Link>
-                    </p>
                   </div>
                 </form>
               </div>
