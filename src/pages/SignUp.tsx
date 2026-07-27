@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '../lib/firebase'
+
 import {
   FiUser,
   FiMail,
@@ -87,6 +91,7 @@ const initialFormData: SignupFormData = {
  * Wire `handleFinishSetup` up to your real registration call later.
  */
 const Signup: React.FC = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [formData, setFormData] = useState<SignupFormData>(initialFormData);
   const [showPassword, setShowPassword] = useState(false);
@@ -162,13 +167,48 @@ const Signup: React.FC = () => {
     if (!validateStep2()) return;
 
     setIsSubmitting(true);
-    // TODO: replace with real registration call, e.g.
-    // await registerUserWithDetails(formData); navigate(ROUTES.HOME);
-    setTimeout(() => {
-      console.log('Mock signup submit:', formData);
-      setIsSubmitting(false);
+
+    try {
+      const finalCategory =
+        formData.eventCategory === 'Other'
+          ? formData.customEventCategory
+          : formData.eventCategory;
+
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      const createTenant = httpsCallable(functions, 'createTenant');
+      await createTenant({
+        fullName: formData.fullName,
+        organizationName: formData.organizationName,
+        eventCategory: finalCategory,
+        website: formData.website,
+        whatsappNumber: formData.whatsappNumber,
+        address: {
+          street: formData.streetAddress,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode,
+        },
+      });
+      await cred.user.getIdToken(true);
       setSubmitSuccess(true);
-    }, 700);
+      navigate('/events');
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please log in instead.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak — please use at least 6 characters.');
+      } else {
+        setError('Signup failed. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleStepClick = (target: number) => {
@@ -185,13 +225,13 @@ const Signup: React.FC = () => {
 
       {/* Right content */}
       <div className="flex flex-col h-screen overflow-hidden bg-white w-full lg:w-1/2">
-        <div className="flex-shrink-0 bg-white pt-4 pb-2 px-4 shadow-sm z-40 flex justify-center">
+        <div className="shrink-0 bg-white pt-4 pb-2 px-4 shadow-sm z-40 flex justify-center">
           <div className="w-full max-w-xs">
             <Stepper totalSteps={2} currentStep={step} onStepClick={handleStepClick} />
           </div>
         </div>
 
-        <div className="flex-grow px-4 pb-32 overflow-y-auto">
+        <div className="grow px-4 pb-32 overflow-y-auto">
           <div className="mt-3 mb-3">
             <h1 className="text-3xl font-bold">
               {step === 1 ? 'Create your account' : 'Organizer Details'}

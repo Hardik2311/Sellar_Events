@@ -1,9 +1,20 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, XCircle, Eye } from 'lucide-react';
-import { SAMPLE_EVENT_DATA } from '../data/sampleEventData';
-import { getAttendeesForEvent } from '../data/sampleAttendeeData';
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from '../context/AuthContext';
 import type { Attendee } from '../types/attendee.types';
+import type { EventSummary } from '../types/event.types';
 import EventSelector from '../components/ui/EventSelector';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
@@ -11,10 +22,6 @@ import QRScanner from '../components/QrScannerModal';
 import SearchBar from '../components/SearchBar';
 import ExportMenu from '../components/ExportMenu';
 import type { ExportColumn } from '../components/ExportMenu';
-
-// TODO — backend wiring: replace getAttendeesForEvent with a real fetch
-// scoped to the selected event, and wire onCheckIn to a mutation that
-// updates ticket status + checkedInAt server-side.
 
 type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
 
@@ -35,32 +42,109 @@ const EXPORT_COLUMNS: ExportColumn<Attendee>[] = [
   { header: 'Status', accessor: (a) => a.status },
   { header: 'Checked in at', accessor: (a) => (a.checkedInAt ? new Date(a.checkedInAt).toLocaleString('en-IN') : '') },
 ];
+const toEventSummary = (id: string, data: any): EventSummary => {
+  const tiers = (data.tiers ?? []).map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    price: t.price,
+    sold: 0,
+    total: t.quantity,
+  }));
+  return {
+    id,
+    title: data.title,
+    coverImage: data.coverImageUrl ?? undefined,
+    category: data.category,
+    status: data.status,
+    startDate: data.date,
+    venue: data.isOnline ? 'Online' : data.venue,
+    ticketsSold: 0,
+    ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
+    revenue: 0,
+    description: data.description,
+    tiers,
+  };
+};
 
+const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
+  id,
+  eventId,
+  name: data.name,
+  email: data.email,
+  phone: data.phone,
+  tierName: data.tierName,
+  ticketId: data.ticketId,
+  status: data.status,
+  checkedInAt: data.checkedInAt instanceof Timestamp ? data.checkedInAt.toDate().toISOString() : null,
+});
 const Attendees: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedEventId, setSelectedEventId] = useState(SAMPLE_EVENT_DATA.events[0]?.id ?? '');
+  const { profile } = useAuth();
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [attendees, setAttendees] = useState<Attendee[]>(() => getAttendeesForEvent(selectedEventId));
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [isLoadingAttendees, setIsLoadingAttendees] = useState(false);
   const [sortOption, setSortOption] = useState<SortOption>('name_asc');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const selectedEvent = SAMPLE_EVENT_DATA.events.find((e) => e.id === selectedEventId) ?? null;
+  // Organizer ke saare events real-time load karo
+  useEffect(() => {
+    if (!profile?.tenantId) return;
+    const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+    const q = query(eventsRef, orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map((d) => toEventSummary(d.id, d.data()));
+      setEvents(list);
+      setIsLoadingEvents(false);
+      // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback
+      setSelectedEventId((prev) => (prev && list.some((e) => e.id === prev) ? prev : list[0]?.id ?? ''));
+    });
+    return () => unsubscribe();
+  }, [profile?.tenantId]);
+
+  // Selected event ke attendees real-time load karo
+  useEffect(() => {
+    if (!profile?.tenantId || !selectedEventId) {
+      setAttendees([]);
+      return;
+    }
+    setIsLoadingAttendees(true);
+    const attendeesRef = collection(db, 'tenants', profile.tenantId, 'events', selectedEventId, 'attendees');
+    const q = query(attendeesRef, orderBy('name'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setAttendees(snapshot.docs.map((d) => toAttendee(d.id, selectedEventId, d.data())));
+      setIsLoadingAttendees(false);
+    });
+    return () => unsubscribe();
+  }, [profile?.tenantId, selectedEventId]);
+
+  const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
   const handleEventChange = (eventId: string) => {
     setSelectedEventId(eventId);
-    setAttendees(getAttendeesForEvent(eventId));
     setSearchValue('');
     setExpandedId(null);
   };
 
-  const handleCheckIn = useCallback((id: string) => {
-    setAttendees((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: 'checked_in', checkedInAt: new Date().toISOString() } : a))
-    );
-    // TODO: POST /events/:eventId/attendees/:id/check-in
-  }, []);
+  const handleCheckIn = useCallback(
+    (id: string) => {
+      if (!profile?.tenantId || !selectedEventId) return;
+      // Optimistic update — UI turant respond kare, snapshot listener khud bhi confirm kar dega
+      setAttendees((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status: 'checked_in', checkedInAt: new Date().toISOString() } : a))
+      );
+      const attendeeRef = doc(db, 'tenants', profile.tenantId, 'events', selectedEventId, 'attendees', id);
+      updateDoc(attendeeRef, { status: 'checked_in', checkedInAt: serverTimestamp() }).catch((err) => {
+        console.error('Check-in failed:', err);
+        setScanFeedback({ type: 'error', message: 'Check-in failed, please retry.' });
+      });
+    },
+    [profile?.tenantId, selectedEventId]
+  );
 
   const handleQrScan = useCallback(
     (decodedText: string) => {
@@ -145,7 +229,7 @@ const Attendees: React.FC = () => {
       <main className="grow overflow-y-auto p-2">
         <div className="mx-auto max-w-3xl flex flex-col gap-3">
           {/* 1. Event dropdown */}
-          <EventSelector events={SAMPLE_EVENT_DATA.events} selectedEventId={selectedEventId} onChange={handleEventChange} />
+          <EventSelector events={events} selectedEventId={selectedEventId} onChange={handleEventChange} />
 
           {selectedEvent && (
             <>
@@ -224,7 +308,9 @@ const Attendees: React.FC = () => {
               </div>
 
               {/* 5. Attendee list */}
-              {sortedAttendees.length === 0 ? (
+              {isLoadingAttendees ? (
+                <div className="text-center py-10 text-sm text-gray-500">Loading attendees…</div>
+              ) : sortedAttendees.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500">
                   {attendees.length === 0 ? 'No tickets sold for this event yet' : 'No attendees match your search'}
                 </div>

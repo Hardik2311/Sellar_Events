@@ -12,6 +12,10 @@ import ImageUploadBox from '../components/ui/ImageUploadBox';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { compressImageToTargetSize } from '../lib/imageCompression'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { useAuth } from '../context/AuthContext';
+import { db, storage } from '../lib/firebase';
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
@@ -43,8 +47,11 @@ const INITIAL_STATE: EventFormState = {
 
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -82,15 +89,58 @@ const CreateEvent: React.FC = () => {
     }
   };
 
-  const handleSaveDraft = () => {
-    console.log('Save as draft:', form); // TODO: POST { ...form, status: 'draft' }
-    navigate('/events');
+  const saveEvent = async (status: 'draft' | 'published') => {
+    if (!user || !profile?.tenantId) {
+      setSaveError('User session not found. Please log in again.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      let coverImageUrl: string | null = null;
+
+      // Cover image abhi base64 preview hai — Storage pe upload karke URL lo
+      if (form.coverImagePreview) {
+        const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+        const tempId = `evt-${Date.now()}`;
+        const imageRef = ref(storage, `tenants/${profile.tenantId}/events/${tempId}/cover.jpg`);
+        await uploadString(imageRef, form.coverImagePreview, 'data_url');
+        coverImageUrl = await getDownloadURL(imageRef);
+      }
+
+      const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+      await addDoc(eventsRef, {
+        title: form.title,
+        category: form.category === 'Other' ? form.customCategory : form.category,
+        description: form.description,
+        date: form.date,
+        endDate: form.endDate,
+        time: form.time,
+        venue: form.isOnline ? null : form.venue,
+        isOnline: form.isOnline,
+        coverImageUrl,
+        tiers: form.tiers,
+        promoCode: form.promoCode || null,
+        promoDiscountPercent: form.promoDiscountPercent || 0,
+        status,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+
+      navigate('/events');
+    } catch (err) {
+      console.error('Failed to save event:', err);
+      setSaveError('Failed to save event. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  const handleSaveDraft = () => saveEvent('draft');
   const handlePublish = () => {
     if (!isPublishable) return;
-    console.log('Publish event:', form); // TODO: POST { ...form, status: 'published' }
-    navigate('/events');
+    saveEvent('published');
   };
 
   return (
@@ -280,20 +330,26 @@ const CreateEvent: React.FC = () => {
       </main>
 
       {/* ── Sticky action bar ──────────────────────────────────────────── */}
+      {saveError && (
+        <div className="fixed bottom-32 md:bottom-16 left-0 right-0 flex justify-center z-30 px-3">
+          <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2">{saveError}</p>
+        </div>
+      )}
       <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-48 border-t border-gray-200 bg-white p-3 flex justify-center gap-3 z-30">
         <div className="w-full max-w-3xl flex gap-3">
           <button
             onClick={handleSaveDraft}
-            className="flex-1 rounded-md border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            disabled={isSaving}
+            className="flex-1 rounded-md border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
           >
-            Save as draft
+            {isSaving ? 'Saving…' : 'Save as draft'}
           </button>
           <button
             onClick={handlePublish}
-            disabled={!isPublishable}
+            disabled={!isPublishable || isSaving}
             className="flex-1 rounded-md bg-[#F97316] py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#F97316] transition-colors"
           >
-            Preview & publish
+            {isSaving ? 'Saving…' : 'Preview & publish'}
           </button>
         </div>
       </div>

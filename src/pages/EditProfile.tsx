@@ -1,8 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { FiCamera, FiCheck, FiX, FiArrowLeft } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import { useProfileData } from '../hooks/useProfileData';
+import { storage } from '../lib/firebase';
 
-// ─── Mock profile shape (swap for real auth/Firestore later) ───────────────
 interface ProfileData {
     name: string;
     email: string;
@@ -17,12 +20,12 @@ interface ProfileData {
     whatsappNumber: string;
 }
 
-const mockProfile: ProfileData = {
-    name: 'Aditya Sharma',
-    email: 'aditya@sellarevents.com',
-    phone: '9876543210',
+const emptyProfile: ProfileData = {
+    name: '',
+    email: '',
+    phone: '',
     aadhaarNumber: '',
-    organizationName: 'Sellar Events',
+    organizationName: '',
     website: '',
     profilePicture: '',
     instagram: '',
@@ -54,11 +57,35 @@ const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 
 const EditProfile: React.FC = () => {
     const navigate = useNavigate();
+    const { user, profile: authProfile, loading: authLoading } = useAuth();
+    const { profile, loading: dataLoading, error: dataError, saveData, refetch } =
+        useProfileData(user?.uid, authProfile?.tenantId);
 
-    const [formData, setFormData] = useState<ProfileData>(mockProfile);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(mockProfile.profilePicture || null);
+    const [formData, setFormData] = useState<ProfileData>(emptyProfile);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Profile async load hota hai, isliye jab available ho tab form fill karo
+    useEffect(() => {
+        if (profile) {
+            const loaded: ProfileData = {
+                name: profile.name || '',
+                email: profile.email || '',
+                phone: profile.phone || '',
+                aadhaarNumber: profile.aadhaarNumber || '',
+                organizationName: profile.organizationName || '',
+                website: profile.website || '',
+                profilePicture: profile.profilePicture || '',
+                instagram: profile.instagram || '',
+                facebook: profile.facebook || '',
+                twitter: profile.twitter || '',
+                whatsappNumber: profile.whatsappNumber || '',
+            };
+            setFormData(loaded);
+            setPreviewUrl(loaded.profilePicture || null);
+        }
+    }, [profile]);
 
     const [phoneError, setPhoneError] = useState<string | null>(null);
     const [aadhaarError, setAadhaarError] = useState<string | null>(null);
@@ -130,13 +157,28 @@ const EditProfile: React.FC = () => {
             return;
         }
 
+        if (!user || !authProfile?.tenantId) {
+            setSubmitError('User session not found. Please log in again.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            // TODO: replace with real upload + save once a backend is wired up.
-            // e.g. upload `imageFile` to storage, then persist `formData` to Firestore/your API.
-            await new Promise((resolve) => setTimeout(resolve, 600)); // fake latency
+            let profilePictureUrl = formData.profilePicture;
 
-            console.log('Saved profile (mock):', { ...formData, imageFile });
+            if (imageFile) {
+                const imageRef = ref(storage, `tenants/${authProfile.tenantId}/users/${user.uid}/profile.jpg`);
+                await uploadBytes(imageRef, imageFile);
+                profilePictureUrl = await getDownloadURL(imageRef);
+            }
+
+            await saveData({
+                ...formData,
+                profilePicture: profilePictureUrl,
+                ...(profile.role !== 'admin' && { organizationName: undefined, website: undefined }),
+            });
+
+            refetch();
             setSubmitSuccess('Profile updated successfully!');
             setTimeout(() => setSubmitSuccess(null), 2500);
         } catch (err) {
@@ -152,6 +194,22 @@ const EditProfile: React.FC = () => {
     : isSubmitting
         ? 'bg-orange-200'
         : 'bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-200/60';
+
+    if (authLoading || dataLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-100">
+                <div className="w-10 h-10 rounded-full border-[3px] border-slate-200 border-t-orange-500 animate-spin" />
+            </div>
+        );
+    }
+
+    if (dataError) {
+        return (
+            <div className="flex min-h-screen items-center justify-center text-red-500">
+                {dataError}
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-100">
