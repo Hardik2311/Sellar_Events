@@ -17,16 +17,16 @@ import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 
 // Real-time single event listener
-const useEvent = (tenantId?: string, id?: string) => {
+const useEvent = (companyId?: string, id?: string) => {
   const [event, setEvent] = useState<PublicEvent | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!tenantId || !id) {
+    if (!companyId || !id) {
       setLoading(false);
       return;
     }
-    const unsubscribe = onSnapshot(doc(db, 'tenants', tenantId, 'events', id), (snap) => {
+    const unsubscribe = onSnapshot(doc(db, 'companies', companyId, 'events', id), (snap) => {
       if (snap.exists()) {
         const d = snap.data();
         setEvent({
@@ -57,7 +57,7 @@ const useEvent = (tenantId?: string, id?: string) => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [tenantId, id]);
+  }, [companyId, id]);
 
   return { event, loading };
 };
@@ -66,24 +66,24 @@ const OrganizerEventDetail: React.FC = () => {
    const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { event: rawEvent, loading } = useEvent(profile?.tenantId, id);
+  const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   const handleSaveEdit = async (updated: EventFormState) => {
-    if (!profile?.tenantId || !id) return;
+    if (!profile?.companyId || !id) return;
 
     let coverImageUrl = event?.coverImage ?? null;
     // Naya image select hua hai (base64 data URL) to Storage pe upload karo
     if (updated.coverImagePreview?.startsWith('data:')) {
-      const imageRef = ref(storage, `tenants/${profile.tenantId}/events/${id}/cover.jpg`);
+      const imageRef = ref(storage, `companies/${profile.companyId}/events/${id}/cover.jpg`);
       await uploadString(imageRef, updated.coverImagePreview, 'data_url');
       coverImageUrl = await getDownloadURL(imageRef);
     } else if (!updated.coverImagePreview) {
       coverImageUrl = null;
     }
 
-    await updateDoc(doc(db, 'tenants', profile.tenantId, 'events', id), {
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
       title: updated.title,
       category: updated.category === 'Other' ? updated.customCategory : updated.category,
       description: updated.description,

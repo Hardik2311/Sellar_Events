@@ -33,10 +33,10 @@ export const useOrganizerEvents = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!profile?.tenantId) return;
+    if (!profile?.companyId) return;
 
     const eventsQuery = query(
-      collection(db, 'tenants', profile.tenantId, 'events'),
+      collection(db, 'companies', profile.companyId, 'events'),
       orderBy('createdAt', 'desc')
     );
 
@@ -50,17 +50,17 @@ export const useOrganizerEvents = () => {
     });
 
     return () => unsubscribe();
-  }, [profile?.tenantId, profile?.organizationName]);
+  }, [profile?.companyId, profile?.organizationName]);
 
   const toggleLive = async (id: string, currentStatus: string) => {
-    if (!profile?.tenantId) return;
+    if (!profile?.companyId) return;
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
-    await updateDoc(doc(db, 'tenants', profile.tenantId, 'events', id), { status: newStatus });
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { status: newStatus });
   };
 
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {
-    if (!profile?.tenantId) return;
-    await updateDoc(doc(db, 'tenants', profile.tenantId, 'events', id), { featured: !currentFeatured });
+    if (!profile?.companyId) return;
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { featured: !currentFeatured });
   };
 
   return { events, loading, toggleLive, toggleFeatured };

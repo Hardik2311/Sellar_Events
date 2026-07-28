@@ -7,7 +7,7 @@ interface UserProfile {
   fullName: string;
   email: string;
   role: string;
-  tenantId: string;
+  companyId: string;
   phone?: string;
   aadhaarNumber?: string;
   instagram?: string;
@@ -44,10 +44,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (firebaseUser) {
         const tokenResult = await firebaseUser.getIdTokenResult();
-        const tenantId = tokenResult.claims.tenantId as string | undefined;
+        const companyId = tokenResult.claims.companyId as string | undefined;
 
-        if (tenantId) {
-          const userDocRef = doc(db, 'tenants', tenantId, 'users', firebaseUser.uid);
+        if (companyId) {
+          const userDocRef = doc(db, 'companies', companyId, 'users', firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               fullName: data.fullName,
               email: data.email,
               role: data.role,
-              tenantId,
+              companyId,
             });
           }
         }

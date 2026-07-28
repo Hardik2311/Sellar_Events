@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
+} from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../lib/firebase'
 
@@ -174,14 +177,48 @@ const Signup: React.FC = () => {
           ? formData.customEventCategory
           : formData.eventCategory;
 
-      const cred = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
+      let user = auth.currentUser;
 
-      const createTenant = httpsCallable(functions, 'createTenant');
-      await createTenant({
+      // 1. Create or Sign-In the User
+      if (!user || user.email !== formData.email) {
+        try {
+          const cred = await createUserWithEmailAndPassword(
+            auth,
+            formData.email,
+            formData.password
+          );
+          user = cred.user;
+        } catch (err: any) {
+          // If the account was already created on a previous failed attempt, log them in instead
+          if (err.code === 'auth/email-already-in-use') {
+            const cred = await signInWithEmailAndPassword(
+              auth,
+              formData.email,
+              formData.password
+            );
+            user = cred.user;
+          } else {
+            throw err; // Re-throw other errors (e.g., weak password)
+          }
+        }
+      }
+
+      // 2. Wait for auth state to propagate to Functions SDK
+      await new Promise<void>((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged((u) => {
+          if (u && u.uid === user!.uid) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+
+      const token = await user!.getIdToken(true);
+
+      // 3. Execute Cloud Function
+      const createCompany = httpsCallable(functions, 'createCompany');
+      await createCompany({
+        token,
         fullName: formData.fullName,
         organizationName: formData.organizationName,
         eventCategory: finalCategory,
@@ -194,7 +231,7 @@ const Signup: React.FC = () => {
           postalCode: formData.postalCode,
         },
       });
-      await cred.user.getIdToken(true);
+
       setSubmitSuccess(true);
       navigate('/events');
     } catch (err: any) {
@@ -203,6 +240,8 @@ const Signup: React.FC = () => {
         setError('This email is already registered. Please log in instead.');
       } else if (err.code === 'auth/weak-password') {
         setError('Password is too weak — please use at least 6 characters.');
+      } else if (err.code === 'auth/invalid-credential') {
+        setError('This email exists, but the password provided is incorrect.');
       } else {
         setError('Signup failed. Please try again.');
       }

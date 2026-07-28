@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
@@ -7,27 +7,29 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-exports.createUser = functions.https.onCall(async (data, context) => {
+exports.createUser = onCall(async (request) => {
+    const { auth, data } = request;
+
     // Ensure the user is authenticated
-    if (!context.auth) {
-        throw new functions.https.HttpsError(
+    if (!auth) {
+        throw new HttpsError(
             "unauthenticated",
             "User must be logged in."
         );
     }
 
-    // Retrieve the tenant ID (Example assumes it's passed in the data payload)
-    const tenantId = data.tenantId;
+    // Retrieve the company ID (we renamed tenantId to companyId previously)
+    const companyId = data.companyId;
 
-    if (!tenantId) {
-        throw new functions.https.HttpsError(
+    if (!companyId) {
+        throw new HttpsError(
             "invalid-argument",
-            "Tenant ID is required."
+            "Company ID is required."
         );
     }
 
     try {
-    const tenantRef = db.collection("tenants").doc(tenantId);
+    const companyRef = db.collection("companies").doc(companyId);
 
     const newUser = {
       name: data.name,
@@ -37,16 +39,16 @@ exports.createUser = functions.https.onCall(async (data, context) => {
     };
 
     // uid ko hi doc ID banaya taaki rules mein match easy ho 
-    await tenantRef.collection("users").doc(context.auth.uid).set(newUser);
+    await companyRef.collection("users").doc(auth.uid).set(newUser);
 
-    // Custom claims — rules isse tenant + role check karengi
-    await admin.auth().setCustomUserClaims(context.auth.uid, {
-      tenantId,
+    // Custom claims
+    await admin.auth().setCustomUserClaims(auth.uid, {
+      companyId,
       role: newUser.role,
     });
 
     return { success: true, message: "User created successfully" };
   } catch (error) {
-    throw new functions.https.HttpsError("internal", error.message);
+    throw new HttpsError("internal", error.message);
   }
 });

@@ -90,7 +90,7 @@ const CreateEvent: React.FC = () => {
   };
 
   const saveEvent = async (status: 'draft' | 'published') => {
-    if (!user || !profile?.tenantId) {
+    if (!user || !profile?.companyId) {
       setSaveError('User session not found. Please log in again.');
       return;
     }
@@ -102,14 +102,14 @@ const CreateEvent: React.FC = () => {
 
       // Cover image abhi base64 preview hai — Storage pe upload karke URL lo
       if (form.coverImagePreview) {
-        const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+
         const tempId = `evt-${Date.now()}`;
-        const imageRef = ref(storage, `tenants/${profile.tenantId}/events/${tempId}/cover.jpg`);
+        const imageRef = ref(storage, `companies/${profile.companyId}/events/${tempId}/cover.jpg`);
         await uploadString(imageRef, form.coverImagePreview, 'data_url');
         coverImageUrl = await getDownloadURL(imageRef);
       }
 
-      const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+      const eventsRef = collection(db, 'companies', profile.companyId, 'events');
       await addDoc(eventsRef, {
         title: form.title,
         category: form.category === 'Other' ? form.customCategory : form.category,
