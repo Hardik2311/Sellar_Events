@@ -81,7 +81,7 @@ const Attendees: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [events, setEvents] = useState<EventSummary[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+
   const [selectedEventId, setSelectedEventId] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -93,34 +93,34 @@ const Attendees: React.FC = () => {
 
   // Organizer ke saare events real-time load karo
   useEffect(() => {
-    if (!profile?.tenantId) return;
-    const eventsRef = collection(db, 'tenants', profile.tenantId, 'events');
+    if (!profile?.companyId) return;
+    const eventsRef = collection(db, 'companies', profile.companyId, 'events');
     const q = query(eventsRef, orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map((d) => toEventSummary(d.id, d.data()));
       setEvents(list);
-      setIsLoadingEvents(false);
+
       // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback
       setSelectedEventId((prev) => (prev && list.some((e) => e.id === prev) ? prev : list[0]?.id ?? ''));
     });
     return () => unsubscribe();
-  }, [profile?.tenantId]);
+  }, [profile?.companyId]);
 
   // Selected event ke attendees real-time load karo
   useEffect(() => {
-    if (!profile?.tenantId || !selectedEventId) {
+    if (!profile?.companyId || !selectedEventId) {
       setAttendees([]);
       return;
     }
     setIsLoadingAttendees(true);
-    const attendeesRef = collection(db, 'tenants', profile.tenantId, 'events', selectedEventId, 'attendees');
+    const attendeesRef = collection(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees');
     const q = query(attendeesRef, orderBy('name'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setAttendees(snapshot.docs.map((d) => toAttendee(d.id, selectedEventId, d.data())));
       setIsLoadingAttendees(false);
     });
     return () => unsubscribe();
-  }, [profile?.tenantId, selectedEventId]);
+  }, [profile?.companyId, selectedEventId]);
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
@@ -132,18 +132,18 @@ const Attendees: React.FC = () => {
 
   const handleCheckIn = useCallback(
     (id: string) => {
-      if (!profile?.tenantId || !selectedEventId) return;
+      if (!profile?.companyId || !selectedEventId) return;
       // Optimistic update — UI turant respond kare, snapshot listener khud bhi confirm kar dega
       setAttendees((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: 'checked_in', checkedInAt: new Date().toISOString() } : a))
       );
-      const attendeeRef = doc(db, 'tenants', profile.tenantId, 'events', selectedEventId, 'attendees', id);
+      const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
       updateDoc(attendeeRef, { status: 'checked_in', checkedInAt: serverTimestamp() }).catch((err) => {
         console.error('Check-in failed:', err);
         setScanFeedback({ type: 'error', message: 'Check-in failed, please retry.' });
       });
     },
-    [profile?.tenantId, selectedEventId]
+    [profile?.companyId, selectedEventId]
   );
 
   const handleQrScan = useCallback(

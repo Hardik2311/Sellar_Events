@@ -18,23 +18,23 @@ interface ProfileData {
   role: string;
 }
 
-export const useProfileData = (userId?: string, tenantId?: string) => {
+export const useProfileData = (userId?: string, companyId?: string) => {
   const [profile, setProfile] = useState<Partial<ProfileData>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProfileData = async () => {
-    if (!userId || !tenantId) return;
+    if (!userId || !companyId) return;
     setLoading(true);
     try {
-      const userDocRef = doc(db, 'tenants', tenantId, 'users', userId);
-      const tenantDocRef = doc(db, 'tenants', tenantId);
-      const [userDocSnap, tenantDocSnap] = await Promise.all([
+      const userDocRef = doc(db, 'companies', companyId, 'users', userId);
+      const companyBusinessDocRef = doc(db, 'companies', companyId, 'business_info', 'profile');
+      const [userDocSnap, companyDocSnap] = await Promise.all([
         getDoc(userDocRef),
-        getDoc(tenantDocRef),
+        getDoc(companyBusinessDocRef),
       ]);
       const userData = userDocSnap.exists() ? userDocSnap.data() : {};
-      const tenantData = tenantDocSnap.exists() ? tenantDocSnap.data() : {};
+      const companyData = companyDocSnap.exists() ? companyDocSnap.data() : {};
 
       setProfile({
         name: userData.fullName || '',
@@ -47,8 +47,8 @@ export const useProfileData = (userId?: string, tenantId?: string) => {
         twitter: userData.twitter || '',
         whatsappNumber: userData.whatsappNumber || '',
         role: userData.role || '',
-        organizationName: tenantData.organizationName || '',
-        website: tenantData.website || '',
+        organizationName: companyData.organizationName || '',
+        website: companyData.website || '',
       });
     } catch (err) {
       console.error('Error fetching profile data:', err);
@@ -59,25 +59,25 @@ export const useProfileData = (userId?: string, tenantId?: string) => {
   };
 
   useEffect(() => {
-    if (!userId || !tenantId) {
+    if (!userId || !companyId) {
       setLoading(false);
       return;
     }
     fetchProfileData();
-  }, [userId, tenantId]);
+  }, [userId, companyId]);
 
   const refetch = () => {
     fetchProfileData();
   };
 
   const saveData = async (data: Partial<ProfileData>) => {
-    if (!userId || !tenantId || !auth.currentUser) {
-      throw new Error('User or tenant is not authenticated.');
+    if (!userId || !companyId || !auth.currentUser) {
+      throw new Error('User or company is not authenticated.');
     }
 
     const { organizationName, website, role, ...userFields } = data;
-    const userDocRef = doc(db, 'tenants', tenantId, 'users', userId);
-    const tenantDocRef = doc(db, 'tenants', tenantId);
+    const userDocRef = doc(db, 'companies', companyId, 'users', userId);
+    const companyBusinessDocRef = doc(db, 'companies', companyId, 'business_info', 'profile');
     const promises: Promise<any>[] = [];
 
     
@@ -102,7 +102,7 @@ export const useProfileData = (userId?: string, tenantId?: string) => {
 
    
     if (organizationName !== undefined || website !== undefined) {
-      promises.push(setDoc(tenantDocRef, {
+      promises.push(setDoc(companyBusinessDocRef, {
         ...(organizationName !== undefined && { organizationName }),
         ...(website !== undefined && { website }),
         updatedAt: serverTimestamp(),

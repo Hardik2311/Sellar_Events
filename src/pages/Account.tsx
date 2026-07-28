@@ -7,7 +7,7 @@ import { auth } from '../lib/firebase';
 
 const Account: React.FC = () => {
     const navigate = useNavigate();
-    const { user, profile } = useAuth();
+    const { profile } = useAuth();
 
     const handleLogout = async () => {
         await signOut(auth);

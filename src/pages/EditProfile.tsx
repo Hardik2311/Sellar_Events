@@ -59,7 +59,7 @@ const EditProfile: React.FC = () => {
     const navigate = useNavigate();
     const { user, profile: authProfile, loading: authLoading } = useAuth();
     const { profile, loading: dataLoading, error: dataError, saveData, refetch } =
-        useProfileData(user?.uid, authProfile?.tenantId);
+        useProfileData(user?.uid, authProfile?.companyId);
 
     const [formData, setFormData] = useState<ProfileData>(emptyProfile);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -157,7 +157,7 @@ const EditProfile: React.FC = () => {
             return;
         }
 
-        if (!user || !authProfile?.tenantId) {
+        if (!user || !authProfile?.companyId) {
             setSubmitError('User session not found. Please log in again.');
             return;
         }
@@ -167,7 +167,7 @@ const EditProfile: React.FC = () => {
             let profilePictureUrl = formData.profilePicture;
 
             if (imageFile) {
-                const imageRef = ref(storage, `tenants/${authProfile.tenantId}/users/${user.uid}/profile.jpg`);
+                const imageRef = ref(storage, `companies/${authProfile.companyId}/users/${user.uid}/profile.jpg`);
                 await uploadBytes(imageRef, imageFile);
                 profilePictureUrl = await getDownloadURL(imageRef);
             }
