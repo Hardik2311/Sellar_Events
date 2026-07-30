@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
 import EventSelector from '../components/ui/EventSelector';
@@ -210,20 +211,21 @@ const Attendees: React.FC = () => {
   }, [attendees]);
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-slate-300 bg-gray-100 p-2">
+      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
         <button
           onClick={() => navigate('/events')}
-          className="p-2 rounded-sm border border-slate-400 hover:bg-slate-200 transition-colors"
+          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+          title="Back to Events"
         >
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 text-center flex flex-col items-center justify-center">
-          <h1 className="text-2xl font-bold text-slate-800">Attendees</h1>
-          <p className="text-sm text-slate-500">Guest list for your event</p>
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Attendees</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Guest list & real-time check-in manager</p>
         </div>
-        <div className="w-9" />
+        <ThemeToggle />
       </header>
 
       <main className="grow overflow-y-auto p-2">
@@ -262,12 +264,12 @@ const Attendees: React.FC = () => {
                     <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Checked in</p>
-                    <p className="text-2xl font-bold text-[#F97316]">{stats.checkedIn}</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Checked In</p>
+                    <p className="text-2xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">{stats.checkedIn}</p>
                   </div>
                   <div className="text-center col-span-2 sm:col-span-1">
-                    <p className="text-xs text-gray-500 mb-1">By tier</p>
-                    <p className="text-xs font-medium text-gray-700">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">By Tier</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       {Object.entries(stats.tierCounts).map(([tier, count]) => `${tier}: ${count}`).join(' · ') || '—'}
                     </p>
                   </div>
@@ -279,7 +281,7 @@ const Attendees: React.FC = () => {
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value as SortOption)}
-                  className="w-24 shrink-0 min-w-0 rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-700 focus:outline-none"
+                  className="w-28 shrink-0 min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] px-3 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none shadow-xs"
                 >
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>

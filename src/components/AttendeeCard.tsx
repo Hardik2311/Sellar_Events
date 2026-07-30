@@ -35,55 +35,55 @@ const handleShare = (attendee: Attendee) => {
 
 export const AttendeeCard: React.FC<AttendeeCardProps> = ({ attendee, isExpanded, onToggle, onCheckIn, onCancel }) => {
   return (
-    <div className="bg-white rounded-sm shadow-sm border border-gray-100 mb-2 overflow-hidden">
-      <div className="w-full flex items-center justify-between p-3">
-        <button onClick={onToggle} className="flex items-center gap-2.5 min-w-0 flex-1 text-left">
+    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
+      <div className="w-full flex items-center justify-between p-3.5">
+        <button onClick={onToggle} className="flex items-center gap-3 min-w-0 flex-1 text-left">
           <a
             href={`tel:${attendee.phone}`}
             onClick={(e) => e.stopPropagation()}
-            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
-            title="Call"
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-xs"
+            title="Call Attendee"
           >
-            <Phone size={16} />
+            <Phone size={18} />
           </a>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{attendee.name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {attendee.tierName} · {attendee.ticketId}
+            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{attendee.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+              {attendee.tierName} · <span className="font-mono text-slate-600 dark:text-slate-300">{attendee.ticketId}</span>
             </p>
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0">
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[attendee.status]}`}>
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${STATUS_STYLES[attendee.status]}`}>
             {STATUS_LABEL[attendee.status]}
           </span>
-          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          <ChevronDown size={18} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
       {isExpanded && (
-        <div className="border-t border-gray-100 p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2 text-xs text-gray-600">
+        <div className="border-t border-slate-200/80 dark:border-slate-800 p-3.5 space-y-2.5 bg-white dark:bg-slate-900/60">
+          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300 font-medium">
             <span className="flex items-center gap-2">
-              <Mail size={13} className="text-gray-400" /> {attendee.email}
+              <Mail size={14} className="text-slate-400" /> {attendee.email}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-2 text-xs text-gray-600">
+          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300 font-medium">
             <span className="flex items-center gap-2">
-              <Phone size={13} className="text-gray-400" /> {attendee.phone}
+              <Phone size={14} className="text-slate-400" /> {attendee.phone}
             </span>
             {attendee.checkedInAt && (
-              <span className="text-[11px] font-medium text-emerald-600 shrink-0">
+              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
                 Checked in at {new Date(attendee.checkedInAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
           </div>
 
-          <div className="flex rounded-sm overflow-hidden mt-2">
+          <div className="flex rounded-xl overflow-hidden mt-3 gap-2">
             {attendee.status === 'valid' && (
               <button
                 onClick={() => onCheckIn(attendee.id)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#F97316] text-white text-xs font-bold"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 text-xs font-extrabold shadow-xs"
               >
                 <CheckCircle2 size={14} /> Check In
               </button>

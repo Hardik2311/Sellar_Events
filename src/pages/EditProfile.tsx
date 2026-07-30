@@ -1,18 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { FiCamera, FiCheck, FiX, FiArrowLeft } from 'react-icons/fi';
+import { FiCamera, FiCheck, FiX, FiArrowLeft, FiUser } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
 import { storage } from '../lib/firebase';
+import ThemeToggle from '../components/ui/ThemeToggle';
 
-interface ProfileData {
+interface ProfileFormData {
     name: string;
     email: string;
     phone: string;
     aadhaarNumber: string;
     organizationName: string;
+    eventCategory: string;
+    customEventCategory: string;
     website: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    postalCode: string;
     profilePicture: string;
     instagram: string;
     facebook: string;
@@ -20,13 +27,19 @@ interface ProfileData {
     whatsappNumber: string;
 }
 
-const emptyProfile: ProfileData = {
+const emptyProfile: ProfileFormData = {
     name: '',
     email: '',
     phone: '',
     aadhaarNumber: '',
     organizationName: '',
+    eventCategory: '',
+    customEventCategory: '',
     website: '',
+    streetAddress: '',
+    city: '',
+    state: '',
+    postalCode: '',
     profilePicture: '',
     instagram: '',
     facebook: '',
@@ -34,23 +47,41 @@ const emptyProfile: ProfileData = {
     whatsappNumber: '',
 };
 
-// ─── Small shared bits (mirrors the SectionCard / LabeledField pattern) ────
+const eventCategoryOptions = [
+    { value: 'Wedding', label: 'Wedding' },
+    { value: 'Corporate', label: 'Corporate' },
+    { value: 'Birthday', label: 'Birthday' },
+    { value: 'Concert', label: 'Concert / Show' },
+    { value: 'Conference', label: 'Conference' },
+    { value: 'Exhibition', label: 'Exhibition' },
+    { value: 'Other', label: 'Other' },
+];
+
+const indianStates = [
+    'Andhra Pradesh', 'Assam', 'Bihar', 'Chandigarh', 'Chhattisgarh', 'Delhi',
+    'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir',
+    'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra',
+    'Manipur', 'Odisha', 'Punjab', 'Rajasthan', 'Tamil Nadu', 'Telangana',
+    'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+];
+
 const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div className="bg-white rounded-sm border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-2 border-b border-slate-100">
-            <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500">{title}</span>
+    <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-200">
+        <div className="px-5 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+            <span className="text-xs font-extrabold tracking-wider uppercase text-[#007A78] dark:text-[#2DD4BF]">{title}</span>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="p-5">{children}</div>
     </div>
 );
 
 const inputClass =
-    'w-full border border-slate-200 rounded-sm text-sm bg-slate-50 outline-none ' +
-    'transition-all px-3 py-2 text-slate-800 focus:border-slate-400 focus:bg-white';
+    'w-full border border-slate-300 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-900 outline-none ' +
+    'transition-all px-3.5 py-2.5 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 ' +
+    'focus:border-[#007A78] dark:focus:border-[#2DD4BF] focus:ring-2 focus:ring-[#007A78]/20 dark:focus:ring-[#2DD4BF]/20 font-medium';
 
 const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</label>
+    <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">{label}</label>
         {children}
     </div>
 );
@@ -58,43 +89,54 @@ const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 const EditProfile: React.FC = () => {
     const navigate = useNavigate();
     const { user, profile: authProfile, loading: authLoading } = useAuth();
-    const { profile, loading: dataLoading, error: dataError, saveData, refetch } =
+    const { profile, loading: dataLoading, saveData, refetch } =
         useProfileData(user?.uid, authProfile?.companyId);
 
-    const [formData, setFormData] = useState<ProfileData>(emptyProfile);
+    const [formData, setFormData] = useState<ProfileFormData>(emptyProfile);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Profile async load hota hai, isliye jab available ho tab form fill karo
+    // FIXED: Added loading checks and Object.keys check so it only maps real data
     useEffect(() => {
-        if (profile) {
-            const loaded: ProfileData = {
-                name: profile.name || '',
-                email: profile.email || '',
-                phone: profile.phone || '',
-                aadhaarNumber: profile.aadhaarNumber || '',
-                organizationName: profile.organizationName || '',
-                website: profile.website || '',
-                profilePicture: profile.profilePicture || '',
-                instagram: profile.instagram || '',
-                facebook: profile.facebook || '',
-                twitter: profile.twitter || '',
-                whatsappNumber: profile.whatsappNumber || '',
+        if (!dataLoading && !authLoading && profile && Object.keys(profile).length > 0) {
+            const rawCategory = profile.eventCategory || '';
+            const isStandardCategory = eventCategoryOptions.some((opt) => opt.value === rawCategory);
+
+            const loaded: ProfileFormData = {
+                name: profile.name || authProfile?.fullName || user?.displayName || '',
+                email: profile.email || authProfile?.email || user?.email || '',
+                phone: profile.phone || authProfile?.phone || '',
+                aadhaarNumber: profile.aadhaarNumber || authProfile?.aadhaarNumber || '',
+                organizationName: profile.organizationName || authProfile?.organizationName || '',
+                eventCategory: isStandardCategory ? rawCategory : rawCategory ? 'Other' : '',
+                customEventCategory: isStandardCategory ? '' : rawCategory,
+                website: profile.website || authProfile?.website || '',
+                streetAddress: profile.streetAddress || '',
+                city: profile.city || '',
+                state: profile.state || '',
+                postalCode: profile.postalCode || '',
+                profilePicture: profile.profilePicture || authProfile?.profilePictureUrl || user?.photoURL || '',
+                instagram: profile.instagram || authProfile?.instagram || '',
+                facebook: profile.facebook || authProfile?.facebook || '',
+                twitter: profile.twitter || authProfile?.twitter || '',
+                whatsappNumber: profile.whatsappNumber || authProfile?.whatsappNumber || '',
             };
+
             setFormData(loaded);
             setPreviewUrl(loaded.profilePicture || null);
         }
-    }, [profile]);
+    }, [profile, dataLoading, authLoading, user, authProfile]);
 
     const [phoneError, setPhoneError] = useState<string | null>(null);
     const [aadhaarError, setAadhaarError] = useState<string | null>(null);
+    const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
     const [whatsappError, setWhatsappError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
@@ -111,7 +153,15 @@ const EditProfile: React.FC = () => {
         const value = e.target.value;
         if (/^\d{0,12}$/.test(value)) {
             setFormData((prev) => ({ ...prev, aadhaarNumber: value }));
-            setAadhaarError(value.length > 0 && value.length < 12 ? 'Aadhaar number must be exactly 12 digits.' : null);
+            setAadhaarError(value.length > 0 && value.length < 12 ? 'Identifier must be exactly 12 digits.' : null);
+        }
+    };
+
+    const handlePostalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        if (/^\d{0,6}$/.test(value)) {
+            setFormData((prev) => ({ ...prev, postalCode: value }));
+            setPostalCodeError(value.length > 0 && value.length < 6 ? 'Pincode must be exactly 6 digits.' : null);
         }
     };
 
@@ -148,7 +198,12 @@ const EditProfile: React.FC = () => {
         }
 
         if (formData.aadhaarNumber && formData.aadhaarNumber.length !== 12) {
-            setSubmitError('Aadhaar number must be exactly 12 digits.');
+            setSubmitError('Identifier must be exactly 12 digits.');
+            return;
+        }
+
+        if (formData.postalCode && formData.postalCode.length !== 6) {
+            setSubmitError('Pincode must be exactly 6 digits.');
             return;
         }
 
@@ -157,102 +212,112 @@ const EditProfile: React.FC = () => {
             return;
         }
 
-        if (!user || !authProfile?.companyId) {
+        if (!user) {
             setSubmitError('User session not found. Please log in again.');
             return;
         }
+
+        const effectiveCompanyId = authProfile?.companyId || user.uid;
 
         setIsSubmitting(true);
         try {
             let profilePictureUrl = formData.profilePicture;
 
             if (imageFile) {
-                const imageRef = ref(storage, `companies/${authProfile.companyId}/users/${user.uid}/profile.jpg`);
+                const imageRef = ref(storage, `companies/${effectiveCompanyId}/users/${user.uid}/profile.jpg`);
                 await uploadBytes(imageRef, imageFile);
                 profilePictureUrl = await getDownloadURL(imageRef);
             }
 
+            const finalCategory =
+                formData.eventCategory === 'Other'
+                    ? formData.customEventCategory
+                    : formData.eventCategory;
+
             await saveData({
-                ...formData,
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone,
+                aadhaarNumber: formData.aadhaarNumber,
+                organizationName: formData.organizationName,
+                eventCategory: finalCategory,
+                website: formData.website,
+                streetAddress: formData.streetAddress,
+                city: formData.city,
+                state: formData.state,
+                postalCode: formData.postalCode,
+                instagram: formData.instagram,
+                facebook: formData.facebook,
+                twitter: formData.twitter,
+                whatsappNumber: formData.whatsappNumber,
                 profilePicture: profilePictureUrl,
-                ...(profile.role !== 'admin' && { organizationName: undefined, website: undefined }),
             });
 
             refetch();
             setSubmitSuccess('Profile updated successfully!');
-            setTimeout(() => setSubmitSuccess(null), 2500);
+            setTimeout(() => setSubmitSuccess(null), 3000);
         } catch (err) {
             console.error('Failed to save profile:', err);
-            setSubmitError('Failed to save profile. Please try again.');
+            setSubmitError('Failed to save profile. Please check network connection and try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const submitBtnClass = submitSuccess
-    ? 'bg-gradient-to-br from-green-400 to-green-600 shadow-green-200/60'
-    : isSubmitting
-        ? 'bg-orange-200'
-        : 'bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-200/60';
-
     if (authLoading || dataLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-slate-100">
-                <div className="w-10 h-10 rounded-full border-[3px] border-slate-200 border-t-orange-500 animate-spin" />
-            </div>
-        );
-    }
-
-    if (dataError) {
-        return (
-            <div className="flex min-h-screen items-center justify-center text-red-500">
-                {dataError}
+            <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
+                <div className="w-10 h-10 rounded-full border-4 border-slate-200 dark:border-slate-700 border-t-[#007A78] dark:border-t-[#2DD4BF] animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-100">
-            <div className="max-w-3xl mx-auto px-4 py-3 pb-24">
-
-                {/* ── Page Header ── */}
-                <div className="flex items-center gap-3 mb-4">
+        <div className="min-h-screen bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
+            {/* ── Page Header ── */}
+            <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
+                <div className="flex items-center gap-3">
                     <button
                         type="button"
                         onClick={() => navigate(-1)}
-                        className="p-2 rounded-full hover:bg-slate-200 transition"
+                        className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
                         aria-label="Go back"
                     >
-                        <FiArrowLeft className="w-5 h-5 text-slate-700" />
+                        <FiArrowLeft size={18} />
                     </button>
-                    <h1 className="text-xl font-bold text-slate-900 m-0">Edit Profile</h1>
+                    <div>
+                        <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Edit Profile</h1>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update account, organizer & address details</p>
+                    </div>
                 </div>
+                <ThemeToggle />
+            </header>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="max-w-3xl mx-auto px-4 py-5 pb-24">
+                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
                     {/* ── Avatar banner ── */}
-                    <div className="bg-white rounded-sm border border-slate-100 shadow-sm px-5 py-4 flex items-center gap-6">
+                    <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm px-5 py-4 flex items-center gap-6">
                         <div className="relative shrink-0">
                             {previewUrl ? (
                                 <img
                                     src={previewUrl}
                                     alt="Profile"
-                                    className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md shadow-sky-200"
+                                    className="w-20 h-20 rounded-full object-cover border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md"
                                 />
                             ) : (
-                                <div className="w-20 h-20 rounded-full border-2 border-white shadow-md shadow-sky-200 bg-gray-200 flex items-center justify-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10 text-gray-400">
-                                        <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
-                                    </svg>
+                                <div className="w-20 h-20 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                    <FiUser size={32} className="text-slate-400 dark:text-slate-500" />
                                 </div>
                             )}
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-orange-500 border-2 border-white flex items-center justify-center text-white"
+                                className="absolute bottom-0 right-0 p-2 rounded-full bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 shadow-md transition-all active:scale-95"
                                 aria-label="Change photo"
+                                title="Upload Photo"
                             >
-                                <FiCamera size={10} />
+                                <FiCamera size={12} />
                             </button>
                             <input
                                 ref={fileInputRef}
@@ -264,12 +329,12 @@ const EditProfile: React.FC = () => {
                             />
                         </div>
                         <div className="flex flex-col gap-1">
-                            <p className="text-sm font-semibold text-slate-700 m-0">Profile Photo</p>
-                            <div className="flex gap-3">
+                            <p className="text-sm font-extrabold text-slate-900 dark:text-white m-0">Profile Photo</p>
+                            <div className="flex gap-4">
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="text-xs font-medium text-orange-600 hover:underline"
+                                    className="text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:underline"
                                 >
                                     {previewUrl ? 'Change Photo' : 'Add Photo'}
                                 </button>
@@ -277,7 +342,7 @@ const EditProfile: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={handleRemovePhoto}
-                                        className="text-xs font-medium text-red-500 hover:underline"
+                                        className="text-xs font-bold text-red-500 dark:text-red-400 hover:underline"
                                     >
                                         Remove
                                     </button>
@@ -308,19 +373,19 @@ const EditProfile: React.FC = () => {
                                     maxLength={10}
                                     inputMode="numeric"
                                     className={inputClass}
-                                    placeholder="Phone Number"
+                                    placeholder="10-digit Phone Number"
                                 />
-                                {phoneError && <p className="text-red-500 text-[11px] mt-1 mb-0">{phoneError}</p>}
+                                {phoneError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{phoneError}</p>}
                             </LabeledField>
                             <LabeledField label="Email Address">
                                 <input
                                     type="email"
                                     value={formData.email}
                                     readOnly
-                                    className={`${inputClass} bg-slate-100 text-slate-400 cursor-not-allowed`}
+                                    className={`${inputClass} bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed`}
                                 />
                             </LabeledField>
-                            <LabeledField label="Aadhaar Number">
+                            <LabeledField label="Identifier (12-Digit)">
                                 <input
                                     type="text"
                                     name="aadhaarNumber"
@@ -329,15 +394,15 @@ const EditProfile: React.FC = () => {
                                     maxLength={12}
                                     inputMode="numeric"
                                     className={inputClass}
-                                    placeholder="Aadhaar Number"
+                                    placeholder="12-digit Identifier"
                                 />
-                                {aadhaarError && <p className="text-red-500 text-[11px] mt-1 mb-0">{aadhaarError}</p>}
+                                {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
                             </LabeledField>
                         </div>
                     </SectionCard>
 
                     {/* ── Organization Information ── */}
-                    <SectionCard title="Organization Information">
+                    <SectionCard title="Organization Details">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <LabeledField label="Organization Name">
                                 <input
@@ -349,6 +414,35 @@ const EditProfile: React.FC = () => {
                                     placeholder="Organization Name"
                                 />
                             </LabeledField>
+                            <LabeledField label="Primary Event Category">
+                                <select
+                                    name="eventCategory"
+                                    value={formData.eventCategory}
+                                    onChange={handleInputChange}
+                                    className={inputClass}
+                                >
+                                    <option value="">Select Primary Category</option>
+                                    {eventCategoryOptions.map((cat) => (
+                                        <option key={cat.value} value={cat.value}>
+                                            {cat.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </LabeledField>
+
+                            {formData.eventCategory === 'Other' && (
+                                <LabeledField label="Specify Custom Category">
+                                    <input
+                                        type="text"
+                                        name="customEventCategory"
+                                        value={formData.customEventCategory}
+                                        onChange={handleInputChange}
+                                        className={inputClass}
+                                        placeholder="Specify Category"
+                                    />
+                                </LabeledField>
+                            )}
+
                             <LabeledField label="Website">
                                 <input
                                     type="text"
@@ -356,15 +450,84 @@ const EditProfile: React.FC = () => {
                                     value={formData.website}
                                     onChange={handleInputChange}
                                     className={inputClass}
-                                    placeholder="https://"
+                                    placeholder="https://yourwebsite.com"
                                 />
                             </LabeledField>
                         </div>
                     </SectionCard>
 
-                    {/* ── Social Media ── */}
-                    <SectionCard title="Social Media">
+                    {/* ── Address & Location ── */}
+                    <SectionCard title="Address & Location">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="sm:col-span-2">
+                                <LabeledField label="Street Address">
+                                    <input
+                                        type="text"
+                                        name="streetAddress"
+                                        value={formData.streetAddress}
+                                        onChange={handleInputChange}
+                                        className={inputClass}
+                                        placeholder="Flat, House no., Building, Street address"
+                                    />
+                                </LabeledField>
+                            </div>
+                            <LabeledField label="City">
+                                <input
+                                    type="text"
+                                    name="city"
+                                    value={formData.city}
+                                    onChange={handleInputChange}
+                                    className={inputClass}
+                                    placeholder="City / Town"
+                                />
+                            </LabeledField>
+                            <LabeledField label="State">
+                                <select
+                                    name="state"
+                                    value={formData.state}
+                                    onChange={handleInputChange}
+                                    className={inputClass}
+                                >
+                                    <option value="">Select State</option>
+                                    {indianStates.map((st) => (
+                                        <option key={st} value={st}>
+                                            {st}
+                                        </option>
+                                    ))}
+                                </select>
+                            </LabeledField>
+                            <LabeledField label="Postal Code / Pincode">
+                                <input
+                                    type="text"
+                                    name="postalCode"
+                                    value={formData.postalCode}
+                                    onChange={handlePostalCodeChange}
+                                    maxLength={6}
+                                    inputMode="numeric"
+                                    className={inputClass}
+                                    placeholder="6-digit Pincode"
+                                />
+                                {postalCodeError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{postalCodeError}</p>}
+                            </LabeledField>
+                        </div>
+                    </SectionCard>
+
+                    {/* ── Social Media & Contact ── */}
+                    <SectionCard title="Social Media & Contact">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <LabeledField label="WhatsApp Number">
+                                <input
+                                    type="text"
+                                    name="whatsappNumber"
+                                    value={formData.whatsappNumber}
+                                    onChange={handleWhatsappChange}
+                                    maxLength={10}
+                                    inputMode="numeric"
+                                    className={inputClass}
+                                    placeholder="10-digit WhatsApp Number"
+                                />
+                                {whatsappError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{whatsappError}</p>}
+                            </LabeledField>
                             <LabeledField label="Instagram">
                                 <input
                                     type="text"
@@ -395,56 +558,41 @@ const EditProfile: React.FC = () => {
                                     placeholder="@yourhandle"
                                 />
                             </LabeledField>
-                            <LabeledField label="WhatsApp Number">
-                                <input
-                                    type="text"
-                                    name="whatsappNumber"
-                                    value={formData.whatsappNumber}
-                                    onChange={handleWhatsappChange}
-                                    maxLength={10}
-                                    inputMode="numeric"
-                                    className={inputClass}
-                                    placeholder="WhatsApp Number"
-                                />
-                                {whatsappError && <p className="text-red-500 text-[11px] mt-1 mb-0">{whatsappError}</p>}
-                            </LabeledField>
                         </div>
                     </SectionCard>
 
                     {/* ── Error banner ── */}
                     {submitError && (
-                        <div className="bg-red-50 border border-red-200 rounded-sm px-4 py-2.5 flex items-center gap-2">
+                        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 flex items-center justify-between gap-2 shadow-xs">
+                            <p className="text-red-600 dark:text-red-400 text-xs font-bold m-0">{submitError}</p>
                             <button type="button" onClick={() => setSubmitError(null)} className="text-red-500 shrink-0">
-                                <FiX size={14} />
+                                <FiX size={16} />
                             </button>
-                            <p className="text-red-500 text-sm m-0">{submitError}</p>
                         </div>
                     )}
 
                     {/* ── Submit button ── */}
-                    <div className="sticky bottom-0 left-0 right-0 sm:static bg-slate-100 sm:bg-transparent pt-2 sm:pt-0 -mx-4 sm:mx-0 px-4 sm:px-0 pb-2 sm:pb-0 z-10">
+                    <div className="sticky bottom-14 md:bottom-0 left-0 right-0 p-3.5 bg-white dark:bg-[#1E293B] border-t border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-20">
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className={[
-                                'w-full py-4 rounded-sm text-white text-[15px] font-semibold border-0',
-                                'flex items-center justify-center gap-2 shadow-lg transition-all duration-300',
-                                isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer',
-                                submitBtnClass,
-                            ].join(' ')}
+                            className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${submitSuccess
+                                    ? 'bg-emerald-600 dark:bg-emerald-400'
+                                    : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
+                                }`}
                         >
                             {isSubmitting ? (
-                                <>
-                                    <div className="w-4 h-4 rounded-sm border-2 border-white/40 border-t-white animate-spin" />
-                                    Saving…
-                                </>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                    <span>Saving Profile Changes…</span>
+                                </div>
                             ) : submitSuccess ? (
-                                <>
+                                <div className="flex items-center gap-2">
                                     <FiCheck size={18} />
-                                    {submitSuccess}
-                                </>
+                                    <span>{submitSuccess}</span>
+                                </div>
                             ) : (
-                                'Save Changes'
+                                'Save Profile Changes'
                             )}
                         </button>
                     </div>

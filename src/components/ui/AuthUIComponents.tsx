@@ -273,12 +273,12 @@ export const AuthHeroPanel: React.FC<{
         }}
       />
       {/* soft glow accents */}
-      <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-amber-400/20 blur-3xl" />
+      <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-[#007A78]/30 dark:bg-[#2DD4BF]/20 blur-3xl" />
       <div className="absolute -bottom-20 -right-10 w-72 h-72 rounded-full bg-blue-500/20 blur-3xl" />
 
       <div className="relative z-10 flex flex-col items-center text-center px-8">
-        <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4 backdrop-blur-sm">
-          <FiCalendar className="text-amber-400" size={28} />
+        <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4">
+          <FiCalendar className="text-[#007A78] dark:text-[#2DD4BF]" size={28} />
         </div>
         <h2 className="text-white text-2xl font-bold tracking-tight">{title}</h2>
         <p className="text-slate-300 text-sm mt-2 max-w-55">{subtitle}</p>

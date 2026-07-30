@@ -35,22 +35,22 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
   return (
     <div className="space-y-3">
       {tiers.map((tier, index) => (
-        <div key={tier.id} className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
-          <span className="shrink-0 h-6 w-6 mt-1.5 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center text-xs font-bold">
+        <div key={tier.id} className="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5">
+          <span className="shrink-0 h-7 w-7 mt-1.5 rounded-full bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] flex items-center justify-center text-xs font-black">
             {index + 1}
           </span>
 
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Tier name</label>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Tier Name</label>
               <TextInput
-                placeholder="e.g. General"
+                placeholder="e.g. General Admission"
                 value={tier.name}
                 onChange={(e) => updateTier(tier.id, { name: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Price (₹)</label>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Price (₹)</label>
               <TextInput
                 type="number"
                 min={0}
@@ -60,7 +60,7 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Quantity</label>
               <TextInput
                 type="number"
                 min={1}
@@ -75,7 +75,7 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
             type="button"
             onClick={() => removeTier(tier.id)}
             disabled={tiers.length <= 1}
-            className="shrink-0 mt-1.5 p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors"
+            className="shrink-0 mt-1.5 p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
             title={tiers.length <= 1 ? 'At least one tier is required' : 'Remove tier'}
           >
             <Trash2 size={16} />
@@ -86,9 +86,9 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
       <button
         type="button"
         onClick={addTier}
-        className="flex items-center justify-center gap-1.5 w-full rounded-md border border-dashed border-gray-300 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-[#F97316] hover:border-orange-200 transition-colors"
+        className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-[#007A78]/5 hover:text-[#007A78] dark:hover:text-[#2DD4BF] hover:border-[#007A78]/50 transition-all"
       >
-        <Plus size={15} /> Add ticket tier
+        <Plus size={16} /> Add Ticket Tier
       </button>
     </div>
   );

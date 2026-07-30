@@ -35,10 +35,28 @@
   font-style: normal;
 }
 
-@theme inline {
-  --font-sans: 'Comfortaa', sans-serif;
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+}
+
+html {
+  font-family: 'Comfortaa', sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 body {
   font-family: 'Comfortaa', sans-serif;
+  @apply bg-slate-100 text-[#111827] antialiased dark:bg-[#0F172A] dark:text-[#F8FAFC];
+  min-height: 100vh;
+}
+
+/* Modern Teal System Utility Classes */
+.teal-card {
+  @apply bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-xs transition-all duration-200;
+}
+
+.teal-btn-primary {
+  @apply bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-colors shadow-xs active:scale-[0.98];
 }

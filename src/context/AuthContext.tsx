@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
 interface UserProfile {
@@ -43,22 +43,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        const tokenResult = await firebaseUser.getIdTokenResult();
-        const companyId = tokenResult.claims.companyId as string | undefined;
+        let companyId: string | undefined = undefined;
+        try {
+          const tokenResult = await firebaseUser.getIdTokenResult();
+          companyId = tokenResult.claims.companyId as string | undefined;
+        } catch (e) {
+          console.warn('Could not read id token claims:', e);
+        }
 
-        if (companyId) {
-          const userDocRef = doc(db, 'companies', companyId, 'users', firebaseUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-
-          if (userDocSnap.exists()) {
-            const data = userDocSnap.data();
-            setProfile({
-              fullName: data.fullName,
-              email: data.email,
-              role: data.role,
-              companyId,
-            });
+        if (!companyId) {
+          try {
+            const q = query(collection(db, 'companies'), where('ownerUID', '==', firebaseUser.uid));
+            const querySnap = await getDocs(q);
+            if (!querySnap.empty) {
+              companyId = querySnap.docs[0].id;
+            }
+          } catch (e) {
+            console.warn('Could not query company by ownerUID in AuthContext:', e);
           }
+        }
+
+        const effectiveCompanyId = companyId || firebaseUser.uid;
+
+        try {
+          const userDocRef = doc(db, 'companies', effectiveCompanyId, 'users', firebaseUser.uid);
+          const companyDocRef = doc(db, 'companies', effectiveCompanyId, 'business_info', 'profile');
+          const companyRootRef = doc(db, 'companies', effectiveCompanyId);
+
+          const [userSnap, companySnap, rootSnap] = await Promise.all([
+            getDoc(userDocRef).catch(() => null),
+            getDoc(companyDocRef).catch(() => null),
+            getDoc(companyRootRef).catch(() => null),
+          ]);
+
+          const userData = userSnap && userSnap.exists() ? userSnap.data() : {};
+          const companyData = companySnap && companySnap.exists() ? companySnap.data() : {};
+          const rootData = rootSnap && rootSnap.exists() ? rootSnap.data() : {};
+
+          const mergedCompany = { ...rootData, ...companyData };
+
+          setProfile({
+            fullName: userData.fullName || userData.name || mergedCompany.fullName || firebaseUser.displayName || 'Organizer User',
+            email: userData.email || mergedCompany.email || firebaseUser.email || '',
+            role: userData.role || mergedCompany.role || 'admin',
+            companyId: effectiveCompanyId,
+            phone: userData.phone || rootData.ownerPhoneNumber || mergedCompany.phone,
+            aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
+            instagram: userData.instagram || mergedCompany.instagram,
+            facebook: userData.facebook || mergedCompany.facebook,
+            twitter: userData.twitter || mergedCompany.twitter,
+            whatsappNumber: userData.whatsappNumber || mergedCompany.whatsappNumber || rootData.ownerPhoneNumber,
+            profilePictureUrl: userData.profilePictureUrl || userData.profilePicture || mergedCompany.profilePictureUrl || firebaseUser.photoURL || undefined,
+            organizationName: mergedCompany.organizationName || rootData.name || userData.organizationName,
+            website: mergedCompany.website || userData.website,
+          });
+        } catch (e) {
+          console.warn('Error reading user document:', e);
+          setProfile({
+            fullName: firebaseUser.displayName || 'Organizer User',
+            email: firebaseUser.email || '',
+            role: 'admin',
+            companyId: effectiveCompanyId,
+          });
         }
       } else {
         setProfile(null);

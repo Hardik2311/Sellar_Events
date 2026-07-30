@@ -26,10 +26,10 @@ const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan, title = 
       <div className="w-full max-w-sm rounded-lg bg-white shadow-xl overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Camera size={16} className="text-[#F97316]" />
-            <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+            <Camera size={18} className="text-[#007A78] dark:text-[#2DD4BF]" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-sm hover:bg-gray-100 transition-colors">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -47,7 +47,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ isOpen, onClose, onScan, title = 
               <canvas ref={canvasRef} className="hidden" />
               {/* Viewfinder frame overlay */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="h-2/3 w-2/3 rounded-lg border-2 border-[#F97316]/80" />
+                <div className="h-2/3 w-2/3 rounded-2xl border-2 border-[#007A78] dark:border-[#2DD4BF]" />
               </div>
               {scanning && (
                 <p className="absolute bottom-3 left-0 right-0 text-center text-xs text-white/80">

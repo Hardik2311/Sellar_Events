@@ -2,10 +2,10 @@ import React from 'react';
 import type { EventStatus } from '../../types/event.types';
 
 const STATUS_STYLES: Record<EventStatus, string> = {
-  draft: 'bg-slate-100 text-slate-600',
-  published: 'bg-orange-50 text-[#F97316]',
-  completed: 'bg-emerald-50 text-emerald-600',
-  cancelled: 'bg-red-50 text-red-500',
+  draft: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
+  published: 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]',
+  completed: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400',
+  cancelled: 'bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400',
 };
 
 const STATUS_LABEL: Record<EventStatus, string> = {

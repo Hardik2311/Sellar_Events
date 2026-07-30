@@ -9,6 +9,7 @@ import {
   FloatingLabelTextArea,
 } from '../components/ui/AuthUIComponents'
 import ImageUploadBox from '../components/ui/ImageUploadBox';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { compressImageToTargetSize } from '../lib/imageCompression'
@@ -144,20 +145,21 @@ const CreateEvent: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-24 md:mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-slate-300 bg-gray-100 p-2">
+      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
         <button
           onClick={() => navigate('/events')}
-          className="p-2 rounded-sm border border-slate-400 hover:bg-slate-200 transition-colors"
+          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+          title="Back to Events"
         >
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 text-center flex flex-col items-center justify-center">
-          <h1 className="text-2xl font-bold text-slate-800">Create Event</h1>
-          <p className="text-sm text-slate-500">Fill in the details, add tickets, then publish</p>
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
         </div>
-        <div className="w-9" /> {/* balances the back button so the title stays centered */}
+        <ThemeToggle />
       </header>
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
@@ -335,21 +337,21 @@ const CreateEvent: React.FC = () => {
           <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2">{saveError}</p>
         </div>
       )}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 md:left-48 border-t border-gray-200 bg-white p-3 flex justify-center gap-3 z-30">
+      <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
         <div className="w-full max-w-3xl flex gap-3">
           <button
             onClick={handleSaveDraft}
             disabled={isSaving}
-            className="flex-1 rounded-md border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
           >
-            {isSaving ? 'Saving…' : 'Save as draft'}
+            {isSaving ? 'Saving…' : 'Save as Draft'}
           </button>
           <button
             onClick={handlePublish}
             disabled={!isPublishable || isSaving}
-            className="flex-1 rounded-md bg-[#F97316] py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#F97316] transition-colors"
+            className="flex-1 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
           >
-            {isSaving ? 'Saving…' : 'Preview & publish'}
+            {isSaving ? 'Saving…' : 'Preview & Publish Event'}
           </button>
         </div>
       </div>

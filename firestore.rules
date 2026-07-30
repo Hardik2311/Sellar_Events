@@ -1,34 +1,61 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isCompanyMember(companyId) {
+      return isAuthenticated() && (request.auth.token.companyId == companyId || request.auth.uid == companyId);
+    }
+
+    function isSelf(companyId, userId) {
+      return isCompanyMember(companyId) && request.auth.uid == userId;
+    }
+
+    // --- Tenant Data (Sellar Events) ---
     match /companies/{companyId} {
-      allow read: if request.auth != null && request.auth.token.companyId == companyId;
-      allow write: if request.auth != null
-                   && request.auth.token.companyId == companyId
-                   && request.auth.token.role == "admin";
 
+      // Company document
+      allow read: if true;
+      allow update: if isCompanyMember(companyId);
+
+      // Business Info (Organization name, website, branding)
+      match /business_info/{docId} {
+        allow read: if true;
+        allow write: if isCompanyMember(companyId);
+      }
       match /businessinfo/{docId} {
-        allow read: if request.auth != null && request.auth.token.companyId == companyId;
-        allow write: if request.auth != null
-                     && request.auth.token.companyId == companyId
-                     && request.auth.token.role == "admin";
+        allow read: if true;
+        allow write: if isCompanyMember(companyId);
       }
 
+      // Users / Organizer Profiles
       match /users/{userId} {
-        allow read: if request.auth != null && request.auth.token.companyId == companyId;
-        allow write: if request.auth != null
-                     && request.auth.token.companyId == companyId
-                     && (request.auth.uid == userId || request.auth.token.role == "admin");
+        allow read: if isCompanyMember(companyId);
+        allow create, update: if isCompanyMember(companyId) || isSelf(companyId, userId);
+        allow delete: if false;
       }
 
+      // Events Collection
       match /events/{eventId} {
-        allow read: if request.auth != null && request.auth.token.companyId == companyId;
-        allow write: if request.auth != null && request.auth.token.companyId == companyId;
+        // Public can discover & view events
+        allow read: if true;
+        // Only company members can create, edit, or delete events
+        allow write: if isCompanyMember(companyId);
 
+        // Attendees (Guest List & Real-time Check-ins)
         match /attendees/{attendeeId} {
-          allow read: if request.auth != null && request.auth.token.companyId == companyId;
-          allow write: if request.auth != null && request.auth.token.companyId == companyId;
+          allow read, write: if isCompanyMember(companyId);
         }
+      }
+
+      // Catch-all for any other company subcollections
+      match /{collection}/{docId} {
+        allow read, write: if isCompanyMember(companyId);
       }
     }
   }
