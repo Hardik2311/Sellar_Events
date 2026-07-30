@@ -34,7 +34,7 @@ export const SalesTrendCard: React.FC<SalesTrendCardProps> = ({ data, isDataVisi
               return (
                 <div key={point.date} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
                   <div
-                    className="w-full rounded-t-sm bg-orange-100 hover:bg-[#F97316] transition-colors"
+                    className="w-full rounded-t-lg bg-[#007A78]/20 hover:bg-[#007A78] dark:bg-[#2DD4BF]/30 dark:hover:bg-[#2DD4BF] transition-all"
                     style={{ height: `${heightPercent}%` }}
                     title={`₹${point.revenue.toLocaleString('en-IN')}`}
                   />

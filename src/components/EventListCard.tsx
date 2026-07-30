@@ -52,8 +52,10 @@ export const EventListCard: React.FC<EventListCardProps> = ({
                 <button
                   key={event.id}
                   onClick={() => onSelect(event.id)}
-                  className={`w-full text-left rounded-md border p-2.5 transition-colors ${
-                    isActive ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                  className={`w-full text-left rounded-xl border p-3 transition-all ${
+                    isActive
+                      ? 'border-[#007A78]/40 bg-[#007A78]/10 dark:border-[#2DD4BF]/40 dark:bg-[#2DD4BF]/15 font-bold'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex justify-between items-start gap-2">

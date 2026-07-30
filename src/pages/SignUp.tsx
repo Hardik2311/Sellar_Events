@@ -25,7 +25,6 @@ import { Building2Icon, PinIcon } from 'lucide-react';
 import {
   FloatingLabelInput,
   FloatingLabelSelect,
-  CustomButton,
   Spinner,
   Stepper,
   AuthHeroPanel,
@@ -476,48 +475,46 @@ const Signup: React.FC = () => {
         </div>
 
         {/* Sticky footer action */}
-        <div className="fixed lg:absolute bottom-0 left-0 lg:left-auto right-0 lg:w-1/2 p-2 h-[110px] bg-gray-100 border-t border-gray-200 z-50 shadow-lg">
+        <div className="fixed lg:absolute bottom-0 left-0 lg:left-auto right-0 lg:w-1/2 p-3 h-[110px] bg-[#F9FAFB] dark:bg-[#1E293B] border-t border-slate-200 dark:border-slate-800 z-50 shadow-xl">
           <div className="max-w-md mx-auto space-y-2">
             {step === 1 ? (
-              <CustomButton
+              <button
                 type="button"
-                variant="filled"
                 onClick={handleContinue}
-                className="w-full h-12 text-lg"
+                className="w-full py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs"
               >
-                Continue
-              </CustomButton>
+                Continue to Organization Setup
+              </button>
             ) : (
-              <CustomButton
+              <button
                 type="button"
-                variant="filled"
                 onClick={handleFinishSetup}
                 disabled={isSubmitting}
-                className="w-full h-12 text-lg"
+                className="w-full py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center gap-2">
                     <Spinner />
-                    <span>Setting up...</span>
+                    <span>Setting up account...</span>
                   </div>
                 ) : submitSuccess ? (
                   <div className="flex items-center justify-center gap-2">
-                    <FiCheckCircle />
-                    <span>Account Created</span>
+                    <FiCheckCircle size={18} />
+                    <span>Account Created Successfully!</span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
                     <span>Complete Registration</span>
-                    <FiCheckCircle />
+                    <FiCheckCircle size={18} />
                   </div>
                 )}
-              </CustomButton>
+              </button>
             )}
 
             {step === 1 && (
-              <p className="text-center text-sm text-gray-600">
+              <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400">
                 Already have an account?{' '}
-                <Link to="/login" className="font-semibold text-blue-600 hover:underline">
+                <Link to="/login" className="font-extrabold text-[#007A78] dark:text-[#2DD4BF] hover:underline">
                   Log in
                 </Link>
               </p>

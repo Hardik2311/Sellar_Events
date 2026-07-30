@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { RefreshCw, Loader2, Eye, EyeOff } from 'lucide-react';
+import { RefreshCw, Loader2, Eye, EyeOff, LayoutDashboard } from 'lucide-react';
 import { SAMPLE_EVENT_DATA } from '../data/sampleEventData';
 import EventListCard from '../components/EventListCard';
 import EventOverviewCard from '../components/EventOverviewCard';
 import TicketTierBreakdown from '../components/TicketTierBreakDown';
 import SalesTrendCard from '../components/SalesTrendCard';
 import { EventFilterProvider, EventDateFilter } from '../components/ui/EventdateFilter';
+import ThemeToggle from '../components/ui/ThemeToggle';
 
 // TODO — backend wiring (mirrors HomePage.tsx in the catalogue app):
 // 1. Replace SAMPLE_EVENT_DATA with `fetchDashboardData<EventDashboardData>({ ... })`
@@ -32,21 +33,25 @@ const EventDashboardContent: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-300 bg-gray-100 p-2">
-        <div className="w-20" />
-
-        <div className="flex-1 text-center flex flex-col items-center justify-center">
-          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-sm text-slate-500">Your business</p>
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+            <LayoutDashboard size={20} />
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Dashboard</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Real-time ticketing & sales analytics</p>
+          </div>
         </div>
 
-        <div className="w-20 flex justify-end items-center gap-2">
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             onClick={() => setIsDataVisible(!isDataVisible)}
-            className="p-2 rounded-sm border border-slate-400 hover:bg-slate-200 transition-colors"
-            title={isDataVisible ? 'Hide Data' : 'Show Data'}
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            title={isDataVisible ? 'Hide Sensitive Data' : 'Show Sensitive Data'}
           >
             {isDataVisible ? <Eye size={18} /> : <EyeOff size={18} />}
           </button>
@@ -54,15 +59,19 @@ const EventDashboardContent: React.FC = () => {
       </header>
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
-      <main className="grow overflow-y-auto p-2">
-        <div className="flex justify-center gap-2 mb-2">
-          <p className="text-sm text-slate-500 flex items-center">Last updated: just now</p>
+      <main className="grow overflow-y-auto p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4 max-w-7xl mx-auto">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <span>Last updated: just now</span>
+          </p>
           <button
             onClick={handleRefresh}
-            className={`p-1 rounded-full hover:bg-slate-200 text-slate-600 transition-all ${loading ? 'animate-spin' : ''
-              }`}
+            className={`p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${
+              loading ? 'animate-spin' : ''
+            }`}
+            title="Refresh data"
           >
-            {loading ? <Loader2 size={14} /> : <RefreshCw size={14} />}
+            {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
           </button>
         </div>
 

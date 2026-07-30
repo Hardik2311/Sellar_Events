@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import {
   type PublicEvent,
   CATEGORY_GRADIENTS,
@@ -190,17 +191,20 @@ const OrganizerEventDiscover: React.FC = () => {
   const openEvent = (event: PublicEvent) => navigate(`/events/e/${event.id}`);
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-slate-300 bg-gray-100/95 p-3 backdrop-blur">
+      <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3.5 shadow-xs">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-slate-800">
-              Sellar <span className="text-[#F97316]">Events</span>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+              Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
             </h1>
-            <span className="flex items-center gap-1 text-sm text-slate-500">
-              <MapPin size={15} /> Lucknow
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <MapPin size={14} className="text-[#007A78] dark:text-[#2DD4BF]" /> Lucknow, IN
+              </span>
+              <ThemeToggle />
+            </div>
           </div>
 
           <div className="relative">

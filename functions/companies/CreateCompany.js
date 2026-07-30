@@ -63,10 +63,10 @@ exports.createCompany = onCall(async (request) => {
 
     // Write placeholder for permissions
     await companyRef.collection("permissions").doc("default").set({ initialized: true });
-    
+
     // Write placeholder for cata_permissions
     await companyRef.collection("cata_permissions").doc("default").set({ initialized: true });
-    
+
     // Write placeholder for settings
     await companyRef.collection("settings").doc("default").set({ initialized: true });
 
@@ -74,6 +74,7 @@ exports.createCompany = onCall(async (request) => {
     await companyRef.collection("users").doc(uid).set({
       fullName,
       email: email || "",
+      phoneNumber: whatsappNumber || "",
       role: "admin",
       createdAt: now,
     });

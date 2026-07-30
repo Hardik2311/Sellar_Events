@@ -153,8 +153,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                       <button
                         type="button"
                         onClick={() => update('isOnline', false)}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                          !form.isOnline ? 'bg-orange-50 text-[#F97316]' : 'text-gray-500'
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
+                          !form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
                         }`}
                       >
                         In-person
@@ -162,8 +162,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                       <button
                         type="button"
                         onClick={() => update('isOnline', true)}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                          form.isOnline ? 'bg-orange-50 text-[#F97316]' : 'text-gray-500'
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
+                          form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
                         }`}
                       >
                         Online

@@ -14,43 +14,47 @@ import OrganizerEventDetail from './pages/Organizereventdetail'
 import CustomerEventDiscover from './pages/Customereventdiscover'
 import CustomerEventDetail from './pages/Customereventdetail'
 import CheckoutPage from './pages/Checkout'
+import { ThemeProvider } from './context/ThemeContext'
 
 
 function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        {/* Auth routes — standalone, no sidebar/nav chrome */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <Routes>
+          {/* Auth routes — public standalone */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
 
-        <Route path="/" element={<Navigate to="/events" replace />} />
-        <Route
-          path="/events"
-          element={
-            <ProtectedRoute>
-              <EventsLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<EventDashboard />} />
-          <Route path="create" element={<CreateEvent />} />
-          <Route path="attendees" element={<Attendees />} />
-          <Route path="account" element={<Account />} />
-          <Route path="account/edit" element={<EditProfile />} />
-          <Route path="discover" element={<OrganizerEventDiscover />} />
-          <Route path="e/:id" element={<OrganizerEventDetail />} />
-          {/* Add once built: */}
-          {/* <Route path="payouts" element={<Payouts />} /> */}
-        </Route>
+          {/* Root redirect to events */}
+          <Route path="/" element={<Navigate to="/events" replace />} />
 
-        {/* Customer-facing routes — standalone, no organizer sidebar/nav chrome */}
-        <Route path="/discover" element={<CustomerEventDiscover />} />
-        <Route path="/e/:id" element={<CustomerEventDetail />} />
-        <Route path="/checkout/:id" element={<CheckoutPage />} />
-      </Routes >
-    </AuthProvider>
-  )
+          {/* Protected Organizer routes */}
+          <Route
+            path="/events"
+            element={
+              <ProtectedRoute>
+                <EventsLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<EventDashboard />} />
+            <Route path="create" element={<CreateEvent />} />
+            <Route path="attendees" element={<Attendees />} />
+            <Route path="account" element={<Account />} />
+            <Route path="account/edit" element={<EditProfile />} />
+            <Route path="discover" element={<OrganizerEventDiscover />} />
+            <Route path="e/:id" element={<OrganizerEventDetail />} />
+          </Route>
+
+          {/* Customer-facing public routes */}
+          <Route path="/discover" element={<CustomerEventDiscover />} />
+          <Route path="/e/:id" element={<CustomerEventDetail />} />
+          <Route path="/checkout/:id" element={<CheckoutPage />} />
+        </Routes>
+      </AuthProvider>
+    </ThemeProvider>
+  );
 }
 
 export default App

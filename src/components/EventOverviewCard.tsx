@@ -44,21 +44,21 @@ export const EventOverviewCard: React.FC<EventOverviewCardProps> = ({ event, isD
 
       <CardContent className="grid grid-cols-2 gap-4">
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Tickets sold</p>
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Tickets Sold</p>
           {loading ? (
-            <div className="h-8 w-20 mx-auto animate-pulse rounded bg-gray-100" />
+            <div className="h-8 w-20 mx-auto animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
           ) : (
-            <p className="text-3xl font-bold text-[#F97316]">
+            <p className="text-2xl sm:text-3xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">
               {isDataVisible ? `${event.ticketsSold}/${event.ticketsTotal}` : '••••'}
             </p>
           )}
         </div>
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Revenue</p>
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Total Revenue</p>
           {loading ? (
-            <div className="h-8 w-20 mx-auto animate-pulse rounded bg-gray-100" />
+            <div className="h-8 w-20 mx-auto animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
           ) : (
-            <p className="text-3xl font-bold text-[#F97316]">
+            <p className="text-2xl sm:text-3xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">
               {isDataVisible ? `₹${event.revenue.toLocaleString('en-IN')}` : '••••'}
             </p>
           )}
