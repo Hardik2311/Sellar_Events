@@ -65,6 +65,7 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
             'py-3 text-[15px] text-slate-800 outline-none transition-colors',
             'focus:border-slate-500',
             icon ? 'pl-11 pr-3' : 'px-3',
+            (rest.type === 'date' || rest.type === 'time') && '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full',
             className,
           ].join(' ')}
           {...rest}

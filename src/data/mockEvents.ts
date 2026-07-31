@@ -1,16 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────
-// Shared event data, types, and helpers.
-// Both EventDiscover.tsx and EventDetail.tsx import from here so the two
-// pages always agree on shape and formatting.
-//
-// TODO — backend wiring:
-// Replace MOCK_EVENTS + the helpers that read it with real API calls, e.g.
-//   GET /events?status=published            (discover page, list)
-//   GET /events/:id                         (detail page, single event)
-// Only status: 'published' events should ever reach customers — drafts
-// stay organizer-only until published.
-// ─────────────────────────────────────────────────────────────────────────
-
 export interface PublicTicketTier {
   id: string;
   name: string;
@@ -42,109 +29,13 @@ export interface PublicEvent {
   // Explicitly curated by the organizer/admin — not derived from sales or
   // date. Falls back to "soonest upcoming event" if nothing is flagged.
   featured?: boolean;
+  // NEW — how attendees sign up. Optional + defaulted to 'tickets' at the
+  // mapping layer (mapDocToPublicEvent) so existing docs without this field
+  // keep behaving as ticketed events.
+  registrationMode?: 'tickets' | 'rsvp';
+  rsvpLink?: string;
+  rsvpButtonLabel?: string;
 }
-
-export const MOCK_EVENTS: PublicEvent[] = [
-  {
-    id: 'evt-comedy-01',
-    title: 'Open Mic Comedy Night',
-    category: 'Comedy',
-    description:
-      'A rowdy night of new material from the city\u2019s sharpest up-and-coming comics. Expect a few bits that bomb, a few that land hard, and a host who won\u2019t let anyone off easy. BYO thick skin.',
-    date: '2026-07-25',
-    endDate: '2026-07-25',
-    time: '19:30',
-    venue: 'Cafe Blend, Gomti Nagar, Lucknow',
-    isOnline: false,
-    organizerName: 'Blend Live',
-    coverImage: null,
-    status: 'published',
-    featured: true,
-    tiers: [
-      { id: 't1', name: 'General', price: 199, quantity: 150, sold: 120 },
-      { id: 't2', name: 'Front row', price: 349, quantity: 30, sold: 22 },
-    ],
-  },
-  {
-    id: 'evt-music-01',
-    title: 'College Music Fest',
-    category: 'Music',
-    description:
-      'Six bands, one stage, and a night that decides who\u2019s headlining next year. Food stalls open from 4pm, gates close at capacity.',
-    date: '2026-08-02',
-    endDate: '2026-08-02',
-    time: '17:00',
-    venue: 'Ambedkar Ground, Lucknow',
-    isOnline: false,
-    organizerName: 'Campus Beats',
-    coverImage: null,
-    status: 'published',
-    tiers: [{ id: 't1', name: 'General', price: 499, quantity: 500, sold: 340 }],
-  },
-  {
-    id: 'evt-workshop-01',
-    title: 'Design Sprint Workshop',
-    category: 'Workshop',
-    description:
-      'A hands-on half day taking one idea from sketch to tested prototype. Bring a laptop; everything else is provided. Recording shared with attendees afterward.',
-    date: '2026-08-05',
-    endDate: '2026-08-05',
-    time: '10:00',
-    venue: '',
-    isOnline: true,
-    organizerName: 'Studio North',
-    coverImage: null,
-    status: 'draft',
-    tiers: [{ id: 't1', name: 'Seat', price: 0, quantity: 200, sold: 188 }],
-  },
-  {
-    id: 'evt-comedy-02',
-    title: 'Stand-up Saturdays Vol. 2',
-    category: 'Comedy',
-    description: 'Back by popular demand \u2014 four comics, no filter, one very small stage.',
-    date: '2026-08-09',
-    endDate: '2026-08-09',
-    time: '20:00',
-    venue: 'The Attic, Hazratganj, Lucknow',
-    isOnline: false,
-    organizerName: 'Blend Live',
-    coverImage: null,
-    status: 'published',
-    tiers: [{ id: 't1', name: 'General', price: 249, quantity: 80, sold: 80 }],
-  },
-  {
-    id: 'evt-networking-01',
-    title: 'Founders Fireside Chat',
-    category: 'Networking',
-    description:
-      'An unscripted conversation with three founders about the year they almost quit. Q&A open floor for the last 20 minutes.',
-    date: '2026-08-14',
-    endDate: '2026-08-14',
-    time: '18:30',
-    venue: '',
-    isOnline: true,
-    organizerName: 'Startup Founders Collective',
-    coverImage: null,
-    status: 'completed',
-    tiers: [{ id: 't1', name: 'General', price: 0, quantity: 300, sold: 96 }],
-  },
-  {
-    id: 'evt-other-01',
-    title: 'Lucknow Food & Flea Market',
-    category: 'Other',
-    customCategory: 'Market',
-    description: 'Local makers, street food stalls, and live music through the afternoon, both days.',
-    date: '2026-08-16',
-    endDate: '2026-08-17',
-    time: '11:00',
-    venue: 'Kukrail Riverside, Lucknow',
-    isOnline: false,
-    organizerName: 'Ganga Foundation',
-    coverImage: null,
-    status: 'published',
-    tiers: [{ id: 't1', name: 'Entry', price: 99, quantity: 1000, sold: 410 }],
-  },
-];
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {
   Comedy: 'from-orange-200 to-amber-100',

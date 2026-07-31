@@ -16,6 +16,7 @@ interface ProfileFormData {
     eventCategory: string;
     customEventCategory: string;
     website: string;
+    gstinNumber: string;
     streetAddress: string;
     city: string;
     state: string;
@@ -36,6 +37,7 @@ const emptyProfile: ProfileFormData = {
     eventCategory: '',
     customEventCategory: '',
     website: '',
+    gstinNumber: '',
     streetAddress: '',
     city: '',
     state: '',
@@ -112,6 +114,7 @@ const EditProfile: React.FC = () => {
                 eventCategory: isStandardCategory ? rawCategory : rawCategory ? 'Other' : '',
                 customEventCategory: isStandardCategory ? '' : rawCategory,
                 website: profile.website || authProfile?.website || '',
+                gstinNumber: profile.gstinNumber || authProfile?.gstinNumber || '',
                 streetAddress: profile.streetAddress || '',
                 city: profile.city || '',
                 state: profile.state || '',
@@ -132,6 +135,7 @@ const EditProfile: React.FC = () => {
     const [aadhaarError, setAadhaarError] = useState<string | null>(null);
     const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
     const [whatsappError, setWhatsappError] = useState<string | null>(null);
+    const [gstinError, setGstinError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -170,6 +174,16 @@ const EditProfile: React.FC = () => {
         if (/^\d{0,10}$/.test(value)) {
             setFormData((prev) => ({ ...prev, whatsappNumber: value }));
             setWhatsappError(value.length > 0 && value.length < 10 ? 'WhatsApp number must be exactly 10 digits.' : null);
+        }
+    };
+
+    const handleGstinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.toUpperCase();
+        if (/^[0-9A-Z]{0,15}$/.test(value)) {
+            setFormData((prev) => ({ ...prev, gstinNumber: value }));
+            setGstinError(
+                value.length > 0 && value.length < 15 ? 'GSTIN must be exactly 15 characters.' : null
+            );
         }
     };
 
@@ -212,6 +226,14 @@ const EditProfile: React.FC = () => {
             return;
         }
 
+        if (
+            formData.gstinNumber &&
+            !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formData.gstinNumber)
+        ) {
+            setSubmitError('Please enter a valid 15-character GSTIN.');
+            return;
+        }
+
         if (!user) {
             setSubmitError('User session not found. Please log in again.');
             return;
@@ -242,6 +264,7 @@ const EditProfile: React.FC = () => {
                 organizationName: formData.organizationName,
                 eventCategory: finalCategory,
                 website: formData.website,
+                gstinNumber: formData.gstinNumber,
                 streetAddress: formData.streetAddress,
                 city: formData.city,
                 state: formData.state,
@@ -453,6 +476,18 @@ const EditProfile: React.FC = () => {
                                     placeholder="https://yourwebsite.com"
                                 />
                             </LabeledField>
+                            <LabeledField label="GSTIN">
+                                <input
+                                    type="text"
+                                    name="gstinNumber"
+                                    value={formData.gstinNumber}
+                                    onChange={handleGstinChange}
+                                    maxLength={15}
+                                    className={`${inputClass} uppercase`}
+                                    placeholder="15-character GSTIN"
+                                />
+                                {gstinError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{gstinError}</p>}
+                            </LabeledField>
                         </div>
                     </SectionCard>
 
@@ -577,8 +612,8 @@ const EditProfile: React.FC = () => {
                             type="submit"
                             disabled={isSubmitting}
                             className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${submitSuccess
-                                    ? 'bg-emerald-600 dark:bg-emerald-400'
-                                    : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
+                                ? 'bg-emerald-600 dark:bg-emerald-400'
+                                : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
                                 }`}
                         >
                             {isSubmitting ? (

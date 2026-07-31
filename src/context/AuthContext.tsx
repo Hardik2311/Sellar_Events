@@ -45,8 +45,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         let companyId: string | undefined = undefined;
         try {
-          const tokenResult = await firebaseUser.getIdTokenResult();
+          const tokenResult = await firebaseUser.getIdTokenResult(true);
           companyId = tokenResult.claims.companyId as string | undefined;
+          console.log('[AuthContext] claims.companyId:', companyId); // ADD THIS
         } catch (e) {
           console.warn('Could not read id token claims:', e);
         }

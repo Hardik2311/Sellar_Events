@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import {
-    MOCK_EVENTS,
     type PublicEvent,
     CATEGORY_GRADIENTS,
     getCategoryLabel,
@@ -14,6 +13,7 @@ import {
     getAvailability,
     getFeaturedEvent,
 } from '../data/mockEvents';
+import { usePublicEvents } from '../hooks/usePublicEvents';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -27,7 +27,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
 
     return (
         <Card
-            className="shadow-sm border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow cursor-pointer"
+            className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden flex flex-col hover:shadow-md transition-shadow cursor-pointer"
             onClick={onOpen}
         >
             <div className={`relative h-36 w-full bg-gradient-to-br ${gradient}`}>
@@ -42,22 +42,22 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                         <Wifi size={12} /> Online
                     </span>
                 )}
-                {soldOut && (
+                {event.registrationMode !== 'rsvp' && soldOut && (
                     <span className="absolute bottom-2 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
                         Sold out
                     </span>
                 )}
-                {!soldOut && sellingFast && (
-                    <span className="absolute bottom-2 right-2 rounded-sm bg-[#F97316] px-2 py-0.5 text-xs font-medium text-white">
+                {event.registrationMode !== 'rsvp' && !soldOut && sellingFast && (
+                    <span className="absolute bottom-2 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
                         Selling fast
                     </span>
                 )}
             </div>
 
             <div className="flex flex-1 flex-col gap-2 p-3">
-                <h3 className="line-clamp-2 text-sm font-semibold text-slate-800">{event.title}</h3>
+                <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{event.title}</h3>
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                     <Calendar size={13} />
                     <span>{formatDateRange(event.date, event.endDate)}</span>
                     <span className="text-slate-300">•</span>
@@ -65,7 +65,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                     <span>{formatTime(event.time)}</span>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                     {event.isOnline ? (
                         <>
                             <Wifi size={13} />
@@ -79,13 +79,17 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                     )}
                 </div>
 
-                <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
-                    <div className="h-1.5 rounded-full bg-[#F97316]" style={{ width: `${Math.min(pct, 100)}%` }} />
-                </div>
+                {event.registrationMode !== 'rsvp' && (
+                    <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100 dark:bg-slate-700">
+                        <div className="h-1.5 rounded-full bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    </div>
+                )}
 
                 <div className="mt-1 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[#F97316]">{getPriceLabel(event.tiers)}</span>
-                    <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <span className="text-sm font-semibold text-[#007A78]">
+                        {event.registrationMode === 'rsvp' ? 'RSVP' : getPriceLabel(event.tiers)}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                         <Ticket size={13} /> by {event.organizerName}
                     </span>
                 </div>
@@ -99,7 +103,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
 // ─────────────────────────────────────────────────────────────────────────
 const CustomerEventDiscover: React.FC = () => {
     const navigate = useNavigate();
-    const [events] = useState<PublicEvent[]>(MOCK_EVENTS);
+    const { events, loading } = usePublicEvents(); // organizer-published events only
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [format, setFormat] = useState<FormatFilter>('all');
@@ -169,7 +173,7 @@ const CustomerEventDiscover: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search events, venues, or categories"
-                            className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
+                            className="w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2 pl-9 pr-9 text-sm text-slate-700 dark:text-slate-200 dark:placeholder-slate-500 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
                         />
                         {search && (
                             <button
@@ -187,7 +191,7 @@ const CustomerEventDiscover: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setCategoryMenuOpen((o) => !o)}
-                                className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50"
+                                className="flex items-center gap-1 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 {activeCategory}
                                 <ChevronDown size={14} className={`transition-transform ${categoryMenuOpen ? 'rotate-180' : ''}`} />
@@ -197,7 +201,7 @@ const CustomerEventDiscover: React.FC = () => {
                                 <>
                                     {/* backdrop to close on outside click */}
                                     <div className="fixed inset-0 z-10" onClick={() => setCategoryMenuOpen(false)} />
-                                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
                                         {categories.map((c) => (
                                             <button
                                                 key={c}
@@ -205,7 +209,7 @@ const CustomerEventDiscover: React.FC = () => {
                                                     setActiveCategory(c);
                                                     setCategoryMenuOpen(false);
                                                 }}
-                                                className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 text-[#F97316]' : 'text-slate-600 hover:bg-gray-50'
+                                                className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 dark:bg-orange-950/40 text-[#007A78]' : 'text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
                                                     }`}
                                             >
                                                 {c}
@@ -221,7 +225,7 @@ const CustomerEventDiscover: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setFormatMenuOpen((o) => !o)}
-                                className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50"
+                                className="flex items-center gap-1 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 {activeFormatLabel}
                                 <ChevronDown size={14} className={`transition-transform ${formatMenuOpen ? 'rotate-180' : ''}`} />
@@ -230,7 +234,7 @@ const CustomerEventDiscover: React.FC = () => {
                             {formatMenuOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setFormatMenuOpen(false)} />
-                                    <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                                    <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
                                         {formatOptions.map((f) => (
                                             <button
                                                 key={f.value}
@@ -238,7 +242,7 @@ const CustomerEventDiscover: React.FC = () => {
                                                     setFormat(f.value);
                                                     setFormatMenuOpen(false);
                                                 }}
-                                                className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${format === f.value ? 'bg-orange-50 text-[#F97316]' : 'text-slate-600 hover:bg-gray-50'
+                                                className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${format === f.value ? 'bg-orange-50 dark:bg-orange-950/40 text-[#007A78]' : 'text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
                                                     }`}
                                             >
                                                 {f.label}
@@ -255,14 +259,18 @@ const CustomerEventDiscover: React.FC = () => {
             {/* ── Main content ─────────────────────────────────────────────── */}
             <main className="grow p-3">
                 <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-                    {filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-gray-300 bg-white py-16 text-center">
-                            <Ticket size={28} className="text-gray-300" />
-                            <p className="text-sm font-medium text-slate-700">No events match your filters</p>
-                            <p className="text-xs text-slate-400">Try a different category, format, or search term</p>
+                    {loading ? (
+                        <div className="flex justify-center py-16">
+                            <Loader2 className="animate-spin text-slate-400" size={24} />
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-[#1E293B] py-16 text-center">
+                            <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No events match your filters</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">Try a different category, format, or search term</p>
                             <button
                                 onClick={clearFilters}
-                                className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50"
+                                className="mt-1 rounded-md border border-gray-300 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 Clear filters
                             </button>
@@ -271,7 +279,7 @@ const CustomerEventDiscover: React.FC = () => {
                         <>
                             {/* Featured event — only shown on the unfiltered view */}
                             {!hasFiltersApplied && featured && (
-                                <Card className="shadow-sm border-gray-200 overflow-hidden cursor-pointer" onClick={() => openEvent(featured)}>
+                                <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden cursor-pointer" onClick={() => openEvent(featured)}>
                                     <div
                                         className={`relative flex h-52 w-full flex-col justify-end bg-gradient-to-br ${CATEGORY_GRADIENTS[featured.category] ?? CATEGORY_GRADIENTS.Other
                                             } p-4`}
@@ -280,7 +288,7 @@ const CustomerEventDiscover: React.FC = () => {
                                             <img src={featured.coverImage} alt={featured.title} className="absolute inset-0 h-full w-full object-cover" />
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                                        <span className="relative mb-1 w-fit rounded-sm bg-[#F97316] px-2 py-0.5 text-xs font-semibold text-white">
+                                        <span className="relative mb-1 w-fit rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-semibold text-white">
                                             Featured
                                         </span>
                                         <h2 className="relative text-xl font-bold text-white">{featured.title}</h2>
@@ -295,8 +303,8 @@ const CustomerEventDiscover: React.FC = () => {
                                         </p>
                                     </div>
                                     <div className="flex items-center justify-between p-3">
-                                        <span className="text-sm font-semibold text-[#F97316]">{getPriceLabel(featured.tiers)}</span>
-                                        <span className="rounded-md bg-[#F97316] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#ea580c]">
+                                        <span className="text-sm font-semibold text-[#007A78]">{getPriceLabel(featured.tiers)}</span>
+                                        <span className="rounded-md bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2DD4BF]">
                                             View details
                                         </span>
                                     </div>
@@ -304,7 +312,7 @@ const CustomerEventDiscover: React.FC = () => {
                             )}
 
                             <div>
-                                <p className="mb-2 text-sm font-semibold text-slate-700">
+                                <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     {hasFiltersApplied ? `${filtered.length} event${filtered.length === 1 ? '' : 's'} found` : 'Upcoming events'}
                                 </p>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

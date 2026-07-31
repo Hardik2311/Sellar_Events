@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import type { PublicEvent } from '../data/mockEvents';
@@ -25,13 +25,13 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string): PublicE
     quantity: t.quantity,
     sold: t.sold || 0,
   })),
-  // NEW — defaults keep old docs (no field written yet) behaving as ticketed
+  // NEW — keep in sync with useOrganizerEvents.ts
   registrationMode: d.registrationMode || 'tickets',
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
 });
 
-export const useOrganizerEvents = () => {
+export function usePublicEvents() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,12 +39,14 @@ export const useOrganizerEvents = () => {
   useEffect(() => {
     if (!profile?.companyId) return;
 
-    const eventsQuery = query(
+    // Same collection useOrganizerEvents reads, just filtered to published —
+    // this is a single-company storefront, not a cross-tenant marketplace.
+    const publicEventsQuery = query(
       collection(db, 'companies', profile.companyId, 'events'),
-      orderBy('createdAt', 'desc')
+      where('status', '==', 'published')
     );
 
-    const unsubscribe = onSnapshot(eventsQuery, (snapshot) => {
+    const unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
       const organizerName = profile.organizationName || '';
       const mapped = snapshot.docs.map((docSnap) =>
         mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName)
@@ -56,21 +58,11 @@ export const useOrganizerEvents = () => {
     return () => unsubscribe();
   }, [profile?.companyId, profile?.organizationName]);
 
-  const toggleLive = async (id: string, currentStatus: string) => {
-    if (!profile?.companyId) return;
-    const newStatus = currentStatus === 'published' ? 'draft' : 'published';
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { status: newStatus });
-  };
+  return { events, loading };
+}
 
-  const toggleFeatured = async (id: string, currentFeatured: boolean) => {
-    if (!profile?.companyId) return;
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { featured: !currentFeatured });
-  };
-
-  const deleteEvent = async (id: string) => {
-    if (!profile?.companyId) return;
-    await deleteDoc(doc(db, 'companies', profile.companyId, 'events', id));
-  };
-
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent };
-};
+export function usePublicEvent(id?: string) {
+  const { events, loading } = usePublicEvents();
+  const event = id ? events.find((e) => e.id === id) : undefined;
+  return { event, loading };
+}
