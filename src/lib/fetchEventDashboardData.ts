@@ -8,15 +8,8 @@ export type WithCacheMeta<T> = T & {
     cacheStart: string;
     cacheEnd: string;
 };
-// ── Schema assumptions — adjust field names here if they differ ─────────────
-// events doc:    { title, category, status, startDate: Timestamp, venue,
-//                  description, accentColor, tiers: { id, name, price, total }[] }
-// attendee doc:  { ticketTierId, amountPaid: number, status, purchasedAt: Timestamp }
-// ticketsSold / revenue / tier.sold are computed by summing confirmed attendees,
-// same as the catalogue dashboard sums Orders.
-// ──────────────────────────────────────────────────────────────────────────────
 
-const CONFIRMED_STATUSES = new Set(['confirmed', 'paid', 'completed']);
+const CONFIRMED_STATUSES = new Set(['valid', 'checked_in']);
 
 interface FetchEventDashboardOptions {
     companyId: string;
@@ -50,10 +43,10 @@ export async function fetchEventDashboardData(
     const start = new Date(startDate); start.setHours(0, 0, 0, 0);
     const end = new Date(endDate); end.setHours(23, 59, 59, 999);
 
+    // Events are NOT date-filtered anymore — always fetch all of them.
+    // The selected date range only scopes ticketsSold/revenue/tier stats below.
     const eventsSnap = await getDocs(query(
         collection(db, 'companies', companyId, 'events'),
-        where('startDate', '>=', Timestamp.fromDate(start)),
-        where('startDate', '<=', Timestamp.fromDate(end)),
         orderBy('startDate', 'asc')
     ));
 
@@ -77,21 +70,35 @@ export async function fetchEventDashboardData(
             let revenue = 0;
             const tierSold: Record<string, number> = {};
 
+            const tierByName = new Map((e.tiers || []).map((t: any) => [t.name, t]));
+
             attendeesSnap.forEach((a) => {
                 const att = a.data();
                 if (!CONFIRMED_STATUSES.has(att.status)) return;
 
+                // purchasedAt is the source of truth going forward; tickets created
+                // before this field existed fall back to createdAt.
+                const purchasedAt: Timestamp | undefined = att.purchasedAt ?? att.createdAt;
+                if (!purchasedAt) return;
+
+                const purchaseDate = purchasedAt.toDate();
+                if (purchaseDate < start || purchaseDate > end) return;
+
                 ticketsSold += 1;
-                revenue += Number(att.amountPaid) || 0;
-                if (att.ticketTierId) {
-                    tierSold[att.ticketTierId] = (tierSold[att.ticketTierId] || 0) + 1;
+
+                // Older tickets don't have ticketTierId/amountPaid stored — recover the
+                // tier by name and approximate revenue using the tier's current price.
+                const matchedTier = att.ticketTierId ? null : tierByName.get(att.tierName);
+                const resolvedTierId = att.ticketTierId || matchedTier?.id;
+                const resolvedAmount = att.amountPaid ?? matchedTier?.price ?? 0;
+
+                revenue += Number(resolvedAmount) || 0;
+                if (resolvedTierId) {
+                    tierSold[resolvedTierId] = (tierSold[resolvedTierId] || 0) + 1;
                 }
 
-                const purchasedAt: Timestamp | undefined = att.purchasedAt;
-                if (purchasedAt) {
-                    const dateKey = purchasedAt.toDate().toLocaleDateString('en-CA');
-                    if (dateKey in salesByDate) salesByDate[dateKey] += Number(att.amountPaid) || 0;
-                }
+                const dateKey = purchaseDate.toLocaleDateString('en-CA');
+                if (dateKey in salesByDate) salesByDate[dateKey] += Number(resolvedAmount) || 0;
             });
 
             const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({

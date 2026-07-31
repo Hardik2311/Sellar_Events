@@ -10,6 +10,10 @@ interface UserProfile {
   companyId: string;
   phone?: string;
   aadhaarNumber?: string;
+  panNumber?: string;
+  gstinNumber?: string;
+  aadhaarDocUrl?: string;
+  panDocUrl?: string;
   instagram?: string;
   facebook?: string;
   twitter?: string;
@@ -90,6 +94,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             companyId: effectiveCompanyId,
             phone: userData.phone || rootData.ownerPhoneNumber || mergedCompany.phone,
             aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
+            panNumber: userData.panNumber || mergedCompany.panNumber,
+            gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
+            aadhaarDocUrl: userData.aadhaarDocUrl,
+            panDocUrl: userData.panDocUrl,
             instagram: userData.instagram || mergedCompany.instagram,
             facebook: userData.facebook || mergedCompany.facebook,
             twitter: userData.twitter || mergedCompany.twitter,

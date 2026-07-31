@@ -31,6 +31,7 @@ const useEvent = (companyId?: string, id?: string) => {
         const d = snap.data();
         setEvent({
           id: snap.id,
+          companyId,
           title: d.title,
           category: d.category,
           description: d.description,
@@ -123,7 +124,7 @@ const OrganizerEventDetail: React.FC = () => {
         <p className="text-sm font-medium text-slate-700">This event doesn&rsquo;t exist.</p>
         <button
           onClick={() => navigate('/events/discover')}
-          className="rounded-md bg-[#007A786] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c]"
+          className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
         >
           Back to events
         </button>

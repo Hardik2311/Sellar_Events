@@ -8,6 +8,7 @@ export interface PublicTicketTier {
 
 export interface PublicEvent {
   id: string;
+  companyId: string;
   title: string;
   category: string;
   customCategory?: string;

@@ -4,8 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import type { PublicEvent } from '../data/mockEvents';
 
-const mapDocToPublicEvent = (id: string, d: any, organizerName: string): PublicEvent => ({
+const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
+  companyId,
   title: d.title,
   category: d.category,
   description: d.description,
@@ -49,7 +50,7 @@ export function usePublicEvents() {
     const unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
       const organizerName = profile.organizationName || '';
       const mapped = snapshot.docs.map((docSnap) =>
-        mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName)
+        mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, profile.companyId)
       );
       setEvents(mapped);
       setLoading(false);

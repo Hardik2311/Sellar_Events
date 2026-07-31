@@ -6,12 +6,15 @@ import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
 import { storage } from '../lib/firebase';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import IdentityDocumentUpload from '../components/IdentityUpload';
+import ImageOptionsModal from '../components/ui/ImageOptionModal';
 
 interface ProfileFormData {
     name: string;
     email: string;
     phone: string;
     aadhaarNumber: string;
+    panNumber: string;
     organizationName: string;
     eventCategory: string;
     customEventCategory: string;
@@ -22,6 +25,8 @@ interface ProfileFormData {
     state: string;
     postalCode: string;
     profilePicture: string;
+    aadhaarDocUrl: string;
+    panDocUrl: string;
     instagram: string;
     facebook: string;
     twitter: string;
@@ -33,6 +38,7 @@ const emptyProfile: ProfileFormData = {
     email: '',
     phone: '',
     aadhaarNumber: '',
+    panNumber: '',
     organizationName: '',
     eventCategory: '',
     customEventCategory: '',
@@ -43,6 +49,8 @@ const emptyProfile: ProfileFormData = {
     state: '',
     postalCode: '',
     profilePicture: '',
+    aadhaarDocUrl: '',
+    panDocUrl: '',
     instagram: '',
     facebook: '',
     twitter: '',
@@ -98,6 +106,7 @@ const EditProfile: React.FC = () => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [showPhotoMenu, setShowPhotoMenu] = useState(false);
 
     // FIXED: Added loading checks and Object.keys check so it only maps real data
     useEffect(() => {
@@ -110,6 +119,7 @@ const EditProfile: React.FC = () => {
                 email: profile.email || authProfile?.email || user?.email || '',
                 phone: profile.phone || authProfile?.phone || '',
                 aadhaarNumber: profile.aadhaarNumber || authProfile?.aadhaarNumber || '',
+                panNumber: profile.panNumber || authProfile?.panNumber || '',
                 organizationName: profile.organizationName || authProfile?.organizationName || '',
                 eventCategory: isStandardCategory ? rawCategory : rawCategory ? 'Other' : '',
                 customEventCategory: isStandardCategory ? '' : rawCategory,
@@ -120,6 +130,8 @@ const EditProfile: React.FC = () => {
                 state: profile.state || '',
                 postalCode: profile.postalCode || '',
                 profilePicture: profile.profilePicture || authProfile?.profilePictureUrl || user?.photoURL || '',
+                aadhaarDocUrl: profile.aadhaarDocUrl || authProfile?.aadhaarDocUrl || '',
+                panDocUrl: profile.panDocUrl || authProfile?.panDocUrl || '',
                 instagram: profile.instagram || authProfile?.instagram || '',
                 facebook: profile.facebook || authProfile?.facebook || '',
                 twitter: profile.twitter || authProfile?.twitter || '',
@@ -136,6 +148,7 @@ const EditProfile: React.FC = () => {
     const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
     const [whatsappError, setWhatsappError] = useState<string | null>(null);
     const [gstinError, setGstinError] = useState<string | null>(null);
+    const [panError, setPanError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -158,6 +171,14 @@ const EditProfile: React.FC = () => {
         if (/^\d{0,12}$/.test(value)) {
             setFormData((prev) => ({ ...prev, aadhaarNumber: value }));
             setAadhaarError(value.length > 0 && value.length < 12 ? 'Identifier must be exactly 12 digits.' : null);
+        }
+    };
+
+    const handlePanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.toUpperCase();
+        if (/^[0-9A-Z]{0,10}$/.test(value)) {
+            setFormData((prev) => ({ ...prev, panNumber: value }));
+            setPanError(value.length > 0 && value.length < 10 ? 'PAN must be exactly 10 characters.' : null);
         }
     };
 
@@ -201,6 +222,16 @@ const EditProfile: React.FC = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleMenuUpload = () => {
+        fileInputRef.current?.click();
+        setShowPhotoMenu(false);
+    };
+
+    const handleMenuRemove = () => {
+        handleRemovePhoto();
+        setShowPhotoMenu(false);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitError(null);
@@ -234,6 +265,11 @@ const EditProfile: React.FC = () => {
             return;
         }
 
+        if (formData.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber)) {
+            setSubmitError('Please enter a valid 10-character PAN.');
+            return;
+        }
+
         if (!user) {
             setSubmitError('User session not found. Please log in again.');
             return;
@@ -261,6 +297,7 @@ const EditProfile: React.FC = () => {
                 email: formData.email,
                 phone: formData.phone,
                 aadhaarNumber: formData.aadhaarNumber,
+                panNumber: formData.panNumber,
                 organizationName: formData.organizationName,
                 eventCategory: finalCategory,
                 website: formData.website,
@@ -274,6 +311,8 @@ const EditProfile: React.FC = () => {
                 twitter: formData.twitter,
                 whatsappNumber: formData.whatsappNumber,
                 profilePicture: profilePictureUrl,
+                aadhaarDocUrl: formData.aadhaarDocUrl,
+                panDocUrl: formData.panDocUrl,
             });
 
             refetch();
@@ -316,32 +355,28 @@ const EditProfile: React.FC = () => {
                 <ThemeToggle />
             </header>
 
-            <div className="max-w-3xl mx-auto px-4 py-5 pb-24">
+            <div className="max-w-3xl mx-auto px-4 py-5 pb-36 md:pb-8">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
                     {/* ── Avatar banner ── */}
                     <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm px-5 py-4 flex items-center gap-6">
                         <div className="relative shrink-0">
-                            {previewUrl ? (
-                                <img
-                                    src={previewUrl}
-                                    alt="Profile"
-                                    className="w-20 h-20 rounded-full object-cover border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md"
-                                />
-                            ) : (
-                                <div className="w-20 h-20 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                                    <FiUser size={32} className="text-slate-400 dark:text-slate-500" />
+                            <div onClick={() => setShowPhotoMenu(true)} className="relative cursor-pointer">
+                                {previewUrl ? (
+                                    <img
+                                        src={previewUrl}
+                                        alt="Profile"
+                                        className="w-20 h-20 rounded-full object-cover border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md"
+                                    />
+                                ) : (
+                                    <div className="w-20 h-20 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                        <FiUser size={32} className="text-slate-400 dark:text-slate-500" />
+                                    </div>
+                                )}
+                                <div className="absolute bottom-0 right-0 p-2 rounded-full bg-[#007A78] dark:bg-[#2DD4BF] text-white dark:text-slate-950 shadow-md">
+                                    <FiCamera size={12} />
                                 </div>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="absolute bottom-0 right-0 p-2 rounded-full bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 shadow-md transition-all active:scale-95"
-                                aria-label="Change photo"
-                                title="Upload Photo"
-                            >
-                                <FiCamera size={12} />
-                            </button>
+                            </div>
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -353,26 +388,25 @@ const EditProfile: React.FC = () => {
                         </div>
                         <div className="flex flex-col gap-1">
                             <p className="text-sm font-extrabold text-slate-900 dark:text-white m-0">Profile Photo</p>
-                            <div className="flex gap-4">
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:underline"
-                                >
-                                    {previewUrl ? 'Change Photo' : 'Add Photo'}
-                                </button>
-                                {previewUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRemovePhoto}
-                                        className="text-xs font-bold text-red-500 dark:text-red-400 hover:underline"
-                                    >
-                                        Remove
-                                    </button>
-                                )}
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowPhotoMenu(true)}
+                                className="text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:underline text-left w-fit"
+                            >
+                                {previewUrl ? 'Change Photo' : 'Add Photo'}
+                            </button>
                         </div>
                     </div>
+
+                    {showPhotoMenu && (
+                        <ImageOptionsModal
+                            title="Profile Photo"
+                            hasImage={!!previewUrl}
+                            onUpload={handleMenuUpload}
+                            onRemove={handleMenuRemove}
+                            onClose={() => setShowPhotoMenu(false)}
+                        />
+                    )}
 
                     {/* ── Personal Information ── */}
                     <SectionCard title="Personal Information">
@@ -421,6 +455,39 @@ const EditProfile: React.FC = () => {
                                 />
                                 {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
                             </LabeledField>
+                            <LabeledField label="PAN Number">
+                                <input
+                                    type="text"
+                                    name="panNumber"
+                                    value={formData.panNumber}
+                                    onChange={handlePanChange}
+                                    maxLength={10}
+                                    className={`${inputClass} uppercase`}
+                                    placeholder="10-character PAN"
+                                />
+                                {panError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{panError}</p>}
+                            </LabeledField>
+
+                            {user && (
+                                <>
+                                    <IdentityDocumentUpload
+                                        label="Aadhaar PDF"
+                                        docType="aadhaar"
+                                        companyId={authProfile?.companyId || user.uid}
+                                        userId={user.uid}
+                                        existingUrl={formData.aadhaarDocUrl}
+                                        onUploaded={(url) => setFormData((prev) => ({ ...prev, aadhaarDocUrl: url }))}
+                                    />
+                                    <IdentityDocumentUpload
+                                        label="PAN Card PDF"
+                                        docType="pan"
+                                        companyId={authProfile?.companyId || user.uid}
+                                        userId={user.uid}
+                                        existingUrl={formData.panDocUrl}
+                                        onUploaded={(url) => setFormData((prev) => ({ ...prev, panDocUrl: url }))}
+                                    />
+                                </>
+                            )}
                         </div>
                     </SectionCard>
 
@@ -607,29 +674,31 @@ const EditProfile: React.FC = () => {
                     )}
 
                     {/* ── Submit button ── */}
-                    <div className="sticky bottom-14 md:bottom-0 left-0 right-0 p-3.5 bg-white dark:bg-[#1E293B] border-t border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-20">
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${submitSuccess
-                                ? 'bg-emerald-600 dark:bg-emerald-400'
-                                : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
-                                }`}
-                        >
-                            {isSubmitting ? (
-                                <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                                    <span>Saving Profile Changes…</span>
-                                </div>
-                            ) : submitSuccess ? (
-                                <div className="flex items-center gap-2">
-                                    <FiCheck size={18} />
-                                    <span>{submitSuccess}</span>
-                                </div>
-                            ) : (
-                                'Save Profile Changes'
-                            )}
-                        </button>
+                    <div className="fixed inset-x-0 bottom-14 z-30 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] shadow-2xl md:static md:inset-auto md:z-auto md:border-0 md:bg-transparent md:shadow-none md:mt-1">
+                        <div className="max-w-3xl mx-auto px-4 py-3.5 md:px-0">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${submitSuccess
+                                    ? 'bg-emerald-600 dark:bg-emerald-400'
+                                    : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
+                                    }`}
+                            >
+                                {isSubmitting ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                        <span>Saving Profile Changes…</span>
+                                    </div>
+                                ) : submitSuccess ? (
+                                    <div className="flex items-center gap-2">
+                                        <FiCheck size={18} />
+                                        <span>{submitSuccess}</span>
+                                    </div>
+                                ) : (
+                                    'Save Profile Changes'
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

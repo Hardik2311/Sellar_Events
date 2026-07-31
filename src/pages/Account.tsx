@@ -35,11 +35,19 @@ const Account: React.FC = () => {
             {/* ── Profile section ── */}
             <div className="flex flex-col py-6 items-center">
                 <div className="relative mb-3">
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-14 h-14 text-slate-400 dark:text-slate-500">
-                            <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
-                        </svg>
-                    </div>
+                    {profile?.profilePictureUrl ? (
+                        <img
+                            src={profile.profilePictureUrl}
+                            alt="Profile"
+                            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md"
+                        />
+                    ) : (
+                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-14 h-14 text-slate-400 dark:text-slate-500">
+                                <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                    )}
 
                     <button
                         onClick={handleEditProfile}
@@ -71,11 +79,10 @@ const Account: React.FC = () => {
                                 <button
                                     key={m}
                                     onClick={() => setTheme(m)}
-                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold capitalize transition-all border ${
-                                        theme === m
+                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold capitalize transition-all border ${theme === m
                                             ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950 border-transparent shadow-xs'
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                    }`}
+                                        }`}
                                 >
                                     {m} Mode
                                 </button>
@@ -109,7 +116,7 @@ const Account: React.FC = () => {
                         </Link>
 
                         <Link
-                            to="/settings"
+                            to="/events/settings"
                             className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all sm:col-span-2"
                         >
                             <div className="p-2.5 rounded-xl bg-slate-500/10 text-slate-500 dark:text-slate-400">

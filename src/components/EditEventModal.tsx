@@ -11,9 +11,10 @@ import ImageUploadBox from './ui/ImageUploadBox';
 import TicketTierEditor from './TicketTierEditor';
 import { EVENT_CATEGORIES, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { compressImageToTargetSize } from '../lib/imageCompression';
-import type { MOCK_EVENTS } from '../data/mockEvents';
+import { useCompanySettings } from '../hooks/useSettings';
+import type { PublicEvent } from '../data/mockEvents';
 
-type EventItem = (typeof MOCK_EVENTS)[number];
+type EventItem = PublicEvent;
 
 interface EditEventModalProps {
   event: EventItem;
@@ -21,9 +22,6 @@ interface EditEventModalProps {
   onSave: (updated: EventFormState) => void;
 }
 
-// TODO — backend wiring:
-// onSave currently just hands the edited form back to the parent, which
-// updates local state. Replace with PATCH /events/:id once the API is ready.
 const toFormState = (event: EventItem): EventFormState => ({
   title: event.title,
   category: EVENT_CATEGORIES.includes(event.category as EventCategory)
@@ -47,18 +45,26 @@ const toFormState = (event: EventItem): EventFormState => ({
   })),
   promoCode: '',
   promoDiscountPercent: 0,
-  // Existing mock/legacy events have no registrationMode → default to ticketed
-  registrationMode: (event as any).registrationMode ?? 'tickets',
-  rsvpLink: (event as any).rsvpLink ?? '',
-  rsvpButtonLabel: (event as any).rsvpButtonLabel ?? 'RSVP Now',
+  // Existing legacy events with no registrationMode field default to ticketed
+  registrationMode: event.registrationMode ?? 'tickets',
+  rsvpLink: event.rsvpLink ?? '',
+  rsvpButtonLabel: event.rsvpButtonLabel ?? 'RSVP Now',
 });
 
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
+  const { settings: companySettings } = useCompanySettings();
   const [form, setForm] = useState<EventFormState>(() => toFormState(event));
   const [isCompressingImage, setIsCompressingImage] = useState(false);
 
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+
+  React.useEffect(() => {
+    if (!companySettings.rsvpEnabled && form.registrationMode === 'rsvp') {
+      update('registrationMode', 'tickets');
+    }
+  }, [companySettings.rsvpEnabled]);
 
   const isOtherCategory = form.category === 'Other';
 
@@ -260,31 +266,33 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <FormField label="Registration type" htmlFor="registration-mode">
-                  <div className="flex rounded-md border border-gray-300 p-1 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => update('registrationMode', 'tickets')}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      Ticketed
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => update('registrationMode', 'rsvp')}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      RSVP (external link)
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {form.registrationMode === 'rsvp'
-                      ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
-                      : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
-                  </p>
-                </FormField>
+                {companySettings.rsvpEnabled && (
+                  <FormField label="Registration type" htmlFor="registration-mode">
+                    <div className="flex rounded-md border border-gray-300 p-1 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => update('registrationMode', 'tickets')}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                          }`}
+                      >
+                        Ticketed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => update('registrationMode', 'rsvp')}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                          }`}
+                      >
+                        RSVP (external link)
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {form.registrationMode === 'rsvp'
+                        ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
+                        : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
+                    </p>
+                  </FormField>
+                )}
 
                 {form.registrationMode === 'tickets' ? (
                   <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
