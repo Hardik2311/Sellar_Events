@@ -325,6 +325,8 @@ const Attendees: React.FC = () => {
                       isExpanded={expandedId === attendee.id}
                       onToggle={() => setExpandedId(expandedId === attendee.id ? null : attendee.id)}
                       onCheckIn={handleCheckIn}
+                      eventTitle={selectedEvent.title}
+                      eventDate={selectedEvent.startDate}
                     />
                   ))}
                 </div>

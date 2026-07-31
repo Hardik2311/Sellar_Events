@@ -1,27 +1,48 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Ticket, Smartphone, CreditCard, Landmark } from 'lucide-react';
+import { ArrowLeft, Ticket, Smartphone, CreditCard, Landmark, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
-import { MOCK_EVENTS } from '../data/mockEvents';
+import { collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { usePublicEvent } from '../hooks/usePublicEvents';
+import TicketConfirmation from '../components/TicketConfirmation';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking';
 
-// TODO — backend wiring:
-// Replace this with GET /events/:id, and pull the selected quantities from a
-// checkout/session id created when "Get tickets" was clicked, instead of
-// relying on router state (state is lost on refresh/direct link).
+// Turns an event title into short initials for ticket IDs.
+// "Party Popper" -> "PP", "Sunburn Festival" -> "SF", "Diwali" (single word) -> "DI"
+const getEventInitials = (title: string): string => {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'EV';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words
+    .slice(0, 3) // cap at 3 words so long titles don't produce long codes
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+};
 const CheckoutPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const event = useMemo(() => MOCK_EVENTS.find((e) => e.id === id), [id]);
+  const { event, loading } = usePublicEvent(id);
   const quantities: Record<string, number> = (location.state as { quantities?: Record<string, number> })?.quantities ?? {};
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('upi');
+  const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
+  const [purchasedTickets, setPurchasedTickets] = useState<{ ticketId: string; tierName: string }[]>([]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-gray-100">
+        <Loader2 className="animate-spin text-slate-400" size={24} />
+      </div>
+    );
+  }
 
   if (!event) {
     return (
@@ -30,7 +51,7 @@ const CheckoutPage: React.FC = () => {
         <p className="text-sm font-medium text-slate-700">We couldn&rsquo;t find this order.</p>
         <button
           onClick={() => navigate('/discover')}
-          className="rounded-md bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c]"
+          className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2DD4BF]"
         >
           Back to events
         </button>
@@ -43,17 +64,107 @@ const CheckoutPage: React.FC = () => {
     .filter((item) => item.qty > 0);
 
   const subtotal = lineItems.reduce((s, item) => s + item.qty * item.tier.price, 0);
-  // TODO — backend wiring: any convenience/platform fee should come from the API, not be hardcoded here.
   const total = subtotal;
   const totalQty = lineItems.reduce((s, item) => s + item.qty, 0);
   const detailsComplete = name.trim().length > 0 && email.trim().length > 0 && phone.trim().length >= 10;
 
-  // TODO — backend wiring:
-  // POST /checkout/:eventId { attendee: { name, email, phone }, items: quantities, method }
-  // then redirect to a payment gateway / show a success screen based on the response.
-  const handlePay = () => {
-    console.log('Submit payment:', { eventId: event.id, name, email, phone, method, total });
+  const handlePay = async () => {
+    if (!detailsComplete || lineItems.length === 0) return;
+
+    const companyId = event.companyId;
+    if (!companyId) {
+      console.error('Missing companyId on event — cannot create attendee records.');
+      return;
+    }
+
+    setStep('processing');
+    try {
+      const eventRef = doc(db, 'companies', companyId, 'events', event.id);
+
+      const attendeeWrites: { ref: ReturnType<typeof doc>; tierName: string; tierId: string; price: number }[] = [];
+
+      for (const item of lineItems) {
+        for (let i = 0; i < item.qty; i++) {
+          const attendeeRef = doc(collection(db, 'companies', companyId, 'events', event.id, 'attendees'));
+          attendeeWrites.push({ ref: attendeeRef, tierName: item.tier.name, tierId: item.tier.id, price: item.tier.price });
+        }
+      }
+
+      const initials = getEventInitials(event.title);
+      const created: { ticketId: string; tierName: string }[] = [];
+
+      await runTransaction(db, async (transaction) => {
+        const eventSnap = await transaction.get(eventRef);
+        if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+
+        const currentTiers = (eventSnap.data().tiers || []) as {
+          id: string;
+          name: string;
+          price: number;
+          quantity: number;
+          sold: number;
+        }[];
+
+        const updatedTiers = currentTiers.map((tier) => {
+          const purchased = lineItems.find((li) => li.tier.id === tier.id)?.qty ?? 0;
+          if (purchased === 0) return tier;
+
+          const currentSold = Number.isFinite(tier.sold) ? tier.sold : 0; // heal bad/NaN data
+          const remaining = tier.quantity - currentSold;
+          if (purchased > remaining) {
+            throw new Error(`Not enough tickets left for "${tier.name}".`);
+          }
+          return { ...tier, sold: currentSold + purchased };
+        });
+
+        const totalAlreadySold = currentTiers.reduce(
+          (sum, tier) => sum + (Number.isFinite(tier.sold) ? tier.sold : 0),
+          0
+        );
+
+        transaction.update(eventRef, { tiers: updatedTiers });
+
+        attendeeWrites.forEach(({ ref, tierName, tierId, price }, index) => {
+          const ticketNumber = totalAlreadySold + index + 1;
+          const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+
+          transaction.set(ref, {
+            name,
+            email,
+            phone,
+            tierName,
+            ticketTierId: tierId,          // dashboard's per-tier breakdown reads this
+            amountPaid: price,             // dashboard's revenue totals read this
+            ticketId,
+            status: 'valid',
+            checkedInAt: null,
+            createdAt: serverTimestamp(),
+            purchasedAt: serverTimestamp(), // dashboard date-scopes sales using this
+          });
+
+          created.push({ ticketId, tierName });
+        });
+      });
+
+      setPurchasedTickets(created);
+      setStep('success');
+    } catch (err) {
+      console.error('Payment/ticket creation failed:', err);
+      setStep('details'); // let them retry
+    }
   };
+
+  if (step === 'success') {
+    return (
+      <TicketConfirmation
+        eventTitle={event.title}
+        eventDate={event.date}
+        attendeeName={name}
+        tickets={purchasedTickets}
+        onDone={() => navigate('/discover')}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-gray-100">
@@ -95,7 +206,7 @@ const CheckoutPage: React.FC = () => {
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 text-sm font-semibold">
                 <span className="text-slate-800">Total</span>
-                <span className="text-[#F97316]">{total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}</span>
+                <span className="text-[#007A78]">{total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}</span>
               </div>
             </CardContent>
           </Card>
@@ -111,7 +222,7 @@ const CheckoutPage: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="As it should appear on the ticket"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
                   />
                 </div>
                 <div>
@@ -121,7 +232,7 @@ const CheckoutPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
                   />
                 </div>
                 <div>
@@ -131,7 +242,7 @@ const CheckoutPage: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="10-digit mobile number"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
                   />
                 </div>
               </div>
@@ -153,18 +264,16 @@ const CheckoutPage: React.FC = () => {
                   <button
                     key={opt.id}
                     onClick={() => setMethod(opt.id)}
-                    className={`flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                      method === opt.id
-                        ? 'border-[#F97316] bg-orange-50 text-[#F97316]'
-                        : 'border-gray-300 text-slate-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm font-medium transition-colors ${method === opt.id
+                      ? 'border-[#007A78] bg-orange-50 text-[#007A78]'
+                      : 'border-gray-300 text-slate-600 hover:bg-gray-50'
+                      }`}
                   >
                     <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                        method === opt.id ? 'border-[#F97316]' : 'border-gray-300'
-                      }`}
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${method === opt.id ? 'border-[#007A78]' : 'border-gray-300'
+                        }`}
                     >
-                      {method === opt.id && <span className="h-2 w-2 rounded-full bg-[#F97316]" />}
+                      {method === opt.id && <span className="h-2 w-2 rounded-full bg-[#007A78]" />}
                     </span>
                     {opt.icon}
                     {opt.label}
@@ -187,10 +296,14 @@ const CheckoutPage: React.FC = () => {
           </div>
           <button
             onClick={handlePay}
-            disabled={!detailsComplete || lineItems.length === 0}
-            className="flex-1 rounded-md bg-[#F97316] py-2.5 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#F97316] transition-colors"
+            disabled={!detailsComplete || lineItems.length === 0 || step === 'processing'}
+            className="flex-1 rounded-md bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
           >
-            {total === 0 ? 'Confirm registration' : `Pay \u20B9${total.toLocaleString('en-IN')}`}
+            {step === 'processing'
+              ? 'Processing…'
+              : total === 0
+                ? 'Confirm registration'
+                : `Pay \u20B9${total.toLocaleString('en-IN')}`}
           </button>
         </div>
       </div>

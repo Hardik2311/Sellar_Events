@@ -122,46 +122,44 @@ export const EventDateFilter: React.FC = () => {
   const handleApply = () => setFilters(localFilters);
 
   return (
-    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs w-full max-w-lg mx-auto mb-3">
-      <div className="space-y-2">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* Preset dropdown */}
-          <div className="relative sm:col-span-2">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-full flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 text-xs font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Calendar size={15} className="text-[#007A78] dark:text-[#2DD4BF]" />
-                {PRESET_LABELS[localFilters.filterType]}
-              </span>
-              <ChevronDown size={16} className={`text-slate-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
+    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs w-full max-w-lg lg:max-w-4xl mx-auto mb-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        {/* Preset dropdown */}
+        <div className="relative lg:w-52 lg:shrink-0">
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="w-full flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 text-xs font-bold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Calendar size={15} className="text-[#007A78] dark:text-[#2DD4BF]" />
+              {PRESET_LABELS[localFilters.filterType]}
+            </span>
+            <ChevronDown size={16} className={`text-slate-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
 
-            {isMenuOpen && (
-              <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-30 overflow-hidden">
-                {(Object.keys(PRESET_LABELS) as EventFilterState['filterType'][]).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => applyPreset(key)}
-                    className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-[#007A78]/10 hover:text-[#007A78] dark:hover:bg-[#2DD4BF]/15 dark:hover:text-[#2DD4BF] transition-colors"
-                  >
-                    {PRESET_LABELS[key]}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {isMenuOpen && (
+            <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-30 overflow-hidden">
+              {(Object.keys(PRESET_LABELS) as EventFilterState['filterType'][]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => applyPreset(key)}
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-[#007A78]/10 hover:text-[#007A78] dark:hover:bg-[#2DD4BF]/15 dark:hover:text-[#2DD4BF] transition-colors"
+                >
+                  {PRESET_LABELS[key]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-          <div className="sm:col-span-2 grid grid-cols-2 gap-2">
-            <FormattedDateInput value={localFilters.startDate} onChange={(e) => handleDateChange('startDate', e.target.value)} />
-            <FormattedDateInput value={localFilters.endDate} onChange={(e) => handleDateChange('endDate', e.target.value)} />
-          </div>
+        <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-1 lg:gap-2">
+          <FormattedDateInput value={localFilters.startDate} onChange={(e) => handleDateChange('startDate', e.target.value)} />
+          <FormattedDateInput value={localFilters.endDate} onChange={(e) => handleDateChange('endDate', e.target.value)} />
         </div>
 
         <button
           onClick={handleApply}
-          className="w-full px-3 py-2.5 text-white dark:text-slate-950 font-extrabold text-xs rounded-xl shadow-xs transition-all bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]"
+          className="w-full lg:w-auto lg:shrink-0 px-3 lg:px-6 py-2.5 text-white dark:text-slate-950 font-extrabold text-xs rounded-xl shadow-xs transition-all bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]"
         >
           Apply Filter
         </button>

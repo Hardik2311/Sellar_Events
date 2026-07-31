@@ -11,6 +11,7 @@ export const ROUTES = {
   EVENTS_ACCOUNT_EDIT: 'account/edit',
   EVENTS_DISCOVER: 'discover',
   EVENTS_DETAIL: 'e/:id',
+  EVENTS_SETTINGS: 'settings',
 
   // Public, customer-facing routes
   DISCOVER: '/discover',

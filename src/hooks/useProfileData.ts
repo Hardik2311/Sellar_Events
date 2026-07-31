@@ -8,6 +8,7 @@ export interface ProfileData {
   email: string;
   phone: string;
   aadhaarNumber: string;
+  panNumber: string;
   organizationName: string;
   eventCategory: string;
   website: string;
@@ -17,6 +18,8 @@ export interface ProfileData {
   state: string;
   postalCode: string;
   profilePicture: string;
+  aadhaarDocUrl: string;
+  panDocUrl: string;
   instagram: string;
   facebook: string;
   twitter: string;
@@ -95,7 +98,10 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         email: userData.email || rootCompanyData.email || auth.currentUser?.email || '',
         phone: rootCompanyData.ownerPhoneNumber || userData.phone || '',
         aadhaarNumber: userData.aadhaarNumber || companyData.aadhaarNumber || '',
+        panNumber: userData.panNumber || companyData.panNumber || '',
         profilePicture: userData.profilePictureUrl || auth.currentUser?.photoURL || '',
+        aadhaarDocUrl: userData.aadhaarDocUrl || '',
+        panDocUrl: userData.panDocUrl || '',
         instagram: userData.instagram || companyData.instagram || '',
         facebook: userData.facebook || companyData.facebook || '',
         twitter: userData.twitter || companyData.twitter || '',
@@ -145,6 +151,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       eventCategory,
       website,
       gstinNumber,
+      panNumber,
       streetAddress,
       city,
       state,
@@ -171,6 +178,8 @@ export const useProfileData = (userId?: string, companyId?: string) => {
     }
     if (userFields.aadhaarNumber !== undefined) userUpdateData.aadhaarNumber = userFields.aadhaarNumber;
     if (userFields.profilePicture !== undefined) userUpdateData.profilePictureUrl = userFields.profilePicture;
+    if (userFields.aadhaarDocUrl !== undefined) userUpdateData.aadhaarDocUrl = userFields.aadhaarDocUrl;
+    if (userFields.panDocUrl !== undefined) userUpdateData.panDocUrl = userFields.panDocUrl;
     if (userFields.instagram !== undefined) userUpdateData.instagram = userFields.instagram;
     if (userFields.facebook !== undefined) userUpdateData.facebook = userFields.facebook;
     if (userFields.twitter !== undefined) userUpdateData.twitter = userFields.twitter;
@@ -185,6 +194,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
       ...(gstinNumber !== undefined && { gstinNumber }),
+      ...(panNumber !== undefined && { panNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),
       ...(userFields.phone !== undefined && { ownerPhoneNumber: userFields.phone }),
       updatedAt: serverTimestamp(),

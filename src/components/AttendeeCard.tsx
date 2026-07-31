@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Phone, Mail, ChevronDown, Share2, Ban, CheckCircle2 } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
 
 interface AttendeeCardProps {
@@ -8,6 +9,8 @@ interface AttendeeCardProps {
   onToggle: () => void;
   onCheckIn: (id: string) => void;
   onCancel?: (id: string) => void;
+  eventTitle?: string;
+  eventDate?: string;
   // TODO — backend wiring: parent (Attendees.tsx) needs to pass a real
   // cancel handler that updates ticket status to 'cancelled' server-side.
 }
@@ -24,18 +27,98 @@ const STATUS_LABEL: Record<Attendee['status'], string> = {
   cancelled: 'Cancelled',
 };
 
-const handleShare = (attendee: Attendee) => {
-  const text = `${attendee.name} — ${attendee.tierName}\nTicket: ${attendee.ticketId}\nPhone: ${attendee.phone}`;
-  if (navigator.share) {
-    navigator.share({ title: attendee.name, text }).catch(() => { });
-  } else {
-    navigator.clipboard?.writeText(text);
-  }
-};
+export const AttendeeCard: React.FC<AttendeeCardProps> = ({
+  attendee,
+  isExpanded,
+  onToggle,
+  onCheckIn,
+  onCancel,
+  eventTitle,
+  eventDate,
+}) => {
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-export const AttendeeCard: React.FC<AttendeeCardProps> = ({ attendee, isExpanded, onToggle, onCheckIn, onCancel }) => {
+  const buildTicketCanvas = (): HTMLCanvasElement | null => {
+    const qrCanvas = qrCanvasRef.current;
+    if (!qrCanvas) return null;
+
+    const width = 360;
+    const qrSize = 200;
+    const padding = 24;
+    const lineHeight = 22;
+    const height = padding + lineHeight * 3 + 12 + qrSize + 12 + lineHeight + padding;
+
+    const out = document.createElement('canvas');
+    out.width = width;
+    out.height = height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, width - 2, height - 2);
+
+    let y = padding + lineHeight;
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(eventTitle || 'Event Ticket', width / 2, y);
+    y += lineHeight;
+
+    if (eventDate) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '13px sans-serif';
+      ctx.fillText(eventDate, width / 2, y);
+      y += lineHeight;
+    }
+
+    ctx.fillStyle = '#334155';
+    ctx.font = '13px sans-serif';
+    ctx.fillText(`${attendee.name} · ${attendee.tierName}`, width / 2, y);
+    y += 12;
+
+    const qrX = (width - qrSize) / 2;
+    ctx.drawImage(qrCanvas, qrX, y, qrSize, qrSize);
+    y += qrSize + lineHeight;
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px monospace';
+    ctx.fillText(attendee.ticketId, width / 2, y);
+
+    return out;
+  };
+
+  const handleShare = () => {
+    const text = `${eventTitle ? eventTitle + '\n' : ''}${attendee.name} — ${attendee.tierName}\nTicket: ${attendee.ticketId}\nPhone: ${attendee.phone}`;
+    const canvas = buildTicketCanvas();
+
+    if (canvas && navigator.share) {
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `${attendee.ticketId}.png`, { type: 'image/png' });
+        try {
+          if (navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ files: [file], title: attendee.name, text });
+          } else {
+            await navigator.share({ title: attendee.name, text });
+          }
+        } catch {
+          /* user cancelled share — ignore */
+        }
+      });
+    } else {
+      navigator.clipboard?.writeText(text);
+    }
+  };
+
   return (
     <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
+      <div style={{ display: 'none' }}>
+        <QRCodeCanvas value={attendee.ticketId} size={200} includeMargin ref={qrCanvasRef} />
+      </div>
       <div className="w-full flex items-center justify-between p-3.5">
         <button onClick={onToggle} className="flex items-center gap-3 min-w-0 flex-1 text-left">
           <a
@@ -95,7 +178,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({ attendee, isExpanded
               <Phone size={14} /> Call
             </a>
             <button
-              onClick={() => handleShare(attendee)}
+              onClick={handleShare}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 text-xs font-bold"
             >
               <Share2 size={14} /> Share
