@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import FormField from './ui/FormField';
 import {
@@ -9,7 +9,7 @@ import {
 } from './ui/AuthUIComponents';
 import ImageUploadBox from './ui/ImageUploadBox';
 import TicketTierEditor from './TicketTierEditor';
-import { EVENT_CATEGORIES,type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
+import { EVENT_CATEGORIES, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { compressImageToTargetSize } from '../lib/imageCompression';
 import type { MOCK_EVENTS } from '../data/mockEvents';
 
@@ -27,11 +27,11 @@ interface EditEventModalProps {
 const toFormState = (event: EventItem): EventFormState => ({
   title: event.title,
   category: EVENT_CATEGORIES.includes(event.category as EventCategory)
-  ? (event.category as EventCategory)
-  : 'Other',
-customCategory: EVENT_CATEGORIES.includes(event.category as EventCategory)
-  ? ''
-  : event.category,
+    ? (event.category as EventCategory)
+    : 'Other',
+  customCategory: EVENT_CATEGORIES.includes(event.category as EventCategory)
+    ? ''
+    : event.category,
   description: event.description,
   date: event.date,
   endDate: event.endDate ?? event.date,
@@ -47,6 +47,10 @@ customCategory: EVENT_CATEGORIES.includes(event.category as EventCategory)
   })),
   promoCode: '',
   promoDiscountPercent: 0,
+  // Existing mock/legacy events have no registrationMode → default to ticketed
+  registrationMode: (event as any).registrationMode ?? 'tickets',
+  rsvpLink: (event as any).rsvpLink ?? '',
+  rsvpButtonLabel: (event as any).rsvpButtonLabel ?? 'RSVP Now',
 });
 
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
@@ -58,13 +62,24 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
 
   const isOtherCategory = form.category === 'Other';
 
+  const isValidUrl = (value: string) => {
+    try {
+      const u = new URL(value.trim());
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
   const isSavable =
     form.title.trim().length > 0 &&
     form.date &&
     form.endDate &&
     form.endDate >= form.date &&
+    form.time &&
     (form.isOnline || form.venue.trim().length > 0) &&
-    (!isOtherCategory || form.customCategory.trim().length > 0);
+    (!isOtherCategory || form.customCategory.trim().length > 0) &&
+    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
 
   const handleCoverImageChange = async (preview: string | null) => {
     if (!preview) {
@@ -130,9 +145,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
 
                 <FloatingLabelInput
                   id="edit-title"
-                  label="Event title"
+                  label="Event title *"
                   value={form.title}
                   onChange={(e) => update('title', e.target.value)}
+                  required
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -153,18 +169,16 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                       <button
                         type="button"
                         onClick={() => update('isOnline', false)}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
-                          !form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
-                        }`}
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${!form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
+                          }`}
                       >
                         In-person
                       </button>
                       <button
                         type="button"
                         onClick={() => update('isOnline', true)}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
-                          form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
-                        }`}
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
+                          }`}
                       >
                         Online
                       </button>
@@ -175,48 +189,56 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 {isOtherCategory && (
                   <FloatingLabelInput
                     id="edit-custom-category"
-                    label="Custom category"
+                    label="Custom category *"
                     value={form.customCategory}
                     onChange={(e) => update('customCategory', e.target.value)}
+                    required
                   />
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <FloatingLabelInput
                     id="edit-date"
-                    label="Start date"
+                    label="Start date *"
                     type="date"
+                    icon={<Calendar size={16} />}
                     value={form.date}
                     onChange={(e) => {
                       const value = e.target.value;
                       update('date', value);
                       if (form.endDate && form.endDate < value) update('endDate', value);
                     }}
+                    required
                   />
                   <FloatingLabelInput
                     id="edit-end-date"
-                    label="End date"
+                    label="End date *"
                     type="date"
+                    icon={<Calendar size={16} />}
                     min={form.date || undefined}
                     value={form.endDate}
                     onChange={(e) => update('endDate', e.target.value)}
+                    required
                   />
                 </div>
 
                 <FloatingLabelInput
                   id="edit-time"
-                  label="Time"
+                  label="Time *"
                   type="time"
+                  icon={<Clock size={16} />}
                   value={form.time}
                   onChange={(e) => update('time', e.target.value)}
+                  required
                 />
 
                 {!form.isOnline && (
                   <FloatingLabelInput
                     id="edit-venue"
-                    label="Venue"
+                    label="Venue *"
                     value={form.venue}
                     onChange={(e) => update('venue', e.target.value)}
+                    required
                   />
                 )}
 
@@ -230,12 +252,65 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
               </CardContent>
             </Card>
 
+
             <Card className="shadow-sm border-gray-200">
               <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900">Ticket tiers</CardTitle>
+                <CardTitle className="text-base font-semibold text-gray-900">
+                  {form.registrationMode === 'tickets' ? 'Ticket tiers' : 'RSVP details'}
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+              <CardContent className="space-y-4">
+                <FormField label="Registration type" htmlFor="registration-mode">
+                  <div className="flex rounded-md border border-gray-300 p-1 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => update('registrationMode', 'tickets')}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
+                    >
+                      Ticketed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update('registrationMode', 'rsvp')}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
+                    >
+                      RSVP (external link)
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.registrationMode === 'rsvp'
+                      ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
+                      : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
+                  </p>
+                </FormField>
+
+                {form.registrationMode === 'tickets' ? (
+                  <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+                ) : (
+                  <div className="space-y-3">
+                    <FloatingLabelInput
+                      id="edit-rsvp-link"
+                      label="Registration link (Google Form, Typeform, etc.) *"
+                      value={form.rsvpLink}
+                      onChange={(e) => update('rsvpLink', e.target.value)}
+                      required
+                    />
+                    {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
+                      <p className="text-xs text-red-500">Enter a valid link starting with http:// or https://</p>
+                    )}
+                    <FloatingLabelInput
+                      id="edit-rsvp-button-label"
+                      label="Button text (optional)"
+                      value={form.rsvpButtonLabel}
+                      onChange={(e) => update('rsvpButtonLabel', e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Attendees will see this button on the event page and be sent to your form to register.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -252,7 +327,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
           <button
             onClick={handleSave}
             disabled={!isSavable}
-            className="rounded-md bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#F97316]"
+            className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF]"
           >
             Save changes
           </button>

@@ -50,6 +50,10 @@ const useEvent = (companyId?: string, id?: string) => {
             quantity: t.quantity,
             sold: t.sold || 0,
           })),
+          // NEW
+          registrationMode: d.registrationMode || 'tickets',
+          rsvpLink: d.rsvpLink || '',
+          rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
         });
       } else {
         setEvent(undefined);
@@ -63,7 +67,7 @@ const useEvent = (companyId?: string, id?: string) => {
 };
 
 const OrganizerEventDetail: React.FC = () => {
-   const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
@@ -83,6 +87,8 @@ const OrganizerEventDetail: React.FC = () => {
       coverImageUrl = null;
     }
 
+    const isRsvp = updated.registrationMode === 'rsvp';
+
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
       title: updated.title,
       category: updated.category === 'Other' ? updated.customCategory : updated.category,
@@ -93,7 +99,10 @@ const OrganizerEventDetail: React.FC = () => {
       venue: updated.isOnline ? null : updated.venue,
       isOnline: updated.isOnline,
       coverImageUrl,
-      tiers: updated.tiers,
+      registrationMode: updated.registrationMode,
+      tiers: isRsvp ? [] : updated.tiers,
+      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
       updatedAt: serverTimestamp(),
     });
     setIsEditOpen(false);
@@ -114,7 +123,7 @@ const OrganizerEventDetail: React.FC = () => {
         <p className="text-sm font-medium text-slate-700">This event doesn&rsquo;t exist.</p>
         <button
           onClick={() => navigate('/events/discover')}
-          className="rounded-md bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c]"
+          className="rounded-md bg-[#007A786] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c]"
         >
           Back to events
         </button>
@@ -142,7 +151,7 @@ const OrganizerEventDetail: React.FC = () => {
             <ArrowLeft size={18} />
           </button>
           <div className="flex items-center gap-2">
-             <button
+            <button
               onClick={() => setIsEditOpen(true)}
               className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
             >
@@ -172,7 +181,7 @@ const OrganizerEventDetail: React.FC = () => {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="space-y-3 pt-4">
               <div className="flex items-start gap-3">
-                <Calendar size={18} className="mt-0.5 shrink-0 text-[#F97316]" />
+                <Calendar size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
                 <div>
                   <p className="text-sm font-medium text-slate-800">{formatDateRange(event.date, event.endDate)}</p>
                   <p className="flex items-center gap-1 text-xs text-slate-500">
@@ -183,9 +192,9 @@ const OrganizerEventDetail: React.FC = () => {
 
               <div className="flex items-start gap-3">
                 {event.isOnline ? (
-                  <Wifi size={18} className="mt-0.5 shrink-0 text-[#F97316]" />
+                  <Wifi size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
                 ) : (
-                  <MapPin size={18} className="mt-0.5 shrink-0 text-[#F97316]" />
+                  <MapPin size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
                 )}
                 <div>
                   <p className="text-sm font-medium text-slate-800">{event.isOnline ? 'Online event' : event.venue}</p>
@@ -194,7 +203,7 @@ const OrganizerEventDetail: React.FC = () => {
               </div>
 
               <div className="flex items-start gap-3">
-                <User size={18} className="mt-0.5 shrink-0 text-[#F97316]" />
+                <User size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
                 <div>
                   <p className="text-sm font-medium text-slate-800">{event.organizerName}</p>
                   <p className="text-xs text-slate-500">Organizer</p>
@@ -211,29 +220,52 @@ const OrganizerEventDetail: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Ticket tiers — read-only summary; organizer changes these via Edit */}
+          {/* Registration — ticket tiers, or the RSVP link if this is an RSVP event */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">
-              <h2 className="mb-3 text-base font-semibold text-gray-900">Ticket tiers</h2>
-              <div className="flex flex-col divide-y divide-gray-100">
-                {event.tiers.map((tier) => (
-                  <div key={tier.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800">{tier.name}</p>
-                      <p className="text-sm font-semibold text-[#F97316]">
-                        {tier.price === 0 ? 'Free' : `\u20B9${tier.price.toLocaleString('en-IN')}`}
-                      </p>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      {tier.sold} / {tier.quantity} sold
-                    </p>
+              {event.registrationMode === 'rsvp' ? (
+                <>
+                  <h2 className="mb-3 text-base font-semibold text-gray-900">RSVP</h2>
+                  <p className="mb-3 text-sm text-slate-600">
+                    Attendees register through an external form instead of buying a ticket.
+                  </p>
+                  {event.rsvpLink ? (
+                    <a
+                      href={event.rsvpLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
+                    >
+                      {event.rsvpButtonLabel || 'RSVP Now'}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-red-500">No RSVP link set yet — add one via Edit.</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h2 className="mb-3 text-base font-semibold text-gray-900">Ticket tiers</h2>
+                  <div className="flex flex-col divide-y divide-gray-100">
+                    {event.tiers.map((tier) => (
+                      <div key={tier.id} className="flex items-center justify-between gap-3 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800">{tier.name}</p>
+                          <p className="text-sm font-semibold text-[#007A78]">
+                            {tier.price === 0 ? 'Free' : `\u20B9${tier.price.toLocaleString('en-IN')}`}
+                          </p>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          {tier.sold} / {tier.quantity} sold
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
-      </main>
+      </main >
       {isEditOpen && (
         <EditEventModal
           event={event}
@@ -241,7 +273,7 @@ const OrganizerEventDetail: React.FC = () => {
           onSave={handleSaveEdit}
         />
       )}
-    </div>
+    </div >
   );
 };
 

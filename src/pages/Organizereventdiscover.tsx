@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import {
@@ -33,7 +33,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
       e.stopPropagation();
       onChange();
     }}
-    className={`relative h-5 w-9 shrink-0 overflow-hidden rounded-full transition-colors disabled:opacity-40 ${checked ? 'bg-[#F97316]' : 'bg-gray-300'
+    className={`relative h-5 w-9 shrink-0 overflow-hidden rounded-full transition-colors disabled:opacity-40 ${checked ? 'bg-[#007A78]' : 'bg-gray-300'
       }`}
   >
     <span
@@ -51,7 +51,8 @@ const OrganizerEventCard: React.FC<{
   onOpen: () => void;
   onToggleLive: (id: string) => void;
   onToggleFeatured: (id: string) => void;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured }) => {
+  onDelete: (id: string) => void;
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDelete }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -72,17 +73,30 @@ const OrganizerEventCard: React.FC<{
           {label}
         </span>
         {event.isOnline && (
-          <span className="absolute top-2 right-2 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             <Wifi size={12} /> Online
           </span>
         )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(`Delete "${event.title}"? This can't be undone.`)) {
+              onDelete(event.id);
+            }
+          }}
+          title="Delete event"
+          className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+        >
+          <Trash2 size={14} />
+        </button>
         {soldOut && (
           <span className="absolute bottom-2 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
           </span>
         )}
         {!soldOut && sellingFast && (
-          <span className="absolute bottom-2 right-2 rounded-sm bg-[#F97316] px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute bottom-2 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
             Selling fast
           </span>
         )}
@@ -116,20 +130,28 @@ const OrganizerEventCard: React.FC<{
         </div>
 
         <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
-          <div className="h-1.5 rounded-full bg-[#F97316]" style={{ width: `${Math.min(pct, 100)}%` }} />
+          <div className="h-1.5 rounded-full bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
         </div>
 
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-sm font-semibold text-[#F97316]">{getPriceLabel(event.tiers)}</span>
-          <span className="flex items-center gap-1 text-xs text-slate-400">
-            <Ticket size={13} /> {event.tiers.reduce((s, t) => s + t.sold, 0)} sold
+          <span className="text-sm font-semibold text-[#007A78]">
+            {event.registrationMode === 'rsvp' ? 'RSVP' : getPriceLabel(event.tiers)}
           </span>
+          {event.registrationMode === 'rsvp' ? (
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <Wifi size={13} /> External form
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <Ticket size={13} /> {event.tiers.reduce((s, t) => s + t.sold, 0)} sold
+            </span>
+          )}
         </div>
 
         {/* ── Organizer controls ─────────────────────────────────── */}
         <div className="mt-1 flex items-center justify-between border-t border-gray-100 pt-2">
           <div className="flex items-center gap-1.5">
-            <Radio size={13} className={isLive ? 'text-[#F97316]' : 'text-gray-300'} />
+            <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300'} />
             <span className="text-xs font-medium text-slate-600">{isLive ? 'Live' : 'Draft'}</span>
           </div>
           <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
@@ -137,7 +159,7 @@ const OrganizerEventCard: React.FC<{
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Star size={13} className={event.featured ? 'fill-[#F97316] text-[#F97316]' : 'text-gray-300'} />
+            <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300'} />
             <span className="text-xs font-medium text-slate-600">Featured</span>
           </div>
           <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
@@ -152,7 +174,7 @@ const OrganizerEventCard: React.FC<{
 // ─────────────────────────────────────────────────────────────────────────
 const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
-  const { events, loading, toggleLive, toggleFeatured } = useOrganizerEvents();
+  const { events, loading, toggleLive, toggleFeatured, deleteEvent } = useOrganizerEvents();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [format, setFormat] = useState<FormatFilter>('all');
@@ -214,7 +236,7 @@ const OrganizerEventDiscover: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search your events"
-              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]"
+              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
             />
             {search && (
               <button
@@ -250,7 +272,7 @@ const OrganizerEventDiscover: React.FC = () => {
                           setActiveCategory(c);
                           setCategoryMenuOpen(false);
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 text-[#F97316]' : 'text-slate-600 hover:bg-gray-50'
+                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 text-[#007A78]' : 'text-slate-600 hover:bg-gray-50'
                           }`}
                       >
                         {c}
@@ -283,9 +305,8 @@ const OrganizerEventDiscover: React.FC = () => {
                           setFormat(f.value);
                           setFormatMenuOpen(false);
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${
-                          format === f.value ? 'bg-orange-50 text-[#F97316]' : 'text-slate-600 hover:bg-gray-50'
-                        }`}
+                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${format === f.value ? 'bg-orange-50 text-[#007A78]' : 'text-slate-600 hover:bg-gray-50'
+                          }`}
                       >
                         {f.label}
                       </button>
@@ -299,7 +320,7 @@ const OrganizerEventDiscover: React.FC = () => {
       </header>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
-       <main className="grow p-3">
+      <main className="grow p-3">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           {loading ? (
             <div className="flex justify-center py-16">
@@ -323,13 +344,14 @@ const OrganizerEventDiscover: React.FC = () => {
                 {filtered.length} event{filtered.length === 1 ? '' : 's'}
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                 {filtered.map((event) => (
+                {filtered.map((event) => (
                   <OrganizerEventCard
                     key={event.id}
                     event={event}
                     onOpen={() => openEvent(event)}
                     onToggleLive={(evId) => toggleLive(evId, event.status)}
                     onToggleFeatured={(evId) => toggleFeatured(evId, !!event.featured)}
+                    onDelete={deleteEvent}
                   />
                 ))}
               </div>

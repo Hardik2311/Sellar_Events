@@ -11,6 +11,7 @@ export interface ProfileData {
   organizationName: string;
   eventCategory: string;
   website: string;
+  gstinNumber: string;
   streetAddress: string;
   city: string;
   state: string;
@@ -103,6 +104,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         organizationName: companyData.organizationName || rootCompanyData.name || '',
         eventCategory: companyData.eventCategory || '',
         website: companyData.website || '',
+        gstinNumber: companyData.gstinNumber || '',
         streetAddress: companyAddress.street || '',
         city: companyAddress.city || '',
         state: companyAddress.state || '',
@@ -142,6 +144,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       organizationName,
       eventCategory,
       website,
+      gstinNumber,
       streetAddress,
       city,
       state,
@@ -181,6 +184,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       ...(organizationName !== undefined && { organizationName, name: organizationName }),
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
+      ...(gstinNumber !== undefined && { gstinNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),
       ...(userFields.phone !== undefined && { ownerPhoneNumber: userFields.phone }),
       updatedAt: serverTimestamp(),

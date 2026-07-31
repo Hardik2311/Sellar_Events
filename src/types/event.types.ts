@@ -1,8 +1,3 @@
-// ─── Event Domain Types ───────────────────────────────────────────────────────
-// These mirror how `CatalogueDashboardData` / item types are shaped in the
-// catalogue app, so backend wiring later follows the same pattern
-// (fetchDashboardData -> transform -> setData).
-
 export type EventStatus = 'draft' | 'published' | 'completed' | 'cancelled';
 
 export interface TicketTier {
@@ -55,6 +50,9 @@ export interface TicketTierDraft {
   quantity: number;
 }
 
+export const REGISTRATION_MODES = ['tickets', 'rsvp'] as const;
+export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
+
 export interface EventFormState {
   title: string;
   category: EventCategory;
@@ -69,4 +67,8 @@ export interface EventFormState {
   tiers: TicketTierDraft[];
   promoCode: string;
   promoDiscountPercent: number;
+  // NEW — how attendees sign up for this event
+  registrationMode: RegistrationMode;
+  rsvpLink: string;          // e.g. Google Form URL, only used when registrationMode === 'rsvp'
+  rsvpButtonLabel: string;   // e.g. "RSVP Now" / "Register" — organizer-editable CTA text
 }

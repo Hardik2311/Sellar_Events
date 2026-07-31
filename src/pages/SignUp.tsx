@@ -20,6 +20,7 @@ import {
   FiMapPin,
   FiMap,
   FiCheckCircle,
+  FiFileText,
 } from 'react-icons/fi';
 import { Building2Icon, PinIcon } from 'lucide-react';
 import {
@@ -61,6 +62,7 @@ interface SignupFormData {
   customEventCategory: string;
   website: string;
   whatsappNumber: string;
+  gstinNumber: string;
   streetAddress: string;
   city: string;
   state: string;
@@ -78,6 +80,7 @@ const initialFormData: SignupFormData = {
   customEventCategory: '',
   website: '',
   whatsappNumber: '',
+  gstinNumber: '',
   streetAddress: '',
   city: '',
   state: '',
@@ -153,6 +156,15 @@ const Signup: React.FC = () => {
       setError('Pincode must be exactly 6 digits.');
       return false;
     }
+    if (
+      formData.gstinNumber.trim() &&
+      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
+        formData.gstinNumber.trim()
+      )
+    ) {
+      setError('Please enter a valid 15-character GSTIN.');
+      return false;
+    }
     return true;
   };
 
@@ -223,6 +235,7 @@ const Signup: React.FC = () => {
         eventCategory: finalCategory,
         website: formData.website,
         whatsappNumber: formData.whatsappNumber,
+        gstinNumber: formData.gstinNumber.trim().toUpperCase(),
         address: {
           street: formData.streetAddress,
           city: formData.city,
@@ -230,7 +243,6 @@ const Signup: React.FC = () => {
           postalCode: formData.postalCode,
         },
       });
-
       setSubmitSuccess(true);
       navigate('/events');
     } catch (err: any) {
@@ -378,7 +390,7 @@ const Signup: React.FC = () => {
                 />
 
                 <div
-                  className={`gap-4 ${formData.eventCategory === 'Other' ? 'flex flex-col md:flex-row' : 'grid grid-cols-1'
+                  className={`gap-4 grid grid-cols-1 ${formData.eventCategory === 'Other' ? 'md:grid-cols-2' : ''
                     }`}
                 >
                   <FloatingLabelSelect
@@ -389,7 +401,7 @@ const Signup: React.FC = () => {
                     onChange={(e) => handleChange('eventCategory', e.target.value)}
                     options={eventCategoryOptions}
                     required
-                    className={formData.eventCategory === 'Other' ? 'md:w-1/2' : 'w-full'}
+                    className="w-full min-w-0"
                   />
                   {formData.eventCategory === 'Other' && (
                     <FloatingLabelInput
@@ -399,7 +411,7 @@ const Signup: React.FC = () => {
                       value={formData.customEventCategory}
                       onChange={(e) => handleChange('customEventCategory', e.target.value)}
                       required
-                      className="md:w-1/2"
+                      className="w-full min-w-0"
                     />
                   )}
                 </div>
@@ -425,6 +437,19 @@ const Signup: React.FC = () => {
                     }}
                   />
                 </div>
+
+                <FloatingLabelInput
+                  id="gstinNumber"
+                  label="GSTIN (optional)"
+                  icon={<FiFileText size={20} />}
+                  value={formData.gstinNumber}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    if (value.length <= 15) handleChange('gstinNumber', value);
+                  }}
+                  maxLength={15}
+                  placeholder=" "
+                />
 
                 <FloatingLabelInput
                   id="streetAddress"

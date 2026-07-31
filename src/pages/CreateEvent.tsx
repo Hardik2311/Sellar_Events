@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
 import {
@@ -13,7 +13,8 @@ import ThemeToggle from '../components/ui/ThemeToggle';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { compressImageToTargetSize } from '../lib/imageCompression'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useCompanySettings } from '../hooks/useSettings';
+import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
@@ -39,15 +40,14 @@ const INITIAL_STATE: EventFormState = {
   tiers: [createEmptyTier()],
   promoCode: '',
   promoDiscountPercent: 0,
+  registrationMode: 'tickets',
+  rsvpLink: '',
+  rsvpButtonLabel: 'RSVP Now',
 };
-
-// TODO — backend wiring:
-// Replace handlePublish/handleSaveDraft with real calls once the API
-// is ready, e.g. POST /events with status: 'draft' | 'published'.
-// This component only manages local form state for now.
 
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
+  const { settings: companySettings } = useCompanySettings();
   const { user, profile } = useAuth();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
@@ -56,16 +56,31 @@ const CreateEvent: React.FC = () => {
 
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
-
+  useEffect(() => {
+    if (!companySettings.rsvpEnabled && form.registrationMode === 'rsvp') {
+      update('registrationMode', 'tickets');
+    }
+  }, [companySettings.rsvpEnabled]);
   const isOtherCategory = form.category === 'Other';
+
+  const isValidUrl = (value: string) => {
+    try {
+      const u = new URL(value.trim());
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
 
   const isPublishable =
     form.title.trim().length > 0 &&
     form.date &&
     form.endDate &&
     form.endDate >= form.date &&
+    form.time &&
     (form.isOnline || form.venue.trim().length > 0) &&
-    (!isOtherCategory || form.customCategory.trim().length > 0);
+    (!isOtherCategory || form.customCategory.trim().length > 0) &&
+    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
 
   const handleCoverImageChange = async (preview: string | null) => {
     if (!preview) {
@@ -99,6 +114,12 @@ const CreateEvent: React.FC = () => {
     setIsSaving(true);
     setSaveError(null);
     try {
+      // Dashboard queries/sorts on `startDate` as a Firestore Timestamp,
+      // built from the separate date + time fields the form collects.
+      const startDate = form.date
+        ? Timestamp.fromDate(new Date(`${form.date}T${form.time || '00:00'}`))
+        : null;
+
       let coverImageUrl: string | null = null;
 
       // Cover image abhi base64 preview hai — Storage pe upload karke URL lo
@@ -111,17 +132,24 @@ const CreateEvent: React.FC = () => {
       }
 
       const eventsRef = collection(db, 'companies', profile.companyId, 'events');
+      const isRsvp = form.registrationMode === 'rsvp';
+
       await addDoc(eventsRef, {
         title: form.title,
         category: form.category === 'Other' ? form.customCategory : form.category,
         description: form.description,
+        startDate,
         date: form.date,
         endDate: form.endDate,
         time: form.time,
         venue: form.isOnline ? null : form.venue,
         isOnline: form.isOnline,
         coverImageUrl,
-        tiers: form.tiers,
+        registrationMode: form.registrationMode,
+        // Keep tiers empty for RSVP events — no pricing/inventory to track
+        tiers: isRsvp ? [] : form.tiers,
+        rsvpLink: isRsvp ? form.rsvpLink.trim() : null,
+        rsvpButtonLabel: isRsvp ? (form.rsvpButtonLabel.trim() || 'RSVP Now') : null,
         promoCode: form.promoCode || null,
         promoDiscountPercent: form.promoDiscountPercent || 0,
         status,
@@ -184,9 +212,10 @@ const CreateEvent: React.FC = () => {
 
               <FloatingLabelInput
                 id="title"
-                label="Event title"
+                label="Event title *"
                 value={form.title}
                 onChange={(e) => update('title', e.target.value)}
+                required
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -207,18 +236,16 @@ const CreateEvent: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => update('isOnline', false)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                        !form.isOnline ? 'bg-orange-50 text-[#F97316]' : 'text-gray-500'
-                      }`}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
                     >
                       In-person
                     </button>
                     <button
                       type="button"
                       onClick={() => update('isOnline', true)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                        form.isOnline ? 'bg-orange-50 text-[#F97316]' : 'text-gray-500'
-                      }`}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
                     >
                       Online
                     </button>
@@ -230,9 +257,10 @@ const CreateEvent: React.FC = () => {
                 <div>
                   <FloatingLabelInput
                     id="custom-category"
-                    label="Custom category"
+                    label="Custom category *"
                     value={form.customCategory}
                     onChange={(e) => update('customCategory', e.target.value)}
+                    required
                   />
                   <p className="text-xs text-gray-500 mt-1">Tell us what kind of event this is</p>
                 </div>
@@ -241,8 +269,9 @@ const CreateEvent: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <FloatingLabelInput
                   id="date"
-                  label="Start date"
+                  label="Start date *"
                   type="date"
+                  icon={<Calendar size={16} />}
                   value={form.date}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -250,32 +279,38 @@ const CreateEvent: React.FC = () => {
                     // keep end date valid if it's now before the new start date
                     if (form.endDate && form.endDate < value) update('endDate', value);
                   }}
+                  required
                 />
                 <FloatingLabelInput
                   id="end-date"
-                  label="End date"
+                  label="End date *"
                   type="date"
+                  icon={<Calendar size={16} />}
                   min={form.date || undefined}
                   value={form.endDate}
                   onChange={(e) => update('endDate', e.target.value)}
+                  required
                 />
               </div>
 
               <FloatingLabelInput
                 id="time"
-                label="Time"
+                label="Time *"
                 type="time"
+                icon={<Clock size={16} />}
                 value={form.time}
                 onChange={(e) => update('time', e.target.value)}
+                required
               />
 
               {!form.isOnline && (
                 <div>
                   <FloatingLabelInput
                     id="venue"
-                    label="Venue"
+                    label="Venue *"
                     value={form.venue}
                     onChange={(e) => update('venue', e.target.value)}
+                    required
                   />
                   <p className="text-xs text-gray-500 mt-1">Full address helps attendees find it on the day</p>
                 </div>
@@ -291,13 +326,67 @@ const CreateEvent: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Ticket tiers */}
+          {/* Registration: paid tiers OR external RSVP link */}
           <Card className="shadow-sm border-gray-200">
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900">Ticket tiers</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900">
+                {form.registrationMode === 'tickets' ? 'Ticket tiers' : 'RSVP details'}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+            <CardContent className="space-y-4">
+              {companySettings.rsvpEnabled && (
+                <FormField label="Registration type" htmlFor="registration-mode">
+                  <div className="flex rounded-md border border-gray-300 p-1 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => update('registrationMode', 'tickets')}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
+                    >
+                      Ticketed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update('registrationMode', 'rsvp')}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
+                        }`}
+                    >
+                      RSVP (external link)
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.registrationMode === 'rsvp'
+                      ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
+                      : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
+                  </p>
+                </FormField>
+              )}
+
+              {form.registrationMode === 'tickets' ? (
+                <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+              ) : (
+                <div className="space-y-3">
+                  <FloatingLabelInput
+                    id="rsvp-link"
+                    label="Registration link (Google Form, Typeform, etc.) *"
+                    value={form.rsvpLink}
+                    onChange={(e) => update('rsvpLink', e.target.value)}
+                    required
+                  />
+                  {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
+                    <p className="text-xs text-red-500">Enter a valid link starting with http:// or https://</p>
+                  )}
+                  <FloatingLabelInput
+                    id="rsvp-button-label"
+                    label="Button text (optional)"
+                    value={form.rsvpButtonLabel}
+                    onChange={(e) => update('rsvpButtonLabel', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Attendees will see this button on the event page and be sent to your form to register.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

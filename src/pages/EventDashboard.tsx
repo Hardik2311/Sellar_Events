@@ -1,36 +1,64 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RefreshCw, Loader2, Eye, EyeOff, LayoutDashboard } from 'lucide-react';
-import { SAMPLE_EVENT_DATA } from '../data/sampleEventData';
+import { useAuth } from '../context/AuthContext';
+ import { fetchEventDashboardData, CACHE_DURATION } from '../lib/fetchEventDashboardData';
+ import type { WithCacheMeta } from '../lib/fetchEventDashboardData';
+ import type { EventDashboardData } from '../types/event.types';
 import EventListCard from '../components/EventListCard';
 import EventOverviewCard from '../components/EventOverviewCard';
 import TicketTierBreakdown from '../components/TicketTierBreakDown';
 import SalesTrendCard from '../components/SalesTrendCard';
-import { EventFilterProvider, EventDateFilter } from '../components/ui/EventdateFilter';
+import { EventFilterProvider, EventDateFilter, useEventFilter } from '../components/ui/EventdateFilter';
 import ThemeToggle from '../components/ui/ThemeToggle';
 
-// TODO — backend wiring (mirrors HomePage.tsx in the catalogue app):
-// 1. Replace SAMPLE_EVENT_DATA with `fetchDashboardData<EventDashboardData>({ ... })`
-// 2. Add the same cache/refresh pattern (CACHE_DURATION interval + manual refresh button)
-// 3. Wire `loading` to the real fetch state instead of the local mock below
-
 const EventDashboardContent: React.FC = () => {
+  const { profile } = useAuth();
+  const { filters } = useEventFilter();
   const [searchValue, setSearchValue] = useState('');
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(SAMPLE_EVENT_DATA.events[0]?.id ?? null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isDataVisible, setIsDataVisible] = useState<boolean>(true);
-  const [loading, setLoading] = useState(false);
-
-  const data = SAMPLE_EVENT_DATA; // <- swap for fetched state
+   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+ const [data, setData] = useState<WithCacheMeta<EventDashboardData> | null>(null);
 
   const selectedEvent = useMemo(
-    () => data.events.find((e) => e.id === selectedEventId) ?? null,
-    [data.events, selectedEventId]
-  );
+    () => data?.events.find((e) => e.id === selectedEventId) ?? null,
+    [data, selectedEventId]
+    );
 
-  const handleRefresh = useCallback(() => {
-    setLoading(true);
-    // TODO: call fetchData(true) once wired to a real source
-    setTimeout(() => setLoading(false), 600);
-  }, []);
+  const fetchData = useCallback(async (forceRefresh = false) => {
+     if (!profile?.companyId || !filters.startDate || !filters.endDate) {
+       setLoading(false);
+       return;
+     }
+     if (!forceRefresh) setLoading(true);
+     setError(null);
+     try {
+       const result = await fetchEventDashboardData({
+         companyId: profile.companyId,
+         startDate: filters.startDate,
+         endDate: filters.endDate,
+          cacheKey: `event_dashboard_cache_${profile.companyId}`,
+         forceRefresh,
+       });
+       setData(result);
+       setSelectedEventId((prev) => prev ?? result.events[0]?.id ?? null);
+     } catch (e) {
+       console.error('Event dashboard fetch error:', e);
+       setError('Could not load your events. Please try again.');
+     } finally {
+       setLoading(false);
+     }
+   }, [profile, filters]);
+
+   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+     const interval = setInterval(() => fetchData(true), CACHE_DURATION);
+     return () => clearInterval(interval);
+   }, [fetchData]);
+
+   const handleRefresh = () => fetchData(true);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -62,7 +90,12 @@ const EventDashboardContent: React.FC = () => {
       <main className="grow overflow-y-auto p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2 mb-4 max-w-7xl mx-auto">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <span>Last updated: just now</span>
+            <span>
+           Last updated:{' '}
+           {data?.lastUpdated
+             ? new Date(data.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+             : 'Never'}
+         </span>
           </p>
           <button
             onClick={handleRefresh}
@@ -79,12 +112,22 @@ const EventDashboardContent: React.FC = () => {
           <div className="mb-2">
             <EventDateFilter />
           </div>
+{error && (
+           <div className="mb-2 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+             {error}
+           </div>
+         )}
 
+         {loading && !data ? (
+           <div className="flex h-64 items-center justify-center text-slate-500 dark:text-slate-400">
+             <Loader2 className="animate-spin mr-2" size={18} /> Loading dashboard...
+           </div>
+         ) : (
           <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
             {/* Left: event picker */}
             <div className="lg:col-span-1 h-full">
               <EventListCard
-                events={data.events}
+                events={data?.events ?? []}
                 selectedEventId={selectedEventId}
                 onSelect={setSelectedEventId}
                 searchValue={searchValue}
@@ -103,18 +146,16 @@ const EventDashboardContent: React.FC = () => {
                   isDataVisible={isDataVisible}
                   loading={loading}
                 />
-                <SalesTrendCard data={data.salesTrend} isDataVisible={isDataVisible} loading={loading} />
+                <SalesTrendCard data={data?.salesTrend ?? []} isDataVisible={isDataVisible} loading={loading} />
               </div>
             </div>
           </div>
+         )}
         </div>
       </main>
     </div>
   );
 };
-
-// EventFilterProvider wraps EventDashboardContent so useEventFilter() works inside it —
-// same pattern as FilterProvider wrapping HomePageContent in the catalogue app.
 const EventDashboard: React.FC = () => (
   <EventFilterProvider>
     <EventDashboardContent />
