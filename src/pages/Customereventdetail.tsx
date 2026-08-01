@@ -8,11 +8,13 @@ import {
   getCategoryLabel,
   formatDateRange,
   formatTime,
-} from '../data/mockEvents';
+} from '../data/events';
 import { usePublicEvent } from '../hooks/usePublicEvents';
+import { parseEventIdFromSlug } from '../data/events';
 
 const CustomerEventDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
+  const id = slug ? parseEventIdFromSlug(slug) : undefined;
   const navigate = useNavigate();
   const { event, loading } = usePublicEvent(id);
 
@@ -72,8 +74,8 @@ const CustomerEventDetail: React.FC = () => {
     <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 bg-gradient-to-br ${gradient}`}>
-        {event.coverImage && (
-          <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
+        {event.images?.[0] && (
+          <img src={event.images[0]} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
@@ -140,7 +142,23 @@ const CustomerEventDetail: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-
+          {event.images && event.images.length > 1 && (
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
+                <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Photos</h2>
+                <div className="grid grid-cols-4 gap-2">
+                  {event.images.map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      className="aspect-square rounded-md object-cover"
+                      alt={`${event.title} photo ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {/* About */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">

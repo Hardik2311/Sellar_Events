@@ -12,7 +12,8 @@ import {
     getPriceLabel,
     getAvailability,
     getFeaturedEvent,
-} from '../data/mockEvents';
+    buildEventSlugId,
+} from '../data/events';
 import { usePublicEvents } from '../hooks/usePublicEvents';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
@@ -147,7 +148,7 @@ const CustomerEventDiscover: React.FC = () => {
         setFormat('all');
     };
 
-    const openEvent = (event: PublicEvent) => navigate(`/e/${event.id}`);
+    const openEvent = (event: PublicEvent) => navigate(`/e/${buildEventSlugId(event.title, event.id)}`);
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">

@@ -12,7 +12,6 @@ import ImageUploadBox from '../components/ui/ImageUploadBox';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
-import { compressImageToTargetSize } from '../lib/imageCompression'
 import { useCompanySettings } from '../hooks/useSettings';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -36,7 +35,7 @@ const INITIAL_STATE: EventFormState = {
   time: '',
   venue: '',
   isOnline: false,
-  coverImagePreview: null,
+  images: [],
   tiers: [createEmptyTier()],
   promoCode: '',
   promoDiscountPercent: 0,
@@ -45,12 +44,13 @@ const INITIAL_STATE: EventFormState = {
   rsvpButtonLabel: 'RSVP Now',
 };
 
+const MAX_IMAGES = 6;
+
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { settings: companySettings } = useCompanySettings();
   const { user, profile } = useAuth();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
-  const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -72,38 +72,19 @@ const CreateEvent: React.FC = () => {
     }
   };
 
+  const req = companySettings.eventFieldRequirements;
+
   const isPublishable =
-    form.title.trim().length > 0 &&
-    form.date &&
-    form.endDate &&
-    form.endDate >= form.date &&
-    form.time &&
-    (form.isOnline || form.venue.trim().length > 0) &&
+    (!req.title || form.title.trim().length > 0) &&
+    (!req.date || form.date) &&
+    (!req.endDate || form.endDate) &&
+    (!form.date || !form.endDate || form.endDate >= form.date) &&
+    (!req.time || form.time) &&
+    (!req.venue || form.isOnline || form.venue.trim().length > 0) &&
+    (!req.description || form.description.trim().length > 0) &&
+    (!req.images || form.images.length > 0) &&
     (!isOtherCategory || form.customCategory.trim().length > 0) &&
     (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
-
-  const handleCoverImageChange = async (preview: string | null) => {
-    if (!preview) {
-      update('coverImagePreview', null);
-      return;
-    }
-
-    setIsCompressingImage(true);
-    try {
-      // Resize/re-encode so we never store a multi-MB base64 image in state
-      // (or, later, send one to the backend). Targets ~500KB.
-      const compressed = await compressImageToTargetSize(preview, 500, {
-        maxWidth: 1600,
-        maxHeight: 1600,
-      });
-      update('coverImagePreview', compressed);
-    } catch (err) {
-      console.error('Image compression failed, falling back to original preview:', err);
-      update('coverImagePreview', preview);
-    } finally {
-      setIsCompressingImage(false);
-    }
-  };
 
   const saveEvent = async (status: 'draft' | 'published') => {
     if (!user || !profile?.companyId) {
@@ -120,15 +101,19 @@ const CreateEvent: React.FC = () => {
         ? Timestamp.fromDate(new Date(`${form.date}T${form.time || '00:00'}`))
         : null;
 
-      let coverImageUrl: string | null = null;
+      let coverImageUrls: string[] = [];
 
-      // Cover image abhi base64 preview hai — Storage pe upload karke URL lo
-      if (form.coverImagePreview) {
-
+      // Images abhi base64 previews hain — Storage pe sab upload karke URLs lo,
+      // pehli image hi list/cover thumbnail ke liye use hogi.
+      if (form.images.length > 0) {
         const tempId = `evt-${Date.now()}`;
-        const imageRef = ref(storage, `companies/${profile.companyId}/events/${tempId}/cover.jpg`);
-        await uploadString(imageRef, form.coverImagePreview, 'data_url');
-        coverImageUrl = await getDownloadURL(imageRef);
+        coverImageUrls = await Promise.all(
+          form.images.map(async (preview, i) => {
+            const imageRef = ref(storage, `companies/${profile.companyId}/events/${tempId}/photo-${i}.jpg`);
+            await uploadString(imageRef, preview, 'data_url');
+            return getDownloadURL(imageRef);
+          })
+        );
       }
 
       const eventsRef = collection(db, 'companies', profile.companyId, 'events');
@@ -144,7 +129,8 @@ const CreateEvent: React.FC = () => {
         time: form.time,
         venue: form.isOnline ? null : form.venue,
         isOnline: form.isOnline,
-        coverImageUrl,
+        coverImageUrl: coverImageUrls[0] ?? null,
+        coverImageUrls,
         registrationMode: form.registrationMode,
         // Keep tiers empty for RSVP events — no pricing/inventory to track
         tiers: isRsvp ? [] : form.tiers,
@@ -175,248 +161,247 @@ const CreateEvent: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-24 md:mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <button
-          onClick={() => navigate('/events')}
-          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-          title="Back to Events"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 text-center flex flex-col items-center justify-center">
-          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
+      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-6 py-4">
+        <div>
+          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/events')}
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            title="Back to Events"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <ThemeToggle />
+        </div>
       </header>
 
-      {/* ── Main Content ─────────────────────────────────────────────── */}
-      <main className="grow overflow-y-auto p-2">
-        <div className="mx-auto max-w-3xl flex flex-col gap-3">
-          {/* Event details */}
-          <Card className="shadow-sm border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900">Event details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-slate-700 mb-1">Cover image</p>
+      <main className="grow overflow-y-auto p-4 lg:p-6">
+        <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* ── Left column ────────────────────────────────────── */}
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            {/* Photo gallery uploader */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
                 <ImageUploadBox
-                  preview={form.coverImagePreview}
-                  onChange={handleCoverImageChange}
+                  images={form.images}
+                  onChange={(images) => update('images', images)}
+                  maxImages={MAX_IMAGES}
                 />
-                {isCompressingImage && (
-                  <p className="text-xs text-gray-500 mt-1">Compressing image…</p>
+              </CardContent>
+            </Card>
+
+            {/* Basic Information */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Basic Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FloatingLabelInput
+                  id="title"
+                  label={req.title ? 'Event title *' : 'Event title'}
+                  value={form.title}
+                  onChange={(e) => update('title', e.target.value)}
+                  required={req.title}
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                  <FloatingLabelSelect
+                    id="category"
+                    label="Category"
+                    value={form.category}
+                    options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                    onChange={(e) => {
+                      const value = e.target.value as EventFormState['category'];
+                      update('category', value);
+                      if (value !== 'Other') update('customCategory', '');
+                    }}
+                  />
+
+                  <FormField label="Format" htmlFor="format">
+                    <div className="flex rounded-md border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => update('isOnline', false)}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                          }`}
+                      >
+                        In-person
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => update('isOnline', true)}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                          }`}
+                      >
+                        Online
+                      </button>
+                    </div>
+                  </FormField>
+                </div>
+
+                {isOtherCategory && (
+                  <div>
+                    <FloatingLabelInput
+                      id="custom-category"
+                      label="Custom category *"
+                      value={form.customCategory}
+                      onChange={(e) => update('customCategory', e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Tell us what kind of event this is</p>
+                  </div>
                 )}
-              </div>
 
-              <FloatingLabelInput
-                id="title"
-                label="Event title *"
-                value={form.title}
-                onChange={(e) => update('title', e.target.value)}
-                required
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FloatingLabelSelect
-                  id="category"
-                  label="Category"
-                  value={form.category}
-                  options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                  onChange={(e) => {
-                    const value = e.target.value as EventFormState['category'];
-                    update('category', value);
-                    if (value !== 'Other') update('customCategory', '');
-                  }}
+                <FloatingLabelTextArea
+                  id="description"
+                  label={req.description ? 'Description *' : 'Description'}
+                  rows={4}
+                  value={form.description}
+                  onChange={(e) => update('description', e.target.value)}
+                  required={req.description}
                 />
+              </CardContent>
+            </Card>
 
-                <FormField label="Format" htmlFor="format">
-                  <div className="flex rounded-md border border-gray-300 p-1 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => update('isOnline', false)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      In-person
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => update('isOnline', true)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      Online
-                    </button>
+            {/* Registration: ticket tiers OR RSVP link */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                  {form.registrationMode === 'tickets' ? 'Ticket Tiers' : 'RSVP details'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {companySettings.rsvpEnabled && (
+                  <FormField label="Registration type" htmlFor="registration-mode">
+                    <div className="flex rounded-md border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => update('registrationMode', 'tickets')}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                          }`}
+                      >
+                        Ticketed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => update('registrationMode', 'rsvp')}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                          }`}
+                      >
+                        RSVP (external link)
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                      {form.registrationMode === 'rsvp'
+                        ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
+                        : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
+                    </p>
+                  </FormField>
+                )}
+
+                {form.registrationMode === 'tickets' ? (
+                  <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+                ) : (
+                  <div className="space-y-3">
+                    <FloatingLabelInput
+                      id="rsvp-link"
+                      label="Registration link (Google Form, Typeform, etc.) *"
+                      value={form.rsvpLink}
+                      onChange={(e) => update('rsvpLink', e.target.value)}
+                      required
+                    />
+                    {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
+                      <p className="text-xs text-red-500 dark:text-red-400">Enter a valid link starting with http:// or https://</p>
+                    )}
+                    <FloatingLabelInput
+                      id="rsvp-button-label"
+                      label="Button text (optional)"
+                      value={form.rsvpButtonLabel}
+                      onChange={(e) => update('rsvpButtonLabel', e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-slate-500">
+                      Attendees will see this button on the event page and be sent to your form to register.
+                    </p>
                   </div>
-                </FormField>
-              </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-              {isOtherCategory && (
-                <div>
+          {/* ── Right column: Logistics + Pro-tips ────────────── */}
+          <div className="flex flex-col gap-4">
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+                  <Calendar size={16} className="text-[#007A78] dark:text-[#2DD4BF]" /> Logistics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
                   <FloatingLabelInput
-                    id="custom-category"
-                    label="Custom category *"
-                    value={form.customCategory}
-                    onChange={(e) => update('customCategory', e.target.value)}
-                    required
+                    id="date"
+                    label={req.date ? 'Start date *' : 'Start date'}
+                    type="date"
+                    icon={<Calendar size={16} />}
+                    value={form.date}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      update('date', value);
+                      if (form.endDate && form.endDate < value) update('endDate', value);
+                    }}
+                    required={req.date}
                   />
-                  <p className="text-xs text-gray-500 mt-1">Tell us what kind of event this is</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <FloatingLabelInput
-                  id="date"
-                  label="Start date *"
-                  type="date"
-                  icon={<Calendar size={16} />}
-                  value={form.date}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    update('date', value);
-                    // keep end date valid if it's now before the new start date
-                    if (form.endDate && form.endDate < value) update('endDate', value);
-                  }}
-                  required
-                />
-                <FloatingLabelInput
-                  id="end-date"
-                  label="End date *"
-                  type="date"
-                  icon={<Calendar size={16} />}
-                  min={form.date || undefined}
-                  value={form.endDate}
-                  onChange={(e) => update('endDate', e.target.value)}
-                  required
-                />
-              </div>
-
-              <FloatingLabelInput
-                id="time"
-                label="Time *"
-                type="time"
-                icon={<Clock size={16} />}
-                value={form.time}
-                onChange={(e) => update('time', e.target.value)}
-                required
-              />
-
-              {!form.isOnline && (
-                <div>
                   <FloatingLabelInput
-                    id="venue"
-                    label="Venue *"
-                    value={form.venue}
-                    onChange={(e) => update('venue', e.target.value)}
-                    required
+                    id="end-date"
+                    label={req.endDate ? 'End date *' : 'End date'}
+                    type="date"
+                    icon={<Calendar size={16} />}
+                    min={form.date || undefined}
+                    value={form.endDate}
+                    onChange={(e) => update('endDate', e.target.value)}
+                    required={req.endDate}
                   />
-                  <p className="text-xs text-gray-500 mt-1">Full address helps attendees find it on the day</p>
                 </div>
-              )}
 
-              <FloatingLabelTextArea
-                id="description"
-                label="Description"
-                rows={4}
-                value={form.description}
-                onChange={(e) => update('description', e.target.value)}
-              />
-            </CardContent>
-          </Card>
+                <FloatingLabelInput
+                  id="time"
+                  label={req.time ? 'Time *' : 'Time'}
+                  type="time"
+                  icon={<Clock size={16} />}
+                  value={form.time}
+                  onChange={(e) => update('time', e.target.value)}
+                  required={req.time}
+                />
 
-          {/* Registration: paid tiers OR external RSVP link */}
-          <Card className="shadow-sm border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900">
-                {form.registrationMode === 'tickets' ? 'Ticket tiers' : 'RSVP details'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {companySettings.rsvpEnabled && (
-                <FormField label="Registration type" htmlFor="registration-mode">
-                  <div className="flex rounded-md border border-gray-300 p-1 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => update('registrationMode', 'tickets')}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      Ticketed
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => update('registrationMode', 'rsvp')}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 text-[#007A78]' : 'text-gray-500'
-                        }`}
-                    >
-                      RSVP (external link)
-                    </button>
+                {!form.isOnline && (
+                  <div>
+                    <FloatingLabelInput
+                      id="venue"
+                      label={req.venue ? 'Venue *' : 'Venue'}
+                      value={form.venue}
+                      onChange={(e) => update('venue', e.target.value)}
+                      required={req.venue}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Full address helps attendees find it on the day</p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {form.registrationMode === 'rsvp'
-                      ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
-                      : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
-                  </p>
-                </FormField>
-              )}
+                )}
+              </CardContent>
+            </Card>
 
-              {form.registrationMode === 'tickets' ? (
-                <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
-              ) : (
-                <div className="space-y-3">
-                  <FloatingLabelInput
-                    id="rsvp-link"
-                    label="Registration link (Google Form, Typeform, etc.) *"
-                    value={form.rsvpLink}
-                    onChange={(e) => update('rsvpLink', e.target.value)}
-                    required
-                  />
-                  {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
-                    <p className="text-xs text-red-500">Enter a valid link starting with http:// or https://</p>
-                  )}
-                  <FloatingLabelInput
-                    id="rsvp-button-label"
-                    label="Button text (optional)"
-                    value={form.rsvpButtonLabel}
-                    onChange={(e) => update('rsvpButtonLabel', e.target.value)}
-                  />
-                  <p className="text-xs text-gray-500">
-                    Attendees will see this button on the event page and be sent to your form to register.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Promo code (optional) */}
-          {/* <Card className="shadow-sm border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900">Promo code (optional)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Code" htmlFor="promo-code">
-                <TextInput
-                  id="promo-code"
-                  placeholder="e.g. SAVE10"
-                  value={form.promoCode}
-                  onChange={(e) => update('promoCode', e.target.value.toUpperCase())}
-                />
-              </FormField>
-              <FormField label="Discount %" htmlFor="promo-discount">
-                <TextInput
-                  id="promo-discount"
-                  type="number"
-                  min={0}
-                  max={100}
-                  placeholder="e.g. 10"
-                  value={form.promoDiscountPercent || ''}
-                  onChange={(e) => update('promoDiscountPercent', Number(e.target.value) || 0)}
-                />
-              </FormField>
-            </CardContent>
-          </Card> */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
+                <p className="text-sm font-semibold text-[#007A78] dark:text-[#2DD4BF] mb-2">Organizer Pro-Tips</p>
+                <ul className="space-y-2 text-xs text-gray-600 dark:text-slate-300">
+                  <li>Use a clear, action-oriented title.</li>
+                  <li>Add multiple high-contrast photos — listings with a gallery attract more attendees.</li>
+                  <li>Set ticket tiers early so you can track sell-through as you promote.</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
 

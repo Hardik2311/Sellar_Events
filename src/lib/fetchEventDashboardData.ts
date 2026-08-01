@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import type { EventDashboardData, EventSummary, EventStatus, TicketTier, SalesTrendPoint } from '../types/event.types';
 
 export const CACHE_DURATION = 60 * 60 * 1000;
@@ -70,7 +70,7 @@ export async function fetchEventDashboardData(
             let revenue = 0;
             const tierSold: Record<string, number> = {};
 
-            const tierByName = new Map((e.tiers || []).map((t: any) => [t.name, t]));
+            const tierByName = new Map<string, any>((e.tiers || []).map((t: any) => [t.name, t]));
 
             attendeesSnap.forEach((a) => {
                 const att = a.data();

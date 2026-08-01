@@ -30,9 +30,21 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   );
 
   const filteredEvents = useMemo(() => {
-    if (!searchValue.trim()) return events;
+    // Hide events whose date has already passed (only today + future events show)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const upcomingEvents = events.filter((e) => {
+      const eventDate = new Date(e.startDate);
+      eventDate.setHours(0, 0, 0, 0);
+      return eventDate >= startOfToday;
+    });
+
+    if (!searchValue.trim()) return upcomingEvents;
     const q = searchValue.toLowerCase();
-    return events.filter((e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q));
+    return upcomingEvents.filter(
+      (e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
+    );
   }, [events, searchValue]);
 
   useEffect(() => {

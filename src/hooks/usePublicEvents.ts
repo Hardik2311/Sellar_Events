@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import type { PublicEvent } from '../data/mockEvents';
+import type { PublicEvent } from '../data/events';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
@@ -16,7 +16,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   venue: d.venue || '',
   isOnline: d.isOnline,
   organizerName,
-  coverImage: d.coverImageUrl || null,
+  coverImage: d.coverImageUrls?.[0] || d.coverImageUrl || null,
+  images: d.coverImageUrls || (d.coverImageUrl ? [d.coverImageUrl] : []),
   status: d.status,
   featured: d.featured || false,
   tiers: (d.tiers || []).map((t: any) => ({

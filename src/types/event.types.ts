@@ -63,7 +63,7 @@ export interface EventFormState {
   time: string; // HH:mm
   venue: string;
   isOnline: boolean;
-  coverImagePreview: string | null;
+  images: string[]; 
   tiers: TicketTierDraft[];
   promoCode: string;
   promoDiscountPercent: number;
