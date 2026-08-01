@@ -10,9 +10,8 @@ import {
 import ImageUploadBox from './ui/ImageUploadBox';
 import TicketTierEditor from './TicketTierEditor';
 import { EVENT_CATEGORIES, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
-import { compressImageToTargetSize } from '../lib/imageCompression';
 import { useCompanySettings } from '../hooks/useSettings';
-import type { PublicEvent } from '../data/mockEvents';
+import type { PublicEvent } from '../data/events';
 
 type EventItem = PublicEvent;
 
@@ -36,7 +35,7 @@ const toFormState = (event: EventItem): EventFormState => ({
   time: event.time,
   venue: event.venue ?? '',
   isOnline: event.isOnline,
-  coverImagePreview: event.coverImage ?? null,
+  images: event.images ?? (event.coverImage ? [event.coverImage] : []),
   tiers: event.tiers.map((t): TicketTierDraft => ({
     id: t.id,
     name: t.name,
@@ -54,11 +53,11 @@ const toFormState = (event: EventItem): EventFormState => ({
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
   const { settings: companySettings } = useCompanySettings();
   const [form, setForm] = useState<EventFormState>(() => toFormState(event));
-  const [isCompressingImage, setIsCompressingImage] = useState(false);
 
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const MAX_IMAGES = 6;
 
   React.useEffect(() => {
     if (!companySettings.rsvpEnabled && form.registrationMode === 'rsvp') {
@@ -86,26 +85,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
     (form.isOnline || form.venue.trim().length > 0) &&
     (!isOtherCategory || form.customCategory.trim().length > 0) &&
     (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
-
-  const handleCoverImageChange = async (preview: string | null) => {
-    if (!preview) {
-      update('coverImagePreview', null);
-      return;
-    }
-    setIsCompressingImage(true);
-    try {
-      const compressed = await compressImageToTargetSize(preview, 500, {
-        maxWidth: 1600,
-        maxHeight: 1600,
-      });
-      update('coverImagePreview', compressed);
-    } catch (err) {
-      console.error('Image compression failed, falling back to original preview:', err);
-      update('coverImagePreview', preview);
-    } finally {
-      setIsCompressingImage(false);
-    }
-  };
 
   const handleSave = () => {
     if (!isSavable) return;
@@ -142,11 +121,12 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-700 mb-1">Cover image</p>
-                  <ImageUploadBox preview={form.coverImagePreview} onChange={handleCoverImageChange} />
-                  {isCompressingImage && (
-                    <p className="text-xs text-gray-500 mt-1">Compressing image…</p>
-                  )}
+                  <p className="text-sm font-medium text-slate-700 mb-1">Photos</p>
+                  <ImageUploadBox
+                    images={form.images}
+                    onChange={(images) => update('images', images)}
+                    maxImages={MAX_IMAGES}
+                  />
                 </div>
 
                 <FloatingLabelInput

@@ -5,7 +5,8 @@ import {
   signInWithEmailAndPassword
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '../lib/firebase'
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, functions, db } from '../lib/firebase'
 
 import {
   FiUser,
@@ -49,6 +50,30 @@ const indianStates = [
   'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
 ].map((s) => ({ value: s, label: s }));
 
+const gstRegistrationOptions = [
+  { value: 'regular_inclusive', label: 'Regular (Tax Inclusive)' },
+  { value: 'regular_exclusive', label: 'Regular (Tax Exclusive)' },
+  { value: 'composition', label: 'Composite' },
+  { value: 'none', label: 'Not Registered / NA' },
+];
+
+// Maps the single signup dropdown to the two fields your Settings page /
+// checkout tax math actually use (CompanySettings.gstScheme + taxType).
+const mapGstRegistrationType = (
+  type: string
+): { gstScheme: 'regular' | 'composition' | 'none'; taxType: 'inclusive' | 'exclusive' } => {
+  switch (type) {
+    case 'regular_inclusive':
+      return { gstScheme: 'regular', taxType: 'inclusive' };
+    case 'regular_exclusive':
+      return { gstScheme: 'regular', taxType: 'exclusive' };
+    case 'composition':
+      return { gstScheme: 'composition', taxType: 'inclusive' };
+    default:
+      return { gstScheme: 'none', taxType: 'inclusive' };
+  }
+};
+
 interface SignupFormData {
   // Step 1 — account
   fullName: string;
@@ -62,6 +87,7 @@ interface SignupFormData {
   customEventCategory: string;
   website: string;
   whatsappNumber: string;
+  gstRegistrationType: string;
   gstinNumber: string;
   streetAddress: string;
   city: string;
@@ -80,6 +106,7 @@ const initialFormData: SignupFormData = {
   customEventCategory: '',
   website: '',
   whatsappNumber: '',
+  gstRegistrationType: 'none',
   gstinNumber: '',
   streetAddress: '',
   city: '',
@@ -157,6 +184,13 @@ const Signup: React.FC = () => {
       return false;
     }
     if (
+      formData.gstRegistrationType !== 'none' &&
+      !formData.gstinNumber.trim()
+    ) {
+      setError('GSTIN is required for the selected GST registration type.');
+      return false;
+    }
+    if (
       formData.gstinNumber.trim() &&
       !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
         formData.gstinNumber.trim()
@@ -227,14 +261,17 @@ const Signup: React.FC = () => {
       const token = await user!.getIdToken(true);
 
       // 3. Execute Cloud Function
+      const { gstScheme, taxType } = mapGstRegistrationType(formData.gstRegistrationType);
+
       const createCompany = httpsCallable(functions, 'createCompany');
-      await createCompany({
+      const result = await createCompany({
         token,
         fullName: formData.fullName,
         organizationName: formData.organizationName,
         eventCategory: finalCategory,
         website: formData.website,
         whatsappNumber: formData.whatsappNumber,
+        gstRegistrationType: formData.gstRegistrationType,
         gstinNumber: formData.gstinNumber.trim().toUpperCase(),
         address: {
           street: formData.streetAddress,
@@ -243,6 +280,21 @@ const Signup: React.FC = () => {
           postalCode: formData.postalCode,
         },
       });
+
+      const companyId = (result.data as { companyId?: string } | undefined)?.companyId;
+      if (companyId) {
+        const settingsRef = doc(db, 'companies', companyId, 'settings', 'general');
+        await setDoc(
+          settingsRef,
+          {
+            gstScheme,
+            taxType,
+            enableTax: gstScheme !== 'none',
+          },
+          { merge: true }
+        );
+      }
+
       setSubmitSuccess(true);
       navigate('/events');
     } catch (err: any) {
@@ -438,18 +490,30 @@ const Signup: React.FC = () => {
                   />
                 </div>
 
-                <FloatingLabelInput
-                  id="gstinNumber"
-                  label="GSTIN (optional)"
-                  icon={<FiFileText size={20} />}
-                  value={formData.gstinNumber}
-                  onChange={(e) => {
-                    const value = e.target.value.toUpperCase();
-                    if (value.length <= 15) handleChange('gstinNumber', value);
-                  }}
-                  maxLength={15}
-                  placeholder=" "
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FloatingLabelSelect
+                    id="gstRegistrationType"
+                    label="GST Registration Type"
+                    icon={<FiFileText size={20} />}
+                    value={formData.gstRegistrationType}
+                    onChange={(e) => handleChange('gstRegistrationType', e.target.value)}
+                    options={gstRegistrationOptions}
+                    required
+                  />
+                  <FloatingLabelInput
+                    id="gstinNumber"
+                    label={formData.gstRegistrationType === 'none' ? 'GSTIN (optional)' : 'GSTIN'}
+                    icon={<FiFileText size={20} />}
+                    value={formData.gstinNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      if (value.length <= 15) handleChange('gstinNumber', value);
+                    }}
+                    maxLength={15}
+                    placeholder=" "
+                    required={formData.gstRegistrationType !== 'none'}
+                  />
+                </div>
 
                 <FloatingLabelInput
                   id="streetAddress"

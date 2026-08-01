@@ -1,54 +1,120 @@
-import React, { useRef } from 'react';
-import { ImagePlus, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { ImagePlus } from 'lucide-react';
+import { compressImageToTargetSize } from '../../lib/imageCompression';
 
 interface ImageUploadBoxProps {
-  preview: string | null;
-  onChange: (dataUrl: string | null) => void;
+  images: string[];
+  onChange: (images: string[]) => void;
+  maxImages?: number;
 }
 
-export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ preview, onChange }) => {
+export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange, maxImages = 6 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
-  const handleFile = (file: File | undefined) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => onChange(reader.result as string);
-    reader.readAsDataURL(file);
+  const handleFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+
+    const remainingSlots = maxImages - images.length;
+    const files = Array.from(fileList).slice(0, remainingSlots);
+    if (files.length === 0) return;
+
+    setIsCompressing(true);
+    try {
+      const compressedPreviews = await Promise.all(
+        files.map(async (file) => {
+          const rawPreview: string = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          try {
+            return await compressImageToTargetSize(rawPreview, 500, {
+              maxWidth: 1600,
+              maxHeight: 1600,
+            });
+          } catch (err) {
+            console.error('Image compression failed, falling back to original preview:', err);
+            return rawPreview;
+          }
+        })
+      );
+      onChange([...images, ...compressedPreviews]);
+    } finally {
+      setIsCompressing(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
   };
 
-  if (preview) {
-    return (
-      <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-md">
-        <img src={preview} alt="Event cover" className="h-full w-full object-cover" />
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className="absolute top-3 right-3 rounded-xl bg-slate-900 text-white p-2 shadow-md hover:bg-slate-800 transition-all active:scale-95"
-          title="Remove image"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  }
+  const removeImage = (index: number) => {
+    onChange(images.filter((_, i) => i !== index));
+  };
+
+  const reorderAsCover = (index: number) => {
+    if (index === 0) return;
+    const next = [...images];
+    const [chosen] = next.splice(index, 1);
+    next.unshift(chosen);
+    onChange(next);
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      className="flex h-40 w-full flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-[#007A78]/5 dark:hover:bg-slate-800 hover:border-[#007A78]/50 transition-all"
-    >
-      <ImagePlus size={24} className="text-[#007A78] dark:text-[#2DD4BF]" />
-      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Click to upload a cover image</span>
-      <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Recommended: 1200×600, JPG or PNG</span>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
-    </button>
+    <div>
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+        {images.map((src, i) => (
+          <div
+            key={i}
+            className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 group"
+          >
+            <img src={src} alt={`Event photo ${i + 1}`} className="h-full w-full object-cover" />
+            {i === 0 && (
+              <span className="absolute top-1 left-1 rounded-sm bg-[#007A78] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                Cover
+              </span>
+            )}
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              {i !== 0 && (
+                <button
+                  type="button"
+                  onClick={() => reorderAsCover(i)}
+                  className="rounded-sm bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-800"
+                >
+                  Make cover
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => removeImage(i)}
+                className="rounded-sm bg-white/90 px-2 py-1 text-[10px] font-semibold text-red-600"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {images.length < maxImages && (
+          <label className="aspect-square rounded-lg border border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center gap-1 text-gray-400 dark:text-slate-400 hover:border-[#007A78] dark:hover:border-[#2DD4BF] hover:text-[#007A78] dark:hover:text-[#2DD4BF] cursor-pointer transition-colors">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+            <ImagePlus size={20} />
+            <span className="text-[10px] font-medium">Add photo</span>
+          </label>
+        )}
+      </div>
+      <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+        {isCompressing
+          ? 'Compressing images…'
+          : `Up to ${maxImages} photos. First photo is used as the cover. Recommended 1200×600, JPG or PNG.`}
+      </p>
+    </div>
   );
 };
 

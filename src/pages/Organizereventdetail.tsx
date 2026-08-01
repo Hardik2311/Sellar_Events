@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil } from 'lucide-react';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent } from '../components/ui/card';
 import {
@@ -10,11 +10,12 @@ import {
   formatDateRange,
   formatTime,
   type PublicEvent,
-} from '../data/mockEvents';
+} from '../data/events';
 import EditEventModal from '../components/EditEventModal';
 import type { EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
+import { buildEventSlugId } from '../data/events';
 
 // Real-time single event listener
 const useEvent = (companyId?: string, id?: string) => {
@@ -41,7 +42,8 @@ const useEvent = (companyId?: string, id?: string) => {
           venue: d.venue || '',
           isOnline: d.isOnline,
           organizerName: '', // niche component profile se overwrite karega
-          coverImage: d.coverImageUrl || null,
+          coverImage: d.coverImageUrls?.[0] || d.coverImageUrl || null,
+          images: d.coverImageUrls || (d.coverImageUrl ? [d.coverImageUrl] : []),
           status: d.status,
           featured: d.featured || false,
           tiers: (d.tiers || []).map((t: any) => ({
@@ -75,18 +77,54 @@ const OrganizerEventDetail: React.FC = () => {
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
 
+  const handleShareEvent = async () => {
+    if (!event) return;
+
+    const slugId = buildEventSlugId(event.title, event.id);
+
+    // Safe fallback in case the organizer hasn't claimed a subdomain yet —
+    // points at the public customer route, ends in the readable title
+    let shareUrl = `${window.location.origin}/e/${slugId}`;
+
+    try {
+      if (profile?.companyId) {
+        const companySnap = await getDoc(doc(db, 'companies', profile.companyId));
+        if (companySnap.exists() && companySnap.data().subdomain) {
+          shareUrl = `https://${companySnap.data().subdomain}.sellar.in/e/${slugId}`;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching subdomain for sharing:', error);
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: event.title,
+          text: `Check out ${event.title}${event.organizerName ? ` by ${event.organizerName}` : ''} on Sellar Events`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+      }
+    } catch (error) {
+      console.log('Share cancelled:', error);
+    }
+  };
+
   const handleSaveEdit = async (updated: EventFormState) => {
     if (!profile?.companyId || !id) return;
 
-    let coverImageUrl = event?.coverImage ?? null;
-    // Naya image select hua hai (base64 data URL) to Storage pe upload karo
-    if (updated.coverImagePreview?.startsWith('data:')) {
-      const imageRef = ref(storage, `companies/${profile.companyId}/events/${id}/cover.jpg`);
-      await uploadString(imageRef, updated.coverImagePreview, 'data_url');
-      coverImageUrl = await getDownloadURL(imageRef);
-    } else if (!updated.coverImagePreview) {
-      coverImageUrl = null;
-    }
+    // Each entry is either an existing https URL (kept as-is) or a fresh
+    // base64 data URL (newly picked file) that needs uploading.
+    const coverImageUrls: string[] = await Promise.all(
+      updated.images.map(async (img, i) => {
+        if (!img.startsWith('data:')) return img;
+        const imageRef = ref(storage, `companies/${profile.companyId}/events/${id}/photo-${i}.jpg`);
+        await uploadString(imageRef, img, 'data_url');
+        return getDownloadURL(imageRef);
+      })
+    );
 
     const isRsvp = updated.registrationMode === 'rsvp';
 
@@ -99,7 +137,8 @@ const OrganizerEventDetail: React.FC = () => {
       time: updated.time,
       venue: updated.isOnline ? null : updated.venue,
       isOnline: updated.isOnline,
-      coverImageUrl,
+      coverImageUrl: coverImageUrls[0] ?? null,
+      coverImageUrls,
       registrationMode: updated.registrationMode,
       tiers: isRsvp ? [] : updated.tiers,
       rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
@@ -139,8 +178,8 @@ const OrganizerEventDetail: React.FC = () => {
     <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 bg-gradient-to-br ${gradient}`}>
-        {event.coverImage && (
-          <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
+        {event.images?.[0] && (
+          <img src={event.images[0]} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
@@ -159,7 +198,7 @@ const OrganizerEventDetail: React.FC = () => {
               <Pencil size={14} /> Edit
             </button>
             <button
-              onClick={() => navigator.clipboard?.writeText(window.location.href)}
+              onClick={handleShareEvent}
               className="rounded-sm border border-white/40 bg-white/90 p-2 hover:bg-white transition-colors"
             >
               <Share2 size={18} />
@@ -212,7 +251,18 @@ const OrganizerEventDetail: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-
+          {event.images && event.images.length > 1 && (
+            <Card className="shadow-sm border-gray-200">
+              <CardContent className="pt-4">
+                <h2 className="mb-2 text-base font-semibold text-gray-900">Photos</h2>
+                <div className="grid grid-cols-4 gap-2">
+                  {event.images.map((src, i) => (
+                    <img key={i} src={src} className="aspect-square rounded-md object-cover" alt={`${event.title} photo ${i + 1}`} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {/* About */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">

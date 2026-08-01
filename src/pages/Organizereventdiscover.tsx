@@ -1,8 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import EventSubdomainModal from '../components/SubDomainModal';
+import EditEventModal from '../components/EditEventModal';
+import type { EventFormState } from '../types/event.types';
+import { useAuth } from '../context/AuthContext';
 import {
   type PublicEvent,
   CATEGORY_GRADIENTS,
@@ -11,7 +15,7 @@ import {
   formatTime,
   getPriceLabel,
   getAvailability,
-} from '../data/mockEvents';
+} from '../data/events';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
@@ -52,7 +56,8 @@ const OrganizerEventCard: React.FC<{
   onToggleLive: (id: string) => void;
   onToggleFeatured: (id: string) => void;
   onDelete: (id: string) => void;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDelete }) => {
+  onEdit: (event: PublicEvent) => void;
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDelete, onEdit }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -77,6 +82,17 @@ const OrganizerEventCard: React.FC<{
             <Wifi size={12} /> Online
           </span>
         )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(event);
+          }}
+          title="Edit event"
+          className="absolute bottom-2 right-10 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+        >
+          <Pencil size={14} />
+        </button>
         <button
           type="button"
           onClick={(e) => {
@@ -174,12 +190,15 @@ const OrganizerEventCard: React.FC<{
 // ─────────────────────────────────────────────────────────────────────────
 const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
-  const { events, loading, toggleLive, toggleFeatured, deleteEvent } = useOrganizerEvents();
+  const { profile } = useAuth();
+  const { events, loading, toggleLive, toggleFeatured, deleteEvent, updateEvent } = useOrganizerEvents();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [format, setFormat] = useState<FormatFilter>('all');
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
+  const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -212,6 +231,12 @@ const OrganizerEventDiscover: React.FC = () => {
 
   const openEvent = (event: PublicEvent) => navigate(`/events/e/${event.id}`);
 
+  const handleSaveEdit = async (updated: EventFormState) => {
+    if (!editingEvent) return;
+    await updateEvent(editingEvent.id, updated);
+    setEditingEvent(null);
+  };
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
@@ -225,6 +250,13 @@ const OrganizerEventDiscover: React.FC = () => {
               <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 <MapPin size={14} className="text-[#007A78] dark:text-[#2DD4BF]" /> Lucknow, IN
               </span>
+              <button
+                type="button"
+                onClick={() => setIsSubdomainModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <LinkIcon size={14} /> <span className="hidden sm:inline">Store Link</span>
+              </button>
               <ThemeToggle />
             </div>
           </div>
@@ -352,13 +384,30 @@ const OrganizerEventDiscover: React.FC = () => {
                     onToggleLive={(evId) => toggleLive(evId, event.status)}
                     onToggleFeatured={(evId) => toggleFeatured(evId, !!event.featured)}
                     onDelete={deleteEvent}
+                    onEdit={setEditingEvent}
                   />
                 ))}
               </div>
             </div>
           )}
-        </div>
+         </div>
       </main>
+
+      {profile?.companyId && (
+        <EventSubdomainModal
+          companyId={profile.companyId}
+          forceOpen={isSubdomainModalOpen}
+          onClose={() => setIsSubdomainModalOpen(false)}
+        />
+      )}
+
+      {editingEvent && (
+        <EditEventModal
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   );
 };

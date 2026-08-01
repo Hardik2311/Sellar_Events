@@ -19,20 +19,11 @@ export interface PublicEvent {
   venue: string;
   isOnline: boolean;
   organizerName: string;
-  coverImage: string | null;
+  coverImage: string | null;  // kept for back-compat = images[0]
+  images: string[];           // NEW — full gallery
   tiers: PublicTicketTier[];
-  // Organizer-controlled publish state. Only 'published' events should ever
-  // reach the customer-facing pages — filter by this once the API is wired.
-  // (If you already have `EventStatus` defined in your dashboard types file,
-  // import that here instead of redeclaring the union, so there's one
-  // source of truth.)
   status: 'draft' | 'published' | 'completed' | 'cancelled';
-  // Explicitly curated by the organizer/admin — not derived from sales or
-  // date. Falls back to "soonest upcoming event" if nothing is flagged.
   featured?: boolean;
-  // NEW — how attendees sign up. Optional + defaulted to 'tickets' at the
-  // mapping layer (mapDocToPublicEvent) so existing docs without this field
-  // keep behaving as ticketed events.
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
@@ -84,4 +75,20 @@ export const getFeaturedEvent = (events: PublicEvent[]): PublicEvent | undefined
   const flagged = events.find((e) => e.featured);
   if (flagged) return flagged;
   return [...events].sort((a, b) => a.date.localeCompare(b.date))[0];
+};
+// "--" is safe as a separator: Firestore auto-ids never contain hyphens,
+// so splitting on the *last* "--" reliably recovers the id even if the
+// title itself contains single hyphens.
+export const generateSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
+export const buildEventSlugId = (title: string, id: string) => `${generateSlug(title)}--${id}`;
+
+export const parseEventIdFromSlug = (slugId: string) => {
+  const idx = slugId.lastIndexOf('--');
+  return idx === -1 ? slugId : slugId.slice(idx + 2);
 };

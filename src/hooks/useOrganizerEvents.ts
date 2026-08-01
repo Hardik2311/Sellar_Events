@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import type { PublicEvent } from '../data/mockEvents';
+import type { PublicEvent } from '../data/events';
+import type { EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
@@ -16,7 +17,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   venue: d.venue || '',
   isOnline: d.isOnline,
   organizerName,
-  coverImage: d.coverImageUrl || null,
+  coverImage: d.coverImageUrls?.[0] || d.coverImageUrl || null,
+  images: d.coverImageUrls || (d.coverImageUrl ? [d.coverImageUrl] : []),
   status: d.status,
   featured: d.featured || false,
   tiers: (d.tiers || []).map((t: any) => ({
@@ -73,5 +75,44 @@ export const useOrganizerEvents = () => {
     await deleteDoc(doc(db, 'companies', profile.companyId, 'events', id));
   };
 
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent };
+  const updateEvent = async (id: string, form: EventFormState) => {
+    if (!profile?.companyId) return;
+
+    // Preserve `sold` counts for existing tiers; new tiers start at 0
+    const existingEvent = events.find((e) => e.id === id);
+    const tiers = form.tiers.map((t) => {
+      const existingTier = existingEvent?.tiers.find((et) => et.id === t.id);
+      return {
+        id: t.id,
+        name: t.name,
+        price: t.price,
+        quantity: t.quantity,
+        sold: existingTier?.sold ?? 0,
+      };
+    });
+
+    const payload: Record<string, any> = {
+      title: form.title,
+      category: form.category === 'Other' ? form.customCategory.trim() : form.category,
+      description: form.description,
+      date: form.date,
+      endDate: form.endDate,
+      time: form.time,
+      venue: form.venue,
+      isOnline: form.isOnline,
+      coverImageUrls: form.images,
+      coverImageUrl: form.images[0] || null,
+      registrationMode: form.registrationMode,
+      rsvpLink: form.rsvpLink,
+      rsvpButtonLabel: form.rsvpButtonLabel,
+    };
+
+    if (form.registrationMode === 'tickets') {
+      payload.tiers = tiers;
+    }
+
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
+  };
+
+  return { events, loading, toggleLive, toggleFeatured, deleteEvent, updateEvent };
 };
