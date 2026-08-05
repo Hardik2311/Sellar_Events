@@ -115,7 +115,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   };
 
   return (
-    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
+    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-sm shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
       <div style={{ display: 'none' }}>
         <QRCodeCanvas value={attendee.ticketId} size={200} includeMargin ref={qrCanvasRef} />
       </div>
@@ -124,7 +124,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           <a
             href={`tel:${attendee.phone}`}
             onClick={(e) => e.stopPropagation()}
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-xs"
+            className="w-10 h-10 rounded-sm flex items-center justify-center shrink-0 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-xs"
             title="Call Attendee"
           >
             <Phone size={18} />
@@ -137,7 +137,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0">
-          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${STATUS_STYLES[attendee.status]}`}>
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-sm ${STATUS_STYLES[attendee.status]}`}>
             {STATUS_LABEL[attendee.status]}
           </span>
           <ChevronDown size={18} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -162,11 +162,11 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             )}
           </div>
 
-          <div className="flex rounded-xl overflow-hidden mt-3 gap-2">
+          <div className="flex rounded-sm overflow-hidden mt-3 gap-2">
             {attendee.status === 'valid' && (
               <button
                 onClick={() => onCheckIn(attendee.id)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 text-xs font-extrabold shadow-xs"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 text-xs font-extrabold shadow-xs"
               >
                 <CheckCircle2 size={14} /> Check In
               </button>

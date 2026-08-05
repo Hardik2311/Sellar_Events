@@ -75,7 +75,22 @@ const OrganizerEventDetail: React.FC = () => {
   const { profile } = useAuth();
   const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
-  const [isEditOpen, setIsEditOpen] = useState(false);
+const [isEditOpen, setIsEditOpen] = useState(false);
+const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+useEffect(() => {
+  setActiveImageIndex(0); // event change hone par reset
+}, [event?.id]);
+
+const goToPrevImage = () => {
+  if (!event?.images?.length) return;
+  setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length);
+};
+
+const goToNextImage = () => {
+  if (!event?.images?.length) return;
+  setActiveImageIndex((i) => (i + 1) % event.images.length);
+};
 
   const handleShareEvent = async () => {
     if (!event) return;
@@ -177,9 +192,50 @@ const OrganizerEventDetail: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 bg-gradient-to-br ${gradient}`}>
-        {event.images?.[0] && (
-          <img src={event.images[0]} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
+      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+        {event.images && event.images.length > 0 && (
+          <>
+            {event.images.map((src, i) => (
+              <img
+                key={src + i}
+                src={src}
+                alt={`${event.title} photo ${i + 1}`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+                  i === activeImageIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ))}
+            {event.images.length > 1 && (
+              <>
+                <button
+                  onClick={goToPrevImage}
+                  className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                  aria-label="Previous photo"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <button
+                  onClick={goToNextImage}
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                  aria-label="Next photo"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <div className="absolute bottom-14 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                  {event.images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveImageIndex(i)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                      }`}
+                      aria-label={`Photo ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
@@ -251,18 +307,6 @@ const OrganizerEventDetail: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          {event.images && event.images.length > 1 && (
-            <Card className="shadow-sm border-gray-200">
-              <CardContent className="pt-4">
-                <h2 className="mb-2 text-base font-semibold text-gray-900">Photos</h2>
-                <div className="grid grid-cols-4 gap-2">
-                  {event.images.map((src, i) => (
-                    <img key={i} src={src} className="aspect-square rounded-md object-cover" alt={`${event.title} photo ${i + 1}`} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
           {/* About */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">

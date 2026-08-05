@@ -9,7 +9,7 @@ import EventOverviewCard from '../components/EventOverviewCard';
 import TicketTierBreakdown from '../components/TicketTierBreakDown';
 import SalesTrendCard from '../components/SalesTrendCard';
 import { EventFilterProvider, EventDateFilter, useEventFilter } from '../components/ui/EventdateFilter';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 
 const EventDashboardContent: React.FC = () => {
   const { profile } = useAuth();
@@ -75,7 +75,7 @@ const EventDashboardContent: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          {/* <ThemeToggle /> */}
           <button
             onClick={() => setIsDataVisible(!isDataVisible)}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"

@@ -15,7 +15,7 @@ interface StatBoxProps {
  */
 export const StatBox: React.FC<StatBoxProps> = ({ label, value, icon, isVisible = true, loading = false }) => {
   return (
-    <div className="rounded-lg border border-slate-200 bg-gray-100 p-3">
+    <div className="rounded-sm border border-slate-200 bg-gray-100 p-3">
       <div className="flex items-center gap-1.5 mb-1">
         {icon && <span className="text-slate-400">{icon}</span>}
         <p className="text-xs text-slate-500">{label}</p>

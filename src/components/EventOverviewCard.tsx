@@ -46,7 +46,7 @@ export const EventOverviewCard: React.FC<EventOverviewCardProps> = ({ event, isD
         <div className="text-center">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Tickets Sold</p>
           {loading ? (
-            <div className="h-8 w-20 mx-auto animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
+            <div className="h-8 w-20 mx-auto animate-pulse rounded-sm bg-slate-200 dark:bg-slate-700" />
           ) : (
             <p className="text-2xl sm:text-3xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">
               {isDataVisible ? `${event.ticketsSold}/${event.ticketsTotal}` : '••••'}
@@ -56,7 +56,7 @@ export const EventOverviewCard: React.FC<EventOverviewCardProps> = ({ event, isD
         <div className="text-center">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Total Revenue</p>
           {loading ? (
-            <div className="h-8 w-20 mx-auto animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
+            <div className="h-8 w-20 mx-auto animate-pulse rounded-sm bg-slate-200 dark:bg-slate-700" />
           ) : (
             <p className="text-2xl sm:text-3xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">
               {isDataVisible ? `₹${event.revenue.toLocaleString('en-IN')}` : '••••'}

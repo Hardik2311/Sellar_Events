@@ -43,7 +43,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ showLabel = false, cla
     <button
       type="button"
       onClick={cycleTheme}
-      className={`inline-flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all duration-200 shadow-xs active:scale-95 ${className}`}
+      className={`inline-flex items-center gap-2 p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all duration-200 shadow-xs active:scale-95 ${className}`}
       title={`Current mode: ${getLabel()} (Click to toggle)`}
       aria-label="Toggle theme mode"
     >

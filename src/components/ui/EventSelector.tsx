@@ -16,7 +16,7 @@ export const EventSelector: React.FC<EventSelectorProps> = ({ events, selectedEv
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] px-4 py-3 text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-xs"
+        className="w-full flex items-center justify-between gap-2 rounded-sm border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] px-4 py-3 text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-xs"
       >
         <span className="truncate flex items-center gap-2">
           {selected ? selected.title : 'Select an event'}
@@ -25,7 +25,7 @@ export const EventSelector: React.FC<EventSelectorProps> = ({ events, selectedEv
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-xl z-30 max-h-64 overflow-y-auto">
           {events.map((event) => (
             <button
               key={event.id}

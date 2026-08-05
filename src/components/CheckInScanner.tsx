@@ -21,7 +21,7 @@ const CheckInScanner: React.FC<CheckInScannerProps> = ({ active, onScan, onActiv
       onClick={() => {
         if (!active) onActivate();
       }}
-      className="relative w-full aspect-square rounded-2xl bg-neutral-800 overflow-hidden flex items-center justify-center"
+      className="relative w-full aspect-square rounded-sm bg-neutral-800 overflow-hidden flex items-center justify-center"
     >
       {error ? (
         <div className="flex flex-col items-center gap-2 px-6 text-center">
@@ -34,7 +34,7 @@ const CheckInScanner: React.FC<CheckInScannerProps> = ({ active, onScan, onActiv
           <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
           <canvas ref={canvasRef} className="hidden" />
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-2/3 w-2/3 rounded-xl border-2 border-white/50" />
+            <div className="h-2/3 w-2/3 rounded-sm border-2 border-white/50" />
           </div>
           {scanning && (
             <p className="absolute bottom-3 left-0 right-0 text-center text-xs text-white/80">

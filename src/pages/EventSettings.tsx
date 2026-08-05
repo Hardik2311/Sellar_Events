@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import { useCompanySettings, type EventFieldRequirements } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -30,12 +30,8 @@ const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled
 );
 
 const FIELD_LABELS: { key: keyof EventFieldRequirements; label: string; hint: string }[] = [
-  { key: 'title', label: 'Event title', hint: 'Name of the event' },
   { key: 'description', label: 'Description', hint: 'Details shown on the event page' },
-  { key: 'date', label: 'Start date', hint: '' },
   { key: 'endDate', label: 'End date', hint: '' },
-  { key: 'time', label: 'Time', hint: '' },
-  { key: 'venue', label: 'Venue', hint: 'Only applies to in-person events' },
   { key: 'images', label: 'At least one photo', hint: '' },
 ];
 
@@ -111,7 +107,7 @@ const EventFieldSettings: React.FC = () => {
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Event Settings</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">RSVP and required fields for Create Event</p>
         </div>
-        <ThemeToggle />
+        {/* <ThemeToggle /> */}
       </header>
 
       <main className="grow overflow-y-auto p-2">

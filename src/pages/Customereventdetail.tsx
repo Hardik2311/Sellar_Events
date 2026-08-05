@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, Ticket, User, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
@@ -20,10 +20,15 @@ const CustomerEventDetail: React.FC = () => {
 
   // Quantity selected per tier id
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveImageIndex(0); // event change hone par reset
+  }, [event?.id]);
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
+      <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
         <Loader2 className="animate-spin text-slate-400" size={24} />
       </div>
     );
@@ -31,7 +36,7 @@ const CustomerEventDetail: React.FC = () => {
 
   if (!event) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
+      <div className="flex h-dvh w-full flex-col items-center justify-center gap-3 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
         <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300">This event doesn&rsquo;t exist or isn&rsquo;t published yet.</p>
         <button
@@ -59,13 +64,8 @@ const CustomerEventDetail: React.FC = () => {
   };
 
   const totalTickets = Object.values(quantities).reduce((s, n) => s + n, 0);
-  const totalPrice = event.tiers.reduce((sum, t) => sum + (quantities[t.id] ?? 0) * t.price, 0);
   const allSoldOut = event.tiers.every((t) => t.sold >= t.quantity);
 
-  // TODO — backend wiring:
-  // Ideally create a checkout/session on the server here and navigate using
-  // its session id instead of raw router state (router state is lost on
-  // refresh).
   const handleGetTickets = () => {
     navigate(`/checkout/${event.id}`, { state: { quantities } });
   };
@@ -73,28 +73,70 @@ const CustomerEventDetail: React.FC = () => {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
       {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 bg-gradient-to-br ${gradient}`}>
-        {event.images?.[0] && (
-          <img src={event.images[0]} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
+      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+        {event.images && event.images.length > 0 && (
+          <>
+            {event.images.map((src, i) => (
+              <img
+                key={src + i}
+                src={src}
+                alt={`${event.title} photo ${i + 1}`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+                  i === activeImageIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ))}
+            {event.images.length > 1 && (
+              <>
+                <button
+                  onClick={() =>
+                    setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length)
+                  }
+                  className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                  aria-label="Previous photo"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <button
+                  onClick={() =>
+                    setActiveImageIndex((i) => (i + 1) % event.images.length)
+                  }
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                  aria-label="Next photo"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <div className="absolute bottom-14 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                  {event.images.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveImageIndex(i)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                      }`}
+                      aria-label={`Photo ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <button
             onClick={() => navigate(-1)}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 hover:bg-white transition-colors"
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
           >
             <ArrowLeft size={18} />
           </button>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <button
-              onClick={() => navigator.clipboard?.writeText(window.location.href)}
-              className="rounded-sm border border-white/40 bg-white/90 p-2 hover:bg-white transition-colors"
-            >
-              <Share2 size={18} />
-            </button>
-          </div>
+          <button
+            onClick={() => navigator.clipboard?.writeText(window.location.href)}
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+          >
+            <Share2 size={18} />
+          </button>
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-4">
@@ -106,7 +148,7 @@ const CustomerEventDetail: React.FC = () => {
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
-      <main className="grow overflow-y-auto p-2 pb-24">
+      <main className="p-2 pb-24">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {/* Key details */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
@@ -142,23 +184,6 @@ const CustomerEventDetail: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          {event.images && event.images.length > 1 && (
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Photos</h2>
-                <div className="grid grid-cols-4 gap-2">
-                  {event.images.map((src, i) => (
-                    <img
-                      key={i}
-                      src={src}
-                      className="aspect-square rounded-md object-cover"
-                      alt={`${event.title} photo ${i + 1}`}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
           {/* About */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
@@ -254,11 +279,8 @@ const CustomerEventDetail: React.FC = () => {
         <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 flex justify-center gap-3 z-30">
           <div className="flex w-full max-w-3xl items-center gap-3">
             <div className="flex-1">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {totalTickets > 0 ? `${totalTickets} ticket${totalTickets === 1 ? '' : 's'}` : 'Select tickets'}
-              </p>
               <p className="text-base font-bold text-slate-800 dark:text-slate-100">
-                {totalPrice > 0 ? `\u20B9${totalPrice.toLocaleString('en-IN')}` : totalTickets > 0 ? 'Free' : '\u2014'}
+                {totalTickets > 0 ? `${totalTickets} ticket${totalTickets === 1 ? '' : 's'} selected` : 'Select tickets'}
               </p>
             </div>
             <button

@@ -9,7 +9,7 @@ import {
   FloatingLabelTextArea,
 } from '../components/ui/AuthUIComponents'
 import ImageUploadBox from '../components/ui/ImageUploadBox';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
@@ -74,13 +74,13 @@ const CreateEvent: React.FC = () => {
 
   const req = companySettings.eventFieldRequirements;
 
-  const isPublishable =
-    (!req.title || form.title.trim().length > 0) &&
-    (!req.date || form.date) &&
+ const isPublishable =
+    form.title.trim().length > 0 &&
+    Boolean(form.date) &&
+    Boolean(form.time) &&
+    (form.isOnline || form.venue.trim().length > 0) &&
     (!req.endDate || form.endDate) &&
     (!form.date || !form.endDate || form.endDate >= form.date) &&
-    (!req.time || form.time) &&
-    (!req.venue || form.isOnline || form.venue.trim().length > 0) &&
     (!req.description || form.description.trim().length > 0) &&
     (!req.images || form.images.length > 0) &&
     (!isOtherCategory || form.customCategory.trim().length > 0) &&
@@ -174,7 +174,7 @@ const CreateEvent: React.FC = () => {
           >
             <ArrowLeft size={18} />
           </button>
-          <ThemeToggle />
+          {/* <ThemeToggle /> */}
         </div>
       </header>
 
@@ -201,10 +201,10 @@ const CreateEvent: React.FC = () => {
               <CardContent className="space-y-4">
                 <FloatingLabelInput
                   id="title"
-                  label={req.title ? 'Event title *' : 'Event title'}
+                  label="Event title *"
                   value={form.title}
                   onChange={(e) => update('title', e.target.value)}
-                  required={req.title}
+                  required
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
@@ -343,7 +343,7 @@ const CreateEvent: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <FloatingLabelInput
                     id="date"
-                    label={req.date ? 'Start date *' : 'Start date'}
+                    label="Start date *"
                     type="date"
                     icon={<Calendar size={16} />}
                     value={form.date}
@@ -352,7 +352,7 @@ const CreateEvent: React.FC = () => {
                       update('date', value);
                       if (form.endDate && form.endDate < value) update('endDate', value);
                     }}
-                    required={req.date}
+                    required
                   />
                   <FloatingLabelInput
                     id="end-date"
@@ -368,22 +368,22 @@ const CreateEvent: React.FC = () => {
 
                 <FloatingLabelInput
                   id="time"
-                  label={req.time ? 'Time *' : 'Time'}
+                  label="Time *"
                   type="time"
                   icon={<Clock size={16} />}
                   value={form.time}
                   onChange={(e) => update('time', e.target.value)}
-                  required={req.time}
+                  required
                 />
 
                 {!form.isOnline && (
                   <div>
                     <FloatingLabelInput
                       id="venue"
-                      label={req.venue ? 'Venue *' : 'Venue'}
+                      label="Venue *"
                       value={form.venue}
                       onChange={(e) => update('venue', e.target.value)}
-                      required={req.venue}
+                      required
                     />
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Full address helps attendees find it on the day</p>
                   </div>

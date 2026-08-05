@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<EventStatus, string> = {
 };
 
 export const StatusBadge: React.FC<{ status: EventStatus }> = ({ status }) => (
-  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[status]}`}>
+  <span className={`inline-block rounded-sm px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[status]}`}>
     {STATUS_LABEL[status]}
   </span>
 );

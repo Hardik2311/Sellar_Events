@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
-  <div className={cn('rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] text-[#111827] dark:text-[#F8FAFC] shadow-sm transition-all duration-200', className)} {...props} />
+  <div className={cn('rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] text-[#111827] dark:text-[#F8FAFC] shadow-sm transition-all duration-200', className)} {...props} />
 );
 
 export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
