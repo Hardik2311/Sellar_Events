@@ -22,7 +22,7 @@ const ImageOptionsModal: React.FC<ImageOptionsModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-[#1E293B] w-[calc(100%-2rem)] max-w-sm sm:w-80 mx-4 sm:mx-0 mb-4 sm:mb-0 rounded-2xl overflow-hidden shadow-xl"
+        className="bg-white dark:bg-[#1E293B] w-[calc(100%-2rem)] max-w-sm sm:w-80 mx-4 sm:mx-0 mb-4 sm:mb-0 rounded-sm overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 text-center">

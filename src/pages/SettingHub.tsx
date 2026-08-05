@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarCog, Landmark } from 'lucide-react';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import { ROUTES } from '../constants/routes.constants';
 
 const SettingsHub: React.FC = () => {
@@ -21,7 +21,7 @@ const SettingsHub: React.FC = () => {
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Settings</h1>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Choose what you want to configure</p>
                 </div>
-                <ThemeToggle />
+                {/* <ThemeToggle /> */}
             </header>
 
             <main className="grow overflow-y-auto p-4">

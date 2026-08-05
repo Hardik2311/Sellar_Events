@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, X } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import { useCompanySettings } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -150,7 +150,7 @@ const Settings: React.FC = () => {
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Company Settings</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tax and pricing rules</p>
         </div>
-        <ThemeToggle />
+        {/* <ThemeToggle /> */}
       </header>
 
       <main className="grow overflow-y-auto p-2">

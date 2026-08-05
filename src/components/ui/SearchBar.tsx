@@ -9,7 +9,7 @@ interface SearchBarProps {
 
 export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, placeholder = 'Search events' }) => {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2">
+    <div className="flex items-center gap-2 rounded-sm border border-slate-300 bg-white px-3 py-2">
       <Search size={16} className="text-slate-400 flex-shrink-0" />
       <input
         type="text"

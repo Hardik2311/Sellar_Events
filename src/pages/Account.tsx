@@ -5,7 +5,7 @@ import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings } from 'react
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { auth } from '../lib/firebase';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 
 const Account: React.FC = () => {
     const navigate = useNavigate();
@@ -29,7 +29,7 @@ const Account: React.FC = () => {
                 <div className="flex-1 text-center">
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Account</h1>
                 </div>
-                <ThemeToggle />
+                {/* <ThemeToggle /> */}
             </header>
 
             {/* ── Profile section ── */}
@@ -72,14 +72,14 @@ const Account: React.FC = () => {
             {/* ── Theme selector & Quick links ── */}
             <div className="flex-1 p-4">
                 <div className="w-full max-w-2xl mx-auto space-y-4">
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
+                    <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
                         <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Theme Preferences</h3>
                         <div className="grid grid-cols-3 gap-2">
                             {(['light', 'dark', 'system'] as const).map((m) => (
                                 <button
                                     key={m}
                                     onClick={() => setTheme(m)}
-                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold capitalize transition-all border ${theme === m
+                                    className={`py-2.5 px-3 rounded-sm text-xs font-bold capitalize transition-all border ${theme === m
                                             ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950 border-transparent shadow-xs'
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                                         }`}
@@ -95,9 +95,9 @@ const Account: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Link
                             to="/plans"
-                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
-                            <div className="p-2.5 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
                                 <FiCreditCard className="w-5 h-5" />
                             </div>
                             <span className="text-sm font-bold flex-1">Subscription & Plans</span>
@@ -106,9 +106,9 @@ const Account: React.FC = () => {
 
                         <Link
                             to="/support"
-                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
-                            <div className="p-2.5 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
                                 <FiHelpCircle className="w-5 h-5" />
                             </div>
                             <span className="text-sm font-bold flex-1">Help & Support</span>
@@ -117,9 +117,9 @@ const Account: React.FC = () => {
 
                         <Link
                             to="/events/settings"
-                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all sm:col-span-2"
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all sm:col-span-2"
                         >
-                            <div className="p-2.5 rounded-xl bg-slate-500/10 text-slate-500 dark:text-slate-400">
+                            <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-500 dark:text-slate-400">
                                 <FiSettings className="w-5 h-5" />
                             </div>
                             <span className="text-sm font-bold flex-1">Platform Settings</span>
@@ -130,7 +130,7 @@ const Account: React.FC = () => {
                     <div className="mt-8 flex flex-col items-center">
                         <button
                             onClick={handleLogout}
-                            className="flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 transition-colors shadow-xs"
+                            className="flex items-center gap-2 rounded-sm bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 transition-colors shadow-xs"
                         >
                             <FiLogOut className="w-4 h-4" />
                             Logout Account

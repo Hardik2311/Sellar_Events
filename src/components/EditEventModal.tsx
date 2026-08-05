@@ -98,7 +98,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-gray-100 shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-sm bg-gray-100 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -151,11 +151,11 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   />
 
                   <FormField label="Format" htmlFor="edit-format">
-                    <div className="flex rounded-md border border-gray-300 p-1 bg-white">
+                    <div className="flex rounded-sm border border-gray-300 p-1 bg-white">
                       <button
                         type="button"
                         onClick={() => update('isOnline', false)}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${!form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
+                        className={`flex-1 rounded-sm py-1.5 text-xs font-bold transition-all ${!form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
                           }`}
                       >
                         In-person
@@ -163,7 +163,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                       <button
                         type="button"
                         onClick={() => update('isOnline', true)}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
+                        className={`flex-1 rounded-sm py-1.5 text-xs font-bold transition-all ${form.isOnline ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]' : 'text-slate-500 dark:text-slate-400'
                           }`}
                       >
                         Online
@@ -248,7 +248,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
               <CardContent className="space-y-4">
                 {companySettings.rsvpEnabled && (
                   <FormField label="Registration type" htmlFor="registration-mode">
-                    <div className="flex rounded-md border border-gray-300 p-1 bg-white">
+                    <div className="flex rounded-sm border border-gray-300 p-1 bg-white">
                       <button
                         type="button"
                         onClick={() => update('registrationMode', 'tickets')}
@@ -308,14 +308,14 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
         <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-white p-3">
           <button
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-sm border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!isSavable}
-            className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF]"
+            className="rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF]"
           >
             Save changes
           </button>

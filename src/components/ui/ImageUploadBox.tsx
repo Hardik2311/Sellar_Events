@@ -61,11 +61,14 @@ export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange
 
   return (
     <div>
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}
+      >
         {images.map((src, i) => (
           <div
             key={i}
-            className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 group"
+            className="relative aspect-square rounded-sm overflow-hidden border border-gray-200 dark:border-slate-700 group"
           >
             <img src={src} alt={`Event photo ${i + 1}`} className="h-full w-full object-cover" />
             {i === 0 && (
@@ -73,12 +76,12 @@ export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange
                 Cover
               </span>
             )}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
               {i !== 0 && (
                 <button
                   type="button"
                   onClick={() => reorderAsCover(i)}
-                  className="rounded-sm bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-800"
+                  className="w-full rounded-sm bg-white/90 px-1 py-0.5 text-[8px] font-semibold text-slate-800"
                 >
                   Make cover
                 </button>
@@ -86,7 +89,7 @@ export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange
               <button
                 type="button"
                 onClick={() => removeImage(i)}
-                className="rounded-sm bg-white/90 px-2 py-1 text-[10px] font-semibold text-red-600"
+                className="w-full rounded-sm bg-white/90 px-1 py-0.5 text-[8px] font-semibold text-red-600"
               >
                 Remove
               </button>
@@ -95,7 +98,7 @@ export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange
         ))}
 
         {images.length < maxImages && (
-          <label className="aspect-square rounded-lg border border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center gap-1 text-gray-400 dark:text-slate-400 hover:border-[#007A78] dark:hover:border-[#2DD4BF] hover:text-[#007A78] dark:hover:text-[#2DD4BF] cursor-pointer transition-colors">
+          <label className="aspect-square rounded-sm border border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center gap-1 text-gray-400 dark:text-slate-400 hover:border-[#007A78] dark:hover:border-[#2DD4BF] hover:text-[#007A78] dark:hover:text-[#2DD4BF] cursor-pointer transition-colors">
             <input
               ref={inputRef}
               type="file"
@@ -104,8 +107,8 @@ export const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ images, onChange
               className="hidden"
               onChange={(e) => handleFiles(e.target.files)}
             />
-            <ImagePlus size={20} />
-            <span className="text-[10px] font-medium">Add photo</span>
+            <ImagePlus size={16} />
+            <span className="text-[9px] font-medium">Add photo</span>
           </label>
         )}
       </div>

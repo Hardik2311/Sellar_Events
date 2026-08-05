@@ -1,7 +1,7 @@
 import { Suspense, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket } from 'lucide-react';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 
 const NAV_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -54,11 +54,6 @@ const EventsLayout = () => {
             </NavLink>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0F172A]">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Theme</span>
-          <ThemeToggle showLabel />
-        </div>
       </aside>
 
       {/* --- MAIN CONTENT --- */}

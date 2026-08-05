@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import {
     type PublicEvent,
     CATEGORY_GRADIENTS,
@@ -39,10 +39,30 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                     {label}
                 </span>
                 {event.isOnline && (
-                    <span className="absolute top-2 right-2 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+                    <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
                         <Wifi size={12} /> Online
                     </span>
                 )}
+                <button
+                    type="button"
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
+                        if (navigator.share) {
+                            try {
+                                await navigator.share({ title: event.title, url: shareUrl });
+                            } catch {
+                                // user cancelled share sheet, no-op
+                            }
+                        } else {
+                            await navigator.clipboard.writeText(shareUrl);
+                        }
+                    }}
+                    title="Share event"
+                    className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+                >
+                    <Share2 size={14} />
+                </button>
                 {event.registrationMode !== 'rsvp' && soldOut && (
                     <span className="absolute bottom-2 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
                         Sold out
@@ -111,7 +131,16 @@ const CustomerEventDiscover: React.FC = () => {
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [formatMenuOpen, setFormatMenuOpen] = useState(false);
 
-    const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
+    const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
+    const upcomingEvents = useMemo(
+        () => events.filter((e) => (e.endDate || e.date) >= todayISO),
+        [events, todayISO]
+    );
+
+    const categories = useMemo(
+        () => ['All', ...Array.from(new Set(upcomingEvents.map(getCategoryLabel)))],
+        [upcomingEvents]
+    );
 
     const formatOptions: { value: FormatFilter; label: string }[] = [
         { value: 'all', label: 'All formats' },
@@ -122,7 +151,7 @@ const CustomerEventDiscover: React.FC = () => {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return events
+        return upcomingEvents
             .filter((e) => {
                 const label = getCategoryLabel(e);
                 const matchesCategory = activeCategory === 'All' || label === activeCategory;
@@ -132,14 +161,10 @@ const CustomerEventDiscover: React.FC = () => {
                 return matchesCategory && matchesFormat && matchesSearch;
             })
             .sort((a, b) => a.date.localeCompare(b.date));
-    }, [events, activeCategory, format, search]);
+    }, [upcomingEvents, activeCategory, format, search]);
 
     const hasFiltersApplied = search.trim().length > 0 || activeCategory !== 'All' || format !== 'all';
-
-    // The featured pick is independent of filters — it's always the
-    // organizer/admin-flagged event (or soonest upcoming as fallback), and
-    // only shown on the unfiltered view so it doesn't fight the search results.
-    const featured = useMemo(() => getFeaturedEvent(events), [events]);
+    const featured = useMemo(() => getFeaturedEvent(upcomingEvents), [upcomingEvents]);
     const gridEvents = hasFiltersApplied ? filtered : filtered.filter((e) => e.id !== featured?.id);
 
     const clearFilters = () => {
@@ -159,12 +184,6 @@ const CustomerEventDiscover: React.FC = () => {
                         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
                             Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
                         </h1>
-                        <div className="flex items-center gap-3">
-                            <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                                <MapPin size={14} className="text-[#007A78] dark:text-[#2DD4BF]" /> Lucknow, IN
-                            </span>
-                            <ThemeToggle />
-                        </div>
                     </div>
 
                     <div className="relative">

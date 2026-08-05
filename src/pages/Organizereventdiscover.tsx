@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
 import type { EventFormState } from '../types/event.types';
@@ -20,6 +20,15 @@ import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Returns true if the event's last day has already passed (end of day)
+// ─────────────────────────────────────────────────────────────────────────
+const isPastEvent = (event: PublicEvent): boolean => {
+  const lastDateStr = event.endDate || event.date;
+  const eventEnd = new Date(lastDateStr);
+  eventEnd.setHours(23, 59, 59, 999); // event ke din ke end tak valid maano
+  return eventEnd.getTime() < Date.now();
+};
 // ─────────────────────────────────────────────────────────────────────────
 // Small pill toggle switch — reused for the Live/Draft and Featured controls
 // ─────────────────────────────────────────────────────────────────────────
@@ -74,7 +83,7 @@ const OrganizerEventCard: React.FC<{
         {event.coverImage && (
           <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
-        <span className="absolute top-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
           {label}
         </span>
         {event.isOnline && (
@@ -84,12 +93,32 @@ const OrganizerEventCard: React.FC<{
         )}
         <button
           type="button"
+          onClick={async (e) => {
+            e.stopPropagation();
+            const shareUrl = `${window.location.origin}/events/e/${event.id}`;
+            if (navigator.share) {
+              try {
+                await navigator.share({ title: event.title, url: shareUrl });
+              } catch {
+                // user cancelled share sheet, no-op
+              }
+            } else {
+              await navigator.clipboard.writeText(shareUrl);
+            }
+          }}
+          title="Share event"
+          className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+        >
+          <Share2 size={14} />
+        </button>
+        <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onEdit(event);
           }}
           title="Edit event"
-          className="absolute bottom-2 right-10 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
         >
           <Pencil size={14} />
         </button>
@@ -102,17 +131,17 @@ const OrganizerEventCard: React.FC<{
             }
           }}
           title="Delete event"
-          className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+          className="absolute top-2 left-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
         >
           <Trash2 size={14} />
         </button>
         {soldOut && (
-          <span className="absolute bottom-2 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
           </span>
         )}
         {!soldOut && sellingFast && (
-          <span className="absolute bottom-2 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
             Selling fast
           </span>
         )}
@@ -199,6 +228,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -218,10 +248,13 @@ const OrganizerEventDiscover: React.FC = () => {
         const matchesFormat = format === 'all' || (format === 'online' ? e.isOnline : !e.isOnline);
         const matchesSearch =
           !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
-        return matchesCategory && matchesFormat && matchesSearch;
+        const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
+        return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
       })
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [events, activeCategory, format, search]);
+      .sort((a, b) =>
+        showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
+      ); // past view mein recent-most-past pehle dikhega
+  }, [events, activeCategory, format, search, showPastEvents]);
 
   const clearFilters = () => {
     setSearch('');
@@ -257,7 +290,7 @@ const OrganizerEventDiscover: React.FC = () => {
               >
                 <LinkIcon size={14} /> <span className="hidden sm:inline">Store Link</span>
               </button>
-              <ThemeToggle />
+              {/* <ThemeToggle /> */}
             </div>
           </div>
 
@@ -314,6 +347,19 @@ const OrganizerEventDiscover: React.FC = () => {
                 </>
               )}
             </div>
+
+            {/* Past events toggle */}
+            <button
+              type="button"
+              onClick={() => setShowPastEvents((v) => !v)}
+              className={`flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors shrink-0 ${
+                showPastEvents
+                  ? 'border-[#007A78] bg-teal-50 text-[#007A78]'
+                  : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50'
+              }`}
+            >
+              {showPastEvents ? 'Past events' : 'Upcoming'}
+            </button>
 
             {/* Format filter — dropdown, right side */}
             <div className="relative shrink-0">

@@ -4,12 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 
 export interface EventFieldRequirements {
-  title: boolean;
+  // title, date, time, venue are always required — not configurable
   description: boolean;
-  date: boolean;
   endDate: boolean;
-  time: boolean;
-  venue: boolean;
   images: boolean;
 }
 
@@ -28,12 +25,8 @@ export interface CompanySettings {
 }
 
 const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
-  title: true,
   description: false,
-  date: true,
   endDate: true,
-  time: true,
-  venue: true,
   images: false,
 };
 
