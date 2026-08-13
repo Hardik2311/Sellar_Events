@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarCog, Landmark } from 'lucide-react';
+import { ArrowLeft, CalendarCog, Landmark, Settings2 } from 'lucide-react';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 import { ROUTES } from '../constants/routes.constants';
 
@@ -12,7 +12,7 @@ const SettingsHub: React.FC = () => {
             <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
                 <button
                     onClick={() => navigate(`/${ROUTES.EVENTS}/${ROUTES.EVENTS_ACCOUNT}`.replace('//', '/'))}
-                    className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+                    className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
                     title="Back"
                 >
                     <ArrowLeft size={18} />
@@ -28,9 +28,9 @@ const SettingsHub: React.FC = () => {
                 <div className="mx-auto max-w-3xl grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Link
                         to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_EVENT}`.replace('//', '/')}
-                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                     >
-                        <div className="p-2.5 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
                             <CalendarCog className="w-5 h-5" />
                         </div>
                         <div>
@@ -43,14 +43,27 @@ const SettingsHub: React.FC = () => {
 
                     <Link
                         to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_COMPANY}`.replace('//', '/')}
-                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                     >
-                        <div className="p-2.5 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
                             <Landmark className="w-5 h-5" />
                         </div>
                         <div>
                             <p className="text-sm font-bold">Company Settings</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">GST scheme, tax rate, and rounding</p>
+                        </div>
+                    </Link>
+
+                    <Link
+                        to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_APP}`.replace('//', '/')}
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                    >
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                            <Settings2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold">App Settings</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theme and app-wide preferences</p>
                         </div>
                     </Link>
                 </div>

@@ -14,8 +14,10 @@ import {
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 //import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
+import { buildEventSlugId } from '../data/events';
 import EventSelector from '../components/ui/EventSelector';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
@@ -291,7 +293,7 @@ const Attendees: React.FC = () => {
                 </select>
                 {selectedEvent.status === 'published' && (
                   <button
-                    onClick={() => navigate(`/events/discover/${selectedEvent.id}`)}
+                    onClick={() => navigate(`/e/${buildEventSlugId(selectedEvent.title, selectedEvent.id)}`)}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
                     title="View public event page"
                   >

@@ -47,8 +47,8 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({ tiers,
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="shrink-0 w-6" aria-hidden="true" />
-                  <div className="h-1.5 flex-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div className="h-full rounded-full bg-[#007A78] dark:bg-[#2DD4BF] transition-all" style={{ width: `${percent}%` }} />
+                  <div className="h-1.5 flex-1 rounded-sm bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div className="h-full rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] transition-all" style={{ width: `${percent}%` }} />
                   </div>
                 </div>  
               </div>

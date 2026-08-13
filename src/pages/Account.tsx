@@ -1,16 +1,16 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings } from 'react-icons/fi';
+import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings, FiSun, FiMoon } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { auth } from '../lib/firebase';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { ROUTES } from '../constants/routes.constants';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 
 const Account: React.FC = () => {
     const navigate = useNavigate();
     const { profile } = useAuth();
-    const { theme, setTheme } = useTheme();
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -42,7 +42,7 @@ const Account: React.FC = () => {
                             className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md"
                         />
                     ) : (
-                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-sm border-2 border-[#007A78] dark:border-[#2DD4BF] shadow-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-14 h-14 text-slate-400 dark:text-slate-500">
                                 <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
                             </svg>
@@ -72,24 +72,6 @@ const Account: React.FC = () => {
             {/* ── Theme selector & Quick links ── */}
             <div className="flex-1 p-4">
                 <div className="w-full max-w-2xl mx-auto space-y-4">
-                    <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
-                        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Theme Preferences</h3>
-                        <div className="grid grid-cols-3 gap-2">
-                            {(['light', 'dark', 'system'] as const).map((m) => (
-                                <button
-                                    key={m}
-                                    onClick={() => setTheme(m)}
-                                    className={`py-2.5 px-3 rounded-sm text-xs font-bold capitalize transition-all border ${theme === m
-                                            ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950 border-transparent shadow-xs'
-                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                        }`}
-                                >
-                                    {m} Mode
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
                     <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">Quick Actions</h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -104,10 +86,10 @@ const Account: React.FC = () => {
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
 
-                        <Link
-                            to="/support"
+                        <Link to={`${ROUTES.EVENTS}/${ROUTES.EVENTS_SUPPORT}`}
                             className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
                             <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
                                 <FiHelpCircle className="w-5 h-5" />
                             </div>

@@ -79,6 +79,11 @@ export function useQrScanner({ active, onDetected }: UseQrScannerOptions): UseQr
     setError(null);
     let cancelled = false;
 
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera requires a secure connection (HTTPS). Open this page via https:// or localhost.');
+      return;
+    }
+
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' } })
       .then((stream) => {

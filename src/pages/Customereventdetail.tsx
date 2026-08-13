@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, Ticket, User, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 import {
   CATEGORY_GRADIENTS,
@@ -16,7 +18,7 @@ const CustomerEventDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const id = slug ? parseEventIdFromSlug(slug) : undefined;
   const navigate = useNavigate();
-  const { event, loading } = usePublicEvent(id);
+const { event, loading } = usePublicEvent(id);
 
   // Quantity selected per tier id
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -25,7 +27,6 @@ const CustomerEventDetail: React.FC = () => {
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
   }, [event?.id]);
-
   if (loading) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
@@ -41,7 +42,7 @@ const CustomerEventDetail: React.FC = () => {
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300">This event doesn&rsquo;t exist or isn&rsquo;t published yet.</p>
         <button
           onClick={() => navigate('/discover')}
-          className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2DD4BF]"
+          className="rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2DD4BF]"
         >
           Back to events
         </button>
@@ -71,7 +72,7 @@ const CustomerEventDetail: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
+    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
         {event.images && event.images.length > 0 && (
@@ -92,7 +93,7 @@ const CustomerEventDetail: React.FC = () => {
                   onClick={() =>
                     setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length)
                   }
-                  className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                  className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
                   aria-label="Previous photo"
                 >
                   <ArrowLeft size={16} />
@@ -101,7 +102,7 @@ const CustomerEventDetail: React.FC = () => {
                   onClick={() =>
                     setActiveImageIndex((i) => (i + 1) % event.images.length)
                   }
-                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
                   aria-label="Next photo"
                 >
                   <ArrowLeft size={16} />
@@ -111,7 +112,7 @@ const CustomerEventDetail: React.FC = () => {
                     <button
                       key={i}
                       onClick={() => setActiveImageIndex(i)}
-                      className={`h-1.5 rounded-full transition-all ${
+                      className={`h-1.5 rounded-sm transition-all ${
                         i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
                       }`}
                       aria-label={`Photo ${i + 1}`}
@@ -206,7 +207,7 @@ const CustomerEventDetail: React.FC = () => {
                       href={event.rsvpLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
+                      className="inline-flex items-center gap-1.5 rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
                     >
                       {event.rsvpButtonLabel || 'RSVP Now'}
                     </a>
@@ -219,7 +220,7 @@ const CustomerEventDetail: React.FC = () => {
                   <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Tickets</h2>
 
                   {allSoldOut ? (
-                    <p className="rounded-md bg-slate-50 dark:bg-slate-800 p-3 text-sm text-slate-500 dark:text-slate-400">
+                    <p className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 text-sm text-slate-500 dark:text-slate-400">
                       All tickets for this event are sold out.
                     </p>
                   ) : (
@@ -242,7 +243,7 @@ const CustomerEventDetail: React.FC = () => {
                             </div>
 
                             {soldOut ? (
-                              <span className="rounded-md bg-gray-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-slate-400">Sold out</span>
+                              <span className="rounded-sm bg-gray-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-slate-400">Sold out</span>
                             ) : (
                               <div className="flex shrink-0 items-center gap-2">
                                 <button
@@ -286,7 +287,7 @@ const CustomerEventDetail: React.FC = () => {
             <button
               onClick={handleGetTickets}
               disabled={totalTickets === 0}
-              className="flex-1 rounded-md bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
+              className="flex-1 rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
             >
               Get tickets
             </button>

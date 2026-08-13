@@ -61,11 +61,11 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
           id={id}
           placeholder=" "
           className={[
-            'peer w-full bg-white border border-[#7D7777A3] rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
-            'py-3 text-[15px] text-slate-800 outline-none transition-colors',
-            'focus:border-slate-500',
+            'peer w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
+            'py-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none transition-colors',
+            'focus:border-slate-500 dark:focus:border-[#2DD4BF]',
             icon ? 'pl-11 pr-3' : 'px-3',
-            (rest.type === 'date' || rest.type === 'time') && '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full',
+            (rest.type === 'date' || rest.type === 'time') && '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full dark:[&::-webkit-calendar-picker-indicator]:invert',
             className,
           ].join(' ')}
           {...rest}
@@ -73,10 +73,10 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
         <label
           htmlFor={id}
           className={[
-            'absolute bg-white px-1 text-gray-400 pointer-events-none transition-all duration-150',
+            'absolute bg-white dark:bg-slate-800 px-1 text-gray-400 dark:text-slate-500 pointer-events-none transition-all duration-150',
             'top-1/2 -translate-y-1/2 text-[15px]',
             icon ? 'left-11' : 'left-3',
-            'peer-focus:top-0 peer-focus:text-xs peer-focus:text-slate-600',
+            'peer-focus:top-0 peer-focus:text-xs peer-focus:text-slate-600 dark:peer-focus:text-[#2DD4BF]',
             'peer-[&:not(:placeholder-shown)]:top-0 peer-[&:not(:placeholder-shown)]:text-xs',
           ].join(' ')}
         >
@@ -109,9 +109,9 @@ export const FloatingLabelTextArea: React.FC<FloatingLabelTextAreaProps> = ({
           id={id}
           placeholder=" "
           className={[
-            'peer w-full bg-white border border-[#7D7777A3] rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
-            'px-3 pt-4 pb-2 text-[15px] text-slate-800 outline-none transition-colors resize-none',
-            'focus:border-slate-500',
+            'peer w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
+            'px-3 pt-4 pb-2 text-[15px] text-slate-800 dark:text-slate-100 outline-none transition-colors resize-none',
+            'focus:border-slate-500 dark:focus:border-[#2DD4BF]',
             className,
           ].join(' ')}
           {...rest}
@@ -119,9 +119,9 @@ export const FloatingLabelTextArea: React.FC<FloatingLabelTextAreaProps> = ({
         <label
           htmlFor={id}
           className={[
-            'absolute bg-white px-1 left-3 text-gray-400 pointer-events-none transition-all duration-150',
+            'absolute bg-white dark:bg-slate-800 px-1 left-3 text-gray-400 dark:text-slate-500 pointer-events-none transition-all duration-150',
             'top-4 text-[15px]',
-            'peer-focus:top-[-8px] peer-focus:text-xs peer-focus:text-slate-600',
+            'peer-focus:top-[-8px] peer-focus:text-xs peer-focus:text-slate-600 dark:peer-focus:text-[#2DD4BF]',
             'peer-[&:not(:placeholder-shown)]:top-[-8px] peer-[&:not(:placeholder-shown)]:text-xs',
           ].join(' ')}
         >
@@ -159,7 +159,7 @@ export const FloatingLabelSelect: React.FC<FloatingLabelSelectProps> = ({
   return (
     <div className="relative">
       {icon && (
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 z-10 pointer-events-none">
           {icon}
         </span>
       )}
@@ -167,9 +167,9 @@ export const FloatingLabelSelect: React.FC<FloatingLabelSelectProps> = ({
         id={id}
         value={value}
         className={[
-          'peer w-full bg-white border border-[#7D7777A3] rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
-          'py-3 text-[15px] text-slate-800 outline-none appearance-none transition-colors',
-          'focus:border-slate-500',
+          'peer w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
+          'py-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none appearance-none transition-colors',
+          'focus:border-slate-500 dark:focus:border-[#2DD4BF]',
           icon ? 'pl-11 pr-8' : 'px-3 pr-8',
           className,
         ].join(' ')}
@@ -177,7 +177,7 @@ export const FloatingLabelSelect: React.FC<FloatingLabelSelectProps> = ({
       >
         <option value="" disabled hidden />
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="dark:bg-slate-800 dark:text-slate-100">
             {opt.label}
           </option>
         ))}
@@ -185,16 +185,16 @@ export const FloatingLabelSelect: React.FC<FloatingLabelSelectProps> = ({
       <label
         htmlFor={id}
         className={[
-          'absolute bg-white px-1 text-gray-400 pointer-events-none transition-all duration-150 z-10',
+          'absolute bg-white dark:bg-slate-800 px-1 text-gray-400 dark:text-slate-500 pointer-events-none transition-all duration-150 z-10',
           icon ? 'left-11' : 'left-3',
-          hasValue ? '-top-2 text-xs text-slate-600' : 'top-1/2 -translate-y-1/2 text-[15px]',
-          'peer-focus:-top-2 peer-focus:text-xs peer-focus:text-slate-600',
+          hasValue ? '-top-2 text-xs text-slate-600 dark:text-[#2DD4BF]' : 'top-1/2 -translate-y-1/2 text-[15px]',
+          'peer-focus:-top-2 peer-focus:text-xs peer-focus:text-slate-600 dark:peer-focus:text-[#2DD4BF]',
         ].join(' ')}
       >
         {label}
       </label>
       <svg
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"

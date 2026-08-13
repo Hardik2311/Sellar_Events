@@ -26,6 +26,12 @@ const EventDashboardContent: React.FC = () => {
     [data, selectedEventId]
   );
 
+  const upcomingEvents = useMemo(() => {
+    if (!data?.events) return [];
+    const now = new Date();
+    return data.events.filter((e) => new Date(e.startDate) >= now);
+  }, [data]);
+
   const fetchData = useCallback(async (forceRefresh = false) => {
     if (!profile?.companyId || !filters.startDate || !filters.endDate) {
       setLoading(false);
@@ -42,7 +48,9 @@ const EventDashboardContent: React.FC = () => {
         forceRefresh,
       });
       setData(result);
-      setSelectedEventId((prev) => prev ?? result.events[0]?.id ?? null);
+      const now = new Date();
+      const firstUpcoming = result.events.find((e) => new Date(e.startDate) >= now);
+      setSelectedEventId((prev) => prev ?? firstUpcoming?.id ?? result.events[0]?.id ?? null);
     } catch (e) {
       console.error('Event dashboard fetch error:', e);
       setError('Could not load your events. Please try again.');
@@ -65,7 +73,7 @@ const EventDashboardContent: React.FC = () => {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+          <div className="p-2 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
             <LayoutDashboard size={20} />
           </div>
           <div>
@@ -78,7 +86,7 @@ const EventDashboardContent: React.FC = () => {
           {/* <ThemeToggle /> */}
           <button
             onClick={() => setIsDataVisible(!isDataVisible)}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
             title={isDataVisible ? 'Hide Sensitive Data' : 'Show Sensitive Data'}
           >
             {isDataVisible ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -99,7 +107,7 @@ const EventDashboardContent: React.FC = () => {
           </p>
           <button
             onClick={handleRefresh}
-            className={`p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
+            className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
               }`}
             title="Refresh data"
           >
@@ -110,7 +118,7 @@ const EventDashboardContent: React.FC = () => {
         <div className="mx-auto max-w-7xl relative">
           <div className="mb-2">
             <EventListCard
-              events={data?.events ?? []}
+              events={searchValue.trim() ? (data?.events ?? []) : upcomingEvents}
               selectedEventId={selectedEventId}
               onSelect={setSelectedEventId}
               searchValue={searchValue}
@@ -123,7 +131,7 @@ const EventDashboardContent: React.FC = () => {
             <EventDateFilter />
           </div>
           {error && (
-            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            <div className="mb-2 rounded-sm border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
