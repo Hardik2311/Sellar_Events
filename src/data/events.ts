@@ -70,10 +70,15 @@ export const getAvailability = (tiers: PublicTicketTier[]) => {
 };
 
 // Picks the event to lead with on the discover page: an explicitly
-// featured, published event first; otherwise the soonest upcoming one.
-export const getFeaturedEvent = (events: PublicEvent[]): PublicEvent | undefined => {
+// featured, published event first; otherwise (if autoFeatureNearest is
+// on) the soonest upcoming one.
+export const getFeaturedEvent = (
+  events: PublicEvent[],
+  autoFeatureNearest: boolean = true
+): PublicEvent | undefined => {
   const flagged = events.find((e) => e.featured);
   if (flagged) return flagged;
+  if (!autoFeatureNearest) return undefined;
   return [...events].sort((a, b) => a.date.localeCompare(b.date))[0];
 };
 // "--" is safe as a separator: Firestore auto-ids never contain hyphens,

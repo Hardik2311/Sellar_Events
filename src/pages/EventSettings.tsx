@@ -40,10 +40,11 @@ const EventFieldSettings: React.FC = () => {
   const { profile } = useAuth();
   const { settings, loading } = useCompanySettings();
 
-  type DraftEventSettings = Pick<typeof settings, 'rsvpEnabled' | 'eventFieldRequirements'>;
+ type DraftEventSettings = Pick<typeof settings, 'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest'>;
   const [draft, setDraft] = useState<DraftEventSettings>({
     rsvpEnabled: settings.rsvpEnabled,
     eventFieldRequirements: settings.eventFieldRequirements,
+    autoFeatureNearest: settings.autoFeatureNearest,
   });
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,6 +58,7 @@ const EventFieldSettings: React.FC = () => {
       setDraft({
         rsvpEnabled: settings.rsvpEnabled,
         eventFieldRequirements: settings.eventFieldRequirements,
+        autoFeatureNearest: settings.autoFeatureNearest,
       });
       setInitialized(true);
     }
@@ -114,7 +116,28 @@ const EventFieldSettings: React.FC = () => {
         <div className="mx-auto max-w-3xl flex flex-col gap-3">
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Registration</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Featured event</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Auto-feature nearest event</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    When no event is manually marked Featured, automatically lead with the soonest upcoming one. Turn off to show nothing until you feature one yourself.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.autoFeatureNearest}
+                  disabled={loading}
+                  onChange={() => setDraft((prev) => ({ ...prev, autoFeatureNearest: !prev.autoFeatureNearest }))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Required fields</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between gap-4 py-2">

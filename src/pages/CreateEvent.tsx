@@ -10,6 +10,7 @@ import {
 } from '../components/ui/AuthUIComponents'
 import ImageUploadBox from '../components/ui/ImageUploadBox';
 //import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
@@ -74,7 +75,7 @@ const CreateEvent: React.FC = () => {
 
   const req = companySettings.eventFieldRequirements;
 
- const isPublishable =
+  const isPublishable =
     form.title.trim().length > 0 &&
     Boolean(form.date) &&
     Boolean(form.time) &&
@@ -169,12 +170,11 @@ const CreateEvent: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/events')}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             title="Back to Events"
           >
             <ArrowLeft size={18} />
           </button>
-          {/* <ThemeToggle /> */}
         </div>
       </header>
 
@@ -221,7 +221,7 @@ const CreateEvent: React.FC = () => {
                   />
 
                   <FormField label="Format" htmlFor="format">
-                    <div className="flex rounded-md border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                    <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                       <button
                         type="button"
                         onClick={() => update('isOnline', false)}
@@ -276,7 +276,7 @@ const CreateEvent: React.FC = () => {
               <CardContent className="space-y-4">
                 {companySettings.rsvpEnabled && (
                   <FormField label="Registration type" htmlFor="registration-mode">
-                    <div className="flex rounded-md border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                    <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                       <button
                         type="button"
                         onClick={() => update('registrationMode', 'tickets')}
@@ -408,7 +408,7 @@ const CreateEvent: React.FC = () => {
       {/* ── Sticky action bar ──────────────────────────────────────────── */}
       {saveError && (
         <div className="fixed bottom-32 md:bottom-16 left-0 right-0 flex justify-center z-30 px-3">
-          <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2">{saveError}</p>
+          <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-sm px-4 py-2">{saveError}</p>
         </div>
       )}
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
@@ -416,14 +416,14 @@ const CreateEvent: React.FC = () => {
           <button
             onClick={handleSaveDraft}
             disabled={isSaving}
-            className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
+            className="flex-1 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
           >
             {isSaving ? 'Saving…' : 'Save as Draft'}
           </button>
           <button
             onClick={handlePublish}
             disabled={!isPublishable || isSaving}
-            className="flex-1 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
+            className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
           >
             {isSaving ? 'Saving…' : 'Preview & Publish Event'}
           </button>

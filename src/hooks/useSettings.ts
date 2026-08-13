@@ -21,6 +21,9 @@ export interface CompanySettings {
   roundingInterval: number;
   // Which Create Event fields organizers must fill before publishing
   eventFieldRequirements: EventFieldRequirements;
+  // When no event is manually marked Featured, auto-pick the soonest
+  // upcoming event to lead with on Discover. OFF = show nothing instead.
+  autoFeatureNearest: boolean;
   // more settings go here later
 }
 
@@ -39,6 +42,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   enableRounding: false,
   roundingInterval: 1,
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,
+  autoFeatureNearest: true, // preserves current behaviour by default
 };
 
 export function useCompanySettings() {

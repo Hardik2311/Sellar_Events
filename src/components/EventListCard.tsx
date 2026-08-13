@@ -63,27 +63,29 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   };
 
   return (
-    <Card className="shadow-sm border-gray-200 h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-gray-900">Your events</CardTitle>
-      </CardHeader>
-
-      <CardContent className="flex-1 flex flex-col min-h-0">
-        <div className="mb-3">
-          <SearchBar value={searchValue} onChange={onSearchChange} placeholder="Search your events" />
+    <div className="relative w-full max-w-lg lg:max-w-4xl mx-auto" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen((o) => !o)}
+        className="w-full flex items-center justify-between rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+      >
+        <div className="min-w-0 text-left">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Your events</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+            {loading ? 'Loading...' : selectedEvent ? selectedEvent.title : 'Select an event'}
+          </p>
         </div>
         <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 p-3">
+        <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-xl z-30 p-3">
           <div className="mb-2">
             <SearchBar value={searchValue} onChange={onSearchChange} placeholder="Search your events" />
           </div>
 
           <div className="max-h-[300px] overflow-y-auto space-y-2">
             {loading ? (
-              [1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-md bg-gray-100 dark:bg-slate-800" />)
+              [1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-sm bg-gray-100 dark:bg-slate-800" />)
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-500 dark:text-slate-400">No events match your search</p>
@@ -95,7 +97,7 @@ export const EventListCard: React.FC<EventListCardProps> = ({
                   <button
                     key={event.id}
                     onClick={() => handleSelect(event.id)}
-                    className={`w-full text-left rounded-xl border p-3 transition-all ${
+                    className={`w-full text-left rounded-sm border p-3 transition-all ${
                       isActive
                         ? 'border-[#007A78]/40 bg-[#007A78]/10 dark:border-[#2DD4BF]/40 dark:bg-[#2DD4BF]/15 font-bold'
                         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'

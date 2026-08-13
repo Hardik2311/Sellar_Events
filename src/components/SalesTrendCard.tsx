@@ -26,7 +26,7 @@ export const SalesTrendCard: React.FC<SalesTrendCardProps> = ({ data, isDataVisi
         ) : !isDataVisible ? (
           <div className="text-center py-8 text-gray-400 text-sm">Data hidden</div>
         ) : (
-          <div className="flex items-end gap-2 h-32 overflow-x-auto overflow-y-hidden pb-1 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#475569_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div className="flex items-end gap-2 h-32 overflow-x-auto overflow-y-hidden pb-1 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#475569_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-sm">
             {data.map((point, i) => {
               const heightPercent = Math.max(4, Math.round((point.revenue / max) * 100));
               const showLabel = i % labelStep === 0;
@@ -37,7 +37,7 @@ export const SalesTrendCard: React.FC<SalesTrendCardProps> = ({ data, isDataVisi
                   style={{ width: data.length > 14 ? '32px' : `${100 / data.length}%` }}
                 >
                   <div
-                    className="w-full rounded-t-lg bg-[#007A78]/20 hover:bg-[#007A78] dark:bg-[#2DD4BF]/30 dark:hover:bg-[#2DD4BF] transition-all"
+                    className="w-full rounded-t-sm bg-[#007A78]/20 hover:bg-[#007A78] dark:bg-[#2DD4BF]/30 dark:hover:bg-[#2DD4BF] transition-all"
                     style={{ height: `${heightPercent}%` }}
                     title={`₹${point.revenue.toLocaleString('en-IN')}`}
                   />

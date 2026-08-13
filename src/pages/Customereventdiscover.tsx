@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 //import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import {
     type PublicEvent,
     CATEGORY_GRADIENTS,
@@ -15,6 +16,7 @@ import {
     buildEventSlugId,
 } from '../data/events';
 import { usePublicEvents } from '../hooks/usePublicEvents';
+import { useCompanySettings } from '../hooks/useSettings';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -101,8 +103,8 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                 </div>
 
                 {event.registrationMode !== 'rsvp' && (
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100 dark:bg-slate-700">
-                        <div className="h-1.5 rounded-full bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    <div className="mt-1 h-1.5 w-full rounded-sm bg-gray-100 dark:bg-slate-700">
+                        <div className="h-1.5 rounded-sm bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
                     </div>
                 )}
 
@@ -125,6 +127,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
 const CustomerEventDiscover: React.FC = () => {
     const navigate = useNavigate();
     const { events, loading } = usePublicEvents(); // organizer-published events only
+    const { settings } = useCompanySettings();
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [format, setFormat] = useState<FormatFilter>('all');
@@ -164,7 +167,14 @@ const CustomerEventDiscover: React.FC = () => {
     }, [upcomingEvents, activeCategory, format, search]);
 
     const hasFiltersApplied = search.trim().length > 0 || activeCategory !== 'All' || format !== 'all';
-    const featured = useMemo(() => getFeaturedEvent(upcomingEvents), [upcomingEvents]);
+
+    // The featured pick is independent of filters — it's always the
+    // organizer/admin-flagged event (or soonest upcoming as fallback), and
+    // only shown on the unfiltered view so it doesn't fight the search results.
+    const featured = useMemo(
+        () => getFeaturedEvent(upcomingEvents, settings.autoFeatureNearest),
+        [upcomingEvents, settings.autoFeatureNearest]
+    );
     const gridEvents = hasFiltersApplied ? filtered : filtered.filter((e) => e.id !== featured?.id);
 
     const clearFilters = () => {
@@ -193,7 +203,7 @@ const CustomerEventDiscover: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search events, venues, or categories"
-                            className="w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2 pl-9 pr-9 text-sm text-slate-700 dark:text-slate-200 dark:placeholder-slate-500 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+                            className="w-full rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2 pl-9 pr-9 text-sm text-slate-700 dark:text-slate-200 dark:placeholder-slate-500 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
                         />
                         {search && (
                             <button
@@ -211,7 +221,7 @@ const CustomerEventDiscover: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setCategoryMenuOpen((o) => !o)}
-                                className="flex items-center gap-1 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                                className="flex items-center gap-1 rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 {activeCategory}
                                 <ChevronDown size={14} className={`transition-transform ${categoryMenuOpen ? 'rotate-180' : ''}`} />
@@ -221,7 +231,7 @@ const CustomerEventDiscover: React.FC = () => {
                                 <>
                                     {/* backdrop to close on outside click */}
                                     <div className="fixed inset-0 z-10" onClick={() => setCategoryMenuOpen(false)} />
-                                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
+                                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
                                         {categories.map((c) => (
                                             <button
                                                 key={c}
@@ -245,7 +255,7 @@ const CustomerEventDiscover: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setFormatMenuOpen((o) => !o)}
-                                className="flex items-center gap-1 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                                className="flex items-center gap-1 rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 {activeFormatLabel}
                                 <ChevronDown size={14} className={`transition-transform ${formatMenuOpen ? 'rotate-180' : ''}`} />
@@ -254,7 +264,7 @@ const CustomerEventDiscover: React.FC = () => {
                             {formatMenuOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setFormatMenuOpen(false)} />
-                                    <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
+                                    <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
                                         {formatOptions.map((f) => (
                                             <button
                                                 key={f.value}
@@ -284,13 +294,13 @@ const CustomerEventDiscover: React.FC = () => {
                             <Loader2 className="animate-spin text-slate-400" size={24} />
                         </div>
                     ) : filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-[#1E293B] py-16 text-center">
+                        <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-[#1E293B] py-16 text-center">
                             <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
                             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No events match your filters</p>
                             <p className="text-xs text-slate-400 dark:text-slate-500">Try a different category, format, or search term</p>
                             <button
                                 onClick={clearFilters}
-                                className="mt-1 rounded-md border border-gray-300 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                                className="mt-1 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                             >
                                 Clear filters
                             </button>
@@ -324,7 +334,7 @@ const CustomerEventDiscover: React.FC = () => {
                                     </div>
                                     <div className="flex items-center justify-between p-3">
                                         <span className="text-sm font-semibold text-[#007A78]">{getPriceLabel(featured.tiers)}</span>
-                                        <span className="rounded-md bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2DD4BF]">
+                                        <span className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2DD4BF]">
                                             View details
                                         </span>
                                     </div>

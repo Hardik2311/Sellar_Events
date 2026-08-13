@@ -279,15 +279,15 @@ const CheckoutPage: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100">
+    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-slate-900">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-300 bg-white p-3">
-        <button onClick={() => navigate(-1)} className="rounded-sm p-1.5 text-slate-600 hover:bg-gray-100">
+      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+        <button onClick={() => navigate(-1)} className="rounded-sm p-1.5 text-slate-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800">
           <ArrowLeft size={20} />
         </button>
         <div className="min-w-0">
-          <h1 className="text-base font-bold text-slate-800">Checkout</h1>
-          <p className="line-clamp-1 text-xs text-slate-500">{event.title}</p>
+          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Checkout</h1>
+          <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{event.title}</p>
         </div>
       </header>
 
@@ -295,7 +295,7 @@ const CheckoutPage: React.FC = () => {
       <main className="grow overflow-y-auto p-3 pb-28">
         <div className="mx-auto flex max-w-xl flex-col gap-3">
           {lineItems.length === 0 && (
-            <div className="rounded-md border border-dashed border-gray-300 bg-white p-4 text-center text-sm text-slate-500">
+            <div className="rounded-md border border-dashed border-gray-300 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
               No tickets selected. Go back and pick a ticket tier first.
             </div>
           )}
@@ -303,14 +303,14 @@ const CheckoutPage: React.FC = () => {
           {/* Order summary */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Order summary</h2>
-              <div className="flex flex-col divide-y divide-gray-100">
+              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Order summary</h2>
+              <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-700">
                 {lineItems.map(({ tier, qty }) => (
                   <div key={tier.id} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-600">
-                      {tier.name} <span className="text-slate-400">× {qty}</span>
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {tier.name} <span className="text-slate-400 dark:text-slate-500">× {qty}</span>
                     </span>
-                    <span className="font-medium text-slate-800">
+                    <span className="font-medium text-slate-800 dark:text-slate-100">
                       {tier.price === 0 ? 'Free' : `\u20B9${(tier.price * qty).toLocaleString('en-IN')}`}
                     </span>
                   </div>
@@ -318,18 +318,18 @@ const CheckoutPage: React.FC = () => {
               </div>
               {totalTaxAmount > 0 && (
                 <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-slate-500">Tax</span>
-                  <span className="font-medium text-slate-700">{`\u20B9${totalTaxAmount.toFixed(2)}`}</span>
+                  <span className="text-slate-500 dark:text-slate-400">Tax</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{`\u20B9${totalTaxAmount.toFixed(2)}`}</span>
                 </div>
               )}
               {roundOffAmt !== 0 && (
                 <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-slate-500">Round off</span>
-                  <span className="font-medium text-slate-700">{`\u20B9${roundOffAmt.toFixed(2)}`}</span>
+                  <span className="text-slate-500 dark:text-slate-400">Round off</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{`\u20B9${roundOffAmt.toFixed(2)}`}</span>
                 </div>
               )}
-              <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 text-sm font-semibold">
-                <span className="text-slate-800">Total</span>
+              <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 text-sm font-semibold dark:border-slate-700">
+                <span className="text-slate-800 dark:text-slate-100">Total</span>
                 <span className="text-[#007A78]">{total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}</span>
               </div>
             </CardContent>
@@ -338,15 +338,15 @@ const CheckoutPage: React.FC = () => {
           {/* Attendee details */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Attendee details</h2>
+              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Attendee details</h2>
               <div className="flex flex-col gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
+                  <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="As it should appear on the ticket"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
                 </div>
                 <div>
@@ -376,7 +376,7 @@ const CheckoutPage: React.FC = () => {
           {/* Payment method */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Payment method</h2>
+              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Payment method</h2>
               <div className="flex flex-col gap-2">
                 {(
                   [
@@ -389,12 +389,12 @@ const CheckoutPage: React.FC = () => {
                     key={opt.id}
                     onClick={() => setMethod(opt.id)}
                     className={`flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm font-medium transition-colors ${method === opt.id
-                      ? 'border-[#007A78] bg-orange-50 text-[#007A78]'
-                      : 'border-gray-300 text-slate-600 hover:bg-gray-50'
+                      ? 'border-[#007A78] bg-orange-50 text-[#007A78] dark:bg-teal-950'
+                      : 'border-gray-300 text-slate-600 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'
                       }`}
                   >
                     <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${method === opt.id ? 'border-[#007A78]' : 'border-gray-300'
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${method === opt.id ? 'border-[#007A78]' : 'border-gray-300 dark:border-slate-500'
                         }`}
                     >
                       {method === opt.id && <span className="h-2 w-2 rounded-full bg-[#007A78]" />}
@@ -410,11 +410,11 @@ const CheckoutPage: React.FC = () => {
       </main>
 
       {/* ── Sticky pay bar ───────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex justify-center z-30">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex justify-center z-30 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex w-full max-w-xl items-center gap-3">
           <div className="flex-1">
-            <p className="text-xs text-slate-500">{totalQty} ticket{totalQty === 1 ? '' : 's'}</p>
-            <p className="text-base font-bold text-slate-800">
+            <p className="text-xs text-slate-500 dark:text-slate-400">{totalQty} ticket{totalQty === 1 ? '' : 's'}</p>
+            <p className="text-base font-bold text-slate-800 dark:text-slate-100">
               {total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}
             </p>
           </div>

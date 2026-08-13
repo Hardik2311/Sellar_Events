@@ -75,22 +75,22 @@ const OrganizerEventDetail: React.FC = () => {
   const { profile } = useAuth();
   const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
-const [isEditOpen, setIsEditOpen] = useState(false);
-const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-useEffect(() => {
-  setActiveImageIndex(0); // event change hone par reset
-}, [event?.id]);
+  useEffect(() => {
+    setActiveImageIndex(0); // event change hone par reset
+  }, [event?.id]);
 
-const goToPrevImage = () => {
-  if (!event?.images?.length) return;
-  setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length);
-};
+  const goToPrevImage = () => {
+    if (!event?.images?.length) return;
+    setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length);
+  };
 
-const goToNextImage = () => {
-  if (!event?.images?.length) return;
-  setActiveImageIndex((i) => (i + 1) % event.images.length);
-};
+  const goToNextImage = () => {
+    if (!event?.images?.length) return;
+    setActiveImageIndex((i) => (i + 1) % event.images.length);
+  };
 
   const handleShareEvent = async () => {
     if (!event) return;
@@ -165,7 +165,7 @@ const goToNextImage = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen w-full items-center justify-center bg-gray-100 dark:bg-[#0F172A]">
         <div className="w-10 h-10 rounded-full border-[3px] border-slate-200 border-t-orange-500 animate-spin" />
       </div>
     );
@@ -173,9 +173,9 @@ const goToNextImage = () => {
 
   if (!event) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-3 bg-gray-100 p-6 text-center">
-        <Ticket size={28} className="text-gray-300" />
-        <p className="text-sm font-medium text-slate-700">This event doesn&rsquo;t exist.</p>
+      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-3 bg-gray-100 dark:bg-[#0F172A] p-6 text-center">
+        <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">This event doesn&rsquo;t exist.</p>
         <button
           onClick={() => navigate('/events/discover')}
           className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
@@ -190,7 +190,7 @@ const goToNextImage = () => {
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 mb-16">
+    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
         {event.images && event.images.length > 0 && (
@@ -200,9 +200,8 @@ const goToNextImage = () => {
                 key={src + i}
                 src={src}
                 alt={`${event.title} photo ${i + 1}`}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-                  i === activeImageIndex ? 'opacity-100' : 'opacity-0'
-                }`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'
+                  }`}
               />
             ))}
             {event.images.length > 1 && (
@@ -226,9 +225,8 @@ const goToNextImage = () => {
                     <button
                       key={i}
                       onClick={() => setActiveImageIndex(i)}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
-                      }`}
+                      className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                        }`}
                       aria-label={`Photo ${i + 1}`}
                     />
                   ))}
@@ -241,11 +239,11 @@ const goToNextImage = () => {
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <button
-            onClick={() => navigate(-1)}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 hover:bg-white transition-colors"
-          >
-            <ArrowLeft size={18} />
-          </button>
+  onClick={() => navigate(-1)}
+  className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+>
+  <ArrowLeft size={18} />
+</button>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditOpen(true)}
@@ -254,11 +252,11 @@ const goToNextImage = () => {
               <Pencil size={14} /> Edit
             </button>
             <button
-              onClick={handleShareEvent}
-              className="rounded-sm border border-white/40 bg-white/90 p-2 hover:bg-white transition-colors"
-            >
-              <Share2 size={18} />
-            </button>
+  onClick={handleShareEvent}
+  className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+>
+  <Share2 size={18} />
+</button>
           </div>
         </div>
 
@@ -274,13 +272,13 @@ const goToNextImage = () => {
       <main className="grow overflow-y-auto p-2">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {/* Key details */}
-          <Card className="shadow-sm border-gray-200">
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="space-y-3 pt-4">
               <div className="flex items-start gap-3">
-                <Calendar size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
+                <Calendar size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
                 <div>
-                  <p className="text-sm font-medium text-slate-800">{formatDateRange(event.date, event.endDate)}</p>
-                  <p className="flex items-center gap-1 text-xs text-slate-500">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{formatDateRange(event.date, event.endDate)}</p>
+                  <p className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                     <Clock size={12} /> {formatTime(event.time)}
                   </p>
                 </div>
@@ -288,40 +286,40 @@ const goToNextImage = () => {
 
               <div className="flex items-start gap-3">
                 {event.isOnline ? (
-                  <Wifi size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
+                  <Wifi size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
                 ) : (
-                  <MapPin size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
+                  <MapPin size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
                 )}
                 <div>
-                  <p className="text-sm font-medium text-slate-800">{event.isOnline ? 'Online event' : event.venue}</p>
-                  {event.isOnline && <p className="text-xs text-slate-500">Link shared with ticket holders before the event</p>}
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{event.isOnline ? 'Online event' : event.venue}</p>
+                  {event.isOnline && <p className="text-xs text-slate-500 dark:text-slate-400">Link shared with ticket holders before the event</p>}
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <User size={18} className="mt-0.5 shrink-0 text-[#007A78]" />
+                <User size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
                 <div>
-                  <p className="text-sm font-medium text-slate-800">{event.organizerName}</p>
-                  <p className="text-xs text-slate-500">Organizer</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{event.organizerName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Organizer</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           {/* About */}
-          <Card className="shadow-sm border-gray-200">
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
-              <h2 className="mb-2 text-base font-semibold text-gray-900">About this event</h2>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">{event.description}</p>
+              <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{event.description}</p>
             </CardContent>
           </Card>
 
           {/* Registration — ticket tiers, or the RSVP link if this is an RSVP event */}
-          <Card className="shadow-sm border-gray-200">
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               {event.registrationMode === 'rsvp' ? (
                 <>
-                  <h2 className="mb-3 text-base font-semibold text-gray-900">RSVP</h2>
-                  <p className="mb-3 text-sm text-slate-600">
+                  <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">RSVP</h2>
+                  <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
                     Attendees register through an external form instead of buying a ticket.
                   </p>
                   {event.rsvpLink ? (
@@ -334,22 +332,22 @@ const goToNextImage = () => {
                       {event.rsvpButtonLabel || 'RSVP Now'}
                     </a>
                   ) : (
-                    <p className="text-xs text-red-500">No RSVP link set yet — add one via Edit.</p>
+                    <p className="text-xs text-red-500 dark:text-red-400">No RSVP link set yet — add one via Edit.</p>
                   )}
                 </>
               ) : (
                 <>
-                  <h2 className="mb-3 text-base font-semibold text-gray-900">Ticket tiers</h2>
-                  <div className="flex flex-col divide-y divide-gray-100">
+                  <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Ticket tiers</h2>
+                  <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800">
                     {event.tiers.map((tier) => (
                       <div key={tier.id} className="flex items-center justify-between gap-3 py-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800">{tier.name}</p>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{tier.name}</p>
                           <p className="text-sm font-semibold text-[#007A78]">
                             {tier.price === 0 ? 'Free' : `\u20B9${tier.price.toLocaleString('en-IN')}`}
                           </p>
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
                           {tier.sold} / {tier.quantity} sold
                         </p>
                       </div>

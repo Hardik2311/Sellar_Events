@@ -14,6 +14,10 @@ interface CheckInScannerProps {
 
 const CheckInScanner: React.FC<CheckInScannerProps> = ({ active, onScan, onActivate }) => {
   const { videoRef, canvasRef, error, scanning } = useQrScanner({ active, onDetected: onScan });
+  const insecureContext = typeof window !== 'undefined' && !window.isSecureContext;
+  const displayError = insecureContext
+    ? 'Camera needs HTTPS. Open this page via https:// or localhost.'
+    : error;
 
   return (
     <button
@@ -23,10 +27,10 @@ const CheckInScanner: React.FC<CheckInScannerProps> = ({ active, onScan, onActiv
       }}
       className="relative w-full aspect-square rounded-sm bg-neutral-800 overflow-hidden flex items-center justify-center"
     >
-      {error ? (
+      {displayError ? (
         <div className="flex flex-col items-center gap-2 px-6 text-center">
           <AlertCircle size={28} className="text-red-400" />
-          <p className="text-xs text-neutral-300">{error}</p>
+          <p className="text-xs text-neutral-300">{displayError}</p>
         </div>
       ) : active ? (
         <>

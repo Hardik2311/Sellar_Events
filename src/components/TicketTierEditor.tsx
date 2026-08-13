@@ -35,8 +35,8 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
   return (
     <div className="space-y-3">
       {tiers.map((tier, index) => (
-        <div key={tier.id} className="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5">
-          <span className="shrink-0 h-7 w-7 mt-1.5 rounded-full bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] flex items-center justify-center text-xs font-black">
+        <div key={tier.id} className="flex items-start gap-3 rounded-sm border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5">
+          <span className="shrink-0 h-7 w-7 mt-1.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] flex items-center justify-center text-xs font-black">
             {index + 1}
           </span>
 
@@ -75,7 +75,7 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
             type="button"
             onClick={() => removeTier(tier.id)}
             disabled={tiers.length <= 1}
-            className="shrink-0 mt-1.5 p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+            className="shrink-0 mt-1.5 p-2 rounded-sm text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
             title={tiers.length <= 1 ? 'At least one tier is required' : 'Remove tier'}
           >
             <Trash2 size={16} />
@@ -86,7 +86,7 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
       <button
         type="button"
         onClick={addTier}
-        className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-[#007A78]/5 hover:text-[#007A78] dark:hover:text-[#2DD4BF] hover:border-[#007A78]/50 transition-all"
+        className="flex items-center justify-center gap-1.5 w-full rounded-sm border border-dashed border-slate-300 dark:border-slate-700 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-[#007A78]/5 hover:text-[#007A78] dark:hover:text-[#2DD4BF] hover:border-[#007A78]/50 transition-all"
       >
         <Plus size={16} /> Add Ticket Tier
       </button>

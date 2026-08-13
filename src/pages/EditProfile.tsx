@@ -5,7 +5,7 @@ import { FiCamera, FiCheck, FiX, FiArrowLeft, FiUser } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
 import { storage } from '../lib/firebase';
-import ThemeToggle from '../components/ui/ThemeToggle';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 import IdentityDocumentUpload from '../components/IdentityUpload';
 import ImageOptionsModal from '../components/ui/ImageOptionModal';
 
@@ -352,7 +352,6 @@ const EditProfile: React.FC = () => {
                         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update account, organizer & address details</p>
                     </div>
                 </div>
-                <ThemeToggle />
             </header>
 
             <div className="max-w-3xl mx-auto px-4 py-5 pb-36 md:pb-8">

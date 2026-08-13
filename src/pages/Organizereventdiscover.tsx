@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
+//import ThemeToggle from '../components/ui/ThemeToggle';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -15,6 +17,7 @@ import {
   formatTime,
   getPriceLabel,
   getAvailability,
+  buildEventSlugId,
 } from '../data/events';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 
@@ -29,6 +32,7 @@ const isPastEvent = (event: PublicEvent): boolean => {
   eventEnd.setHours(23, 59, 59, 999); // event ke din ke end tak valid maano
   return eventEnd.getTime() < Date.now();
 };
+
 // ─────────────────────────────────────────────────────────────────────────
 // Small pill toggle switch — reused for the Live/Draft and Featured controls
 // ─────────────────────────────────────────────────────────────────────────
@@ -77,20 +81,41 @@ const OrganizerEventCard: React.FC<{
   const isCompleted = event.status === 'completed';
 
   return (
-    <Card className="shadow-sm border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+    <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden flex flex-col hover:shadow-md transition-shadow">
       <div className="relative h-36 w-full cursor-pointer" onClick={onOpen}>
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
         {event.coverImage && (
           <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
         <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
           {label}
         </span>
         {event.isOnline && (
-          <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-1.5 text-xs font-medium text-slate-700">
             <Wifi size={12} /> Online
           </span>
         )}
+        <button
+          type="button"
+          onClick={async (e) => {
+            e.stopPropagation();
+            const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
+            if (navigator.share) {
+              try {
+                await navigator.share({ title: event.title, url: shareUrl });
+              } catch {
+                // user cancelled share sheet, no-op
+              }
+            } else {
+              await navigator.clipboard.writeText(shareUrl);
+            }
+          }}
+          title="Share event"
+          className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+        >
+          <Share2 size={14} />
+        </button>
         <button
           type="button"
           onClick={async (e) => {
@@ -107,7 +132,7 @@ const OrganizerEventCard: React.FC<{
             }
           }}
           title="Share event"
-          className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
         >
           <Share2 size={14} />
         </button>
@@ -118,7 +143,7 @@ const OrganizerEventCard: React.FC<{
             onEdit(event);
           }}
           title="Edit event"
-          className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          className="absolute bottom-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
         >
           <Pencil size={14} />
         </button>
@@ -131,16 +156,18 @@ const OrganizerEventCard: React.FC<{
             }
           }}
           title="Delete event"
-          className="absolute top-2 left-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+          className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
         >
           <Trash2 size={14} />
         </button>
         {soldOut && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
           </span>
         )}
         {!soldOut && sellingFast && (
+          <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
           <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
             Selling fast
           </span>
@@ -148,19 +175,19 @@ const OrganizerEventCard: React.FC<{
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
-        <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 cursor-pointer" onClick={onOpen}>
+        <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100 cursor-pointer" onClick={onOpen}>
           {event.title}
         </h3>
 
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           <Calendar size={13} />
           <span>{formatDateRange(event.date, event.endDate)}</span>
-          <span className="text-slate-300">•</span>
+          <span className="text-slate-300 dark:text-slate-600">•</span>
           <Clock size={13} />
           <span>{formatTime(event.time)}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           {event.isOnline ? (
             <>
               <Wifi size={13} />
@@ -174,8 +201,8 @@ const OrganizerEventCard: React.FC<{
           )}
         </div>
 
-        <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
-          <div className="h-1.5 rounded-full bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
+        <div className="mt-1 h-1.5 w-full rounded-sm bg-gray-100 dark:bg-slate-700">
+          <div className="h-1.5 rounded-sm bg-[#007A78]" style={{ width: `${Math.min(pct, 100)}%` }} />
         </div>
 
         <div className="mt-1 flex items-center justify-between">
@@ -183,29 +210,29 @@ const OrganizerEventCard: React.FC<{
             {event.registrationMode === 'rsvp' ? 'RSVP' : getPriceLabel(event.tiers)}
           </span>
           {event.registrationMode === 'rsvp' ? (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
               <Wifi size={13} /> External form
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
               <Ticket size={13} /> {event.tiers.reduce((s, t) => s + t.sold, 0)} sold
             </span>
           )}
         </div>
 
         {/* ── Organizer controls ─────────────────────────────────── */}
-        <div className="mt-1 flex items-center justify-between border-t border-gray-100 pt-2">
+        <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
           <div className="flex items-center gap-1.5">
-            <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300'} />
-            <span className="text-xs font-medium text-slate-600">{isLive ? 'Live' : 'Draft'}</span>
+            <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{isLive ? 'Live' : 'Draft'}</span>
           </div>
           <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300'} />
-            <span className="text-xs font-medium text-slate-600">Featured</span>
+            <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
           </div>
           <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
         </div>
@@ -229,6 +256,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -250,7 +278,13 @@ const OrganizerEventDiscover: React.FC = () => {
           !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
         const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
         return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
+        const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
+        return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
       })
+      .sort((a, b) =>
+        showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
+      ); // past view mein recent-most-past pehle dikhega
+  }, [events, activeCategory, format, search, showPastEvents]);
       .sort((a, b) =>
         showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
       ); // past view mein recent-most-past pehle dikhega
@@ -280,17 +314,13 @@ const OrganizerEventDiscover: React.FC = () => {
               Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
             </h1>
             <div className="flex items-center gap-3">
-              <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                <MapPin size={14} className="text-[#007A78] dark:text-[#2DD4BF]" /> Lucknow, IN
-              </span>
               <button
                 type="button"
                 onClick={() => setIsSubdomainModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 <LinkIcon size={14} /> <span className="hidden sm:inline">Store Link</span>
               </button>
-              {/* <ThemeToggle /> */}
             </div>
           </div>
 
@@ -301,7 +331,7 @@ const OrganizerEventDiscover: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search your events"
-              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+              className="w-full rounded-sm border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
             {search && (
               <button
@@ -319,7 +349,7 @@ const OrganizerEventDiscover: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCategoryMenuOpen((o) => !o)}
-                className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50"
+                className="flex items-center gap-1 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 {activeCategory}
                 <ChevronDown size={14} className={`transition-transform ${categoryMenuOpen ? 'rotate-180' : ''}`} />
@@ -327,9 +357,8 @@ const OrganizerEventDiscover: React.FC = () => {
 
               {categoryMenuOpen && (
                 <>
-                  {/* backdrop to close on outside click */}
                   <div className="fixed inset-0 z-10" onClick={() => setCategoryMenuOpen(false)} />
-                  <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                  <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-sm border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
                     {categories.map((c) => (
                       <button
                         key={c}
@@ -337,7 +366,7 @@ const OrganizerEventDiscover: React.FC = () => {
                           setActiveCategory(c);
                           setCategoryMenuOpen(false);
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 text-[#007A78]' : 'text-slate-600 hover:bg-gray-50'
+                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${activeCategory === c ? 'bg-orange-50 text-[#007A78] dark:bg-teal-950 dark:text-[#2DD4BF]' : 'text-slate-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
                           }`}
                       >
                         {c}
@@ -352,11 +381,10 @@ const OrganizerEventDiscover: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowPastEvents((v) => !v)}
-              className={`flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors shrink-0 ${
-                showPastEvents
-                  ? 'border-[#007A78] bg-teal-50 text-[#007A78]'
-                  : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50'
-              }`}
+              className={`flex items-center gap-1 rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors shrink-0 ${showPastEvents
+                  ? 'border-[#007A78] bg-teal-50 text-[#007A78] dark:bg-teal-950'
+                  : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
             >
               {showPastEvents ? 'Past events' : 'Upcoming'}
             </button>
@@ -366,7 +394,7 @@ const OrganizerEventDiscover: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setFormatMenuOpen((o) => !o)}
-                className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50"
+                className="flex items-center gap-1 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 {activeFormatLabel}
                 <ChevronDown size={14} className={`transition-transform ${formatMenuOpen ? 'rotate-180' : ''}`} />
@@ -375,7 +403,7 @@ const OrganizerEventDiscover: React.FC = () => {
               {formatMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setFormatMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                  <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-sm border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
                     {formatOptions.map((f) => (
                       <button
                         key={f.value}
@@ -383,7 +411,7 @@ const OrganizerEventDiscover: React.FC = () => {
                           setFormat(f.value);
                           setFormatMenuOpen(false);
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${format === f.value ? 'bg-orange-50 text-[#007A78]' : 'text-slate-600 hover:bg-gray-50'
+                        className={`block w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${format === f.value ? 'bg-orange-50 text-[#007A78] dark:bg-teal-950 dark:text-[#2DD4BF]' : 'text-slate-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
                           }`}
                       >
                         {f.label}
@@ -405,20 +433,20 @@ const OrganizerEventDiscover: React.FC = () => {
               <Loader2 className="animate-spin text-slate-400" size={24} />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-gray-300 bg-white py-16 text-center">
-              <Ticket size={28} className="text-gray-300" />
-              <p className="text-sm font-medium text-slate-700">No events match your filters</p>
-              <p className="text-xs text-slate-400">Try a different category, format, or search term</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-gray-300 bg-white py-16 text-center dark:border-slate-700 dark:bg-slate-800">
+              <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">No events match your filters</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Try a different category, format, or search term</p>
               <button
                 onClick={clearFilters}
-                className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50"
+                className="mt-1 rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 Clear filters
               </button>
             </div>
           ) : (
             <div>
-              <p className="mb-2 text-sm font-semibold text-slate-700">
+              <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 {filtered.length} event{filtered.length === 1 ? '' : 's'}
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -436,7 +464,7 @@ const OrganizerEventDiscover: React.FC = () => {
               </div>
             </div>
           )}
-         </div>
+        </div>
       </main>
 
       {profile?.companyId && (
