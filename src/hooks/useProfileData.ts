@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
+import { mapGstRegistrationType, reverseMapGstScheme } from '../lib/gstMapping';
+import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
 
 export interface ProfileData {
   name: string;
@@ -13,13 +15,15 @@ export interface ProfileData {
   eventCategory: string;
   website: string;
   gstinNumber: string;
+  gstType: string;
   streetAddress: string;
+  landmark: string;
   city: string;
   state: string;
   postalCode: string;
   profilePicture: string;
-  aadhaarDocUrl: string;
-  panDocUrl: string;
+  aadhaarDocUrls: DocFile[];
+  panDocUrls: DocFile[];
   instagram: string;
   facebook: string;
   twitter: string;
@@ -78,17 +82,20 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       const userDocRef = doc(db, 'companies', finalCompanyId, 'users', userId);
       const companyRootDocRef = doc(db, 'companies', finalCompanyId);
       const companyBusinessDocRef = doc(db, 'companies', finalCompanyId, 'business_info', 'profile');
+      const companySettingsDocRef = doc(db, 'companies', finalCompanyId, 'settings', 'general');
 
       // 3. Fetch all documents concurrently and log individual failures
-      const [userSnap, rootSnap, companySnap] = await Promise.all([
+      const [userSnap, rootSnap, companySnap, settingsSnap] = await Promise.all([
         getDoc(userDocRef).catch(e => { console.error('❌ Error reading user doc:', e); return null; }),
         getDoc(companyRootDocRef).catch(e => { console.error('❌ Error reading root doc:', e); return null; }),
-        getDoc(companyBusinessDocRef).catch(e => { console.error('❌ Error reading business_info doc:', e); return null; })
+        getDoc(companyBusinessDocRef).catch(e => { console.error('❌ Error reading business_info doc:', e); return null; }),
+        getDoc(companySettingsDocRef).catch(e => { console.error('❌ Error reading settings/general doc:', e); return null; })
       ]);
 
       const userData = userSnap?.exists() ? userSnap.data() : {};
       const rootCompanyData = rootSnap?.exists() ? rootSnap.data() : {};
       const companyData = companySnap?.exists() ? companySnap.data() : {};
+      const settingsData = settingsSnap?.exists() ? settingsSnap.data() : {};
 
       const companyAddress = companyData.address || {};
 
@@ -100,8 +107,8 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         aadhaarNumber: userData.aadhaarNumber || companyData.aadhaarNumber || '',
         panNumber: userData.panNumber || companyData.panNumber || '',
         profilePicture: userData.profilePictureUrl || auth.currentUser?.photoURL || '',
-        aadhaarDocUrl: userData.aadhaarDocUrl || '',
-        panDocUrl: userData.panDocUrl || '',
+        aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
+        panDocUrls: normalizeDocFiles(userData.panDocUrls),
         instagram: userData.instagram || companyData.instagram || '',
         facebook: userData.facebook || companyData.facebook || '',
         twitter: userData.twitter || companyData.twitter || '',
@@ -111,7 +118,11 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         eventCategory: companyData.eventCategory || '',
         website: companyData.website || '',
         gstinNumber: companyData.gstinNumber || '',
+        // business_info's explicit gstType (if EditProfile ever saved one) wins;
+        // otherwise derive it from settings/general — the doc signup actually writes to.
+        gstType: companyData.gstType || reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
         streetAddress: companyAddress.street || '',
+        landmark: companyAddress.landmark || '',
         city: companyAddress.city || '',
         state: companyAddress.state || '',
         postalCode: companyAddress.postalCode || '',
@@ -151,8 +162,10 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       eventCategory,
       website,
       gstinNumber,
+      gstType,
       panNumber,
       streetAddress,
+      landmark,
       city,
       state,
       postalCode,
@@ -163,6 +176,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
     const userDocRef = doc(db, 'companies', effectiveCompanyId, 'users', effectiveUserId);
     const companyBusinessDocRef = doc(db, 'companies', effectiveCompanyId, 'business_info', 'profile');
     const companyRootDocRef = doc(db, 'companies', effectiveCompanyId);
+    const companySettingsDocRef = doc(db, 'companies', effectiveCompanyId, 'settings', 'general');
 
     const promises: Promise<any>[] = [];
 
@@ -178,8 +192,8 @@ export const useProfileData = (userId?: string, companyId?: string) => {
     }
     if (userFields.aadhaarNumber !== undefined) userUpdateData.aadhaarNumber = userFields.aadhaarNumber;
     if (userFields.profilePicture !== undefined) userUpdateData.profilePictureUrl = userFields.profilePicture;
-    if (userFields.aadhaarDocUrl !== undefined) userUpdateData.aadhaarDocUrl = userFields.aadhaarDocUrl;
-    if (userFields.panDocUrl !== undefined) userUpdateData.panDocUrl = userFields.panDocUrl;
+    if (userFields.aadhaarDocUrls !== undefined) userUpdateData.aadhaarDocUrls = userFields.aadhaarDocUrls;
+    if (userFields.panDocUrls !== undefined) userUpdateData.panDocUrls = userFields.panDocUrls;
     if (userFields.instagram !== undefined) userUpdateData.instagram = userFields.instagram;
     if (userFields.facebook !== undefined) userUpdateData.facebook = userFields.facebook;
     if (userFields.twitter !== undefined) userUpdateData.twitter = userFields.twitter;
@@ -194,6 +208,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
       ...(gstinNumber !== undefined && { gstinNumber }),
+      ...(gstType !== undefined && { gstType }),
       ...(panNumber !== undefined && { panNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),
       ...(userFields.phone !== undefined && { ownerPhoneNumber: userFields.phone }),
@@ -202,6 +217,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
 
     const addressUpdate: Record<string, any> = {};
     if (streetAddress !== undefined) addressUpdate.street = streetAddress;
+    if (landmark !== undefined) addressUpdate.landmark = landmark;
     if (city !== undefined) addressUpdate.city = city;
     if (state !== undefined) addressUpdate.state = state;
     if (postalCode !== undefined) addressUpdate.postalCode = postalCode;
@@ -218,6 +234,17 @@ export const useProfileData = (userId?: string, companyId?: string) => {
 
     if (Object.keys(rootCompanyUpdate).length > 0) {
       promises.push(setDoc(companyRootDocRef, rootCompanyUpdate, { merge: true }));
+    }
+
+    if (gstType !== undefined) {
+      const { gstScheme, taxType } = mapGstRegistrationType(gstType);
+      promises.push(
+        setDoc(
+          companySettingsDocRef,
+          { gstScheme, taxType, enableTax: gstScheme !== 'none' },
+          { merge: true }
+        )
+      );
     }
 
     await Promise.all(promises);

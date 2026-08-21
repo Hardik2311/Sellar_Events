@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
 
 interface UserProfile {
   fullName: string;
@@ -12,8 +13,9 @@ interface UserProfile {
   aadhaarNumber?: string;
   panNumber?: string;
   gstinNumber?: string;
-  aadhaarDocUrl?: string;
-  panDocUrl?: string;
+  gstType?: string;
+    aadhaarDocUrls?: DocFile[];
+  panDocUrls?: DocFile[];
   instagram?: string;
   facebook?: string;
   twitter?: string;
@@ -96,8 +98,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
             panNumber: userData.panNumber || mergedCompany.panNumber,
             gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
-            aadhaarDocUrl: userData.aadhaarDocUrl,
-            panDocUrl: userData.panDocUrl,
+            gstType: userData.gstType || mergedCompany.gstType,
+                        aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
+            panDocUrls: normalizeDocFiles(userData.panDocUrls),
             instagram: userData.instagram || mergedCompany.instagram,
             facebook: userData.facebook || mergedCompany.facebook,
             twitter: userData.twitter || mergedCompany.twitter,

@@ -1,10 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
 import type { EventFormState } from '../types/event.types';
@@ -87,8 +84,7 @@ const OrganizerEventCard: React.FC<{
         {event.coverImage && (
           <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
-        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
-        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+                <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
           {label}
         </span>
         {event.isOnline && (
@@ -96,31 +92,11 @@ const OrganizerEventCard: React.FC<{
             <Wifi size={12} /> Online
           </span>
         )}
-        <button
+                <button
           type="button"
           onClick={async (e) => {
             e.stopPropagation();
             const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
-            if (navigator.share) {
-              try {
-                await navigator.share({ title: event.title, url: shareUrl });
-              } catch {
-                // user cancelled share sheet, no-op
-              }
-            } else {
-              await navigator.clipboard.writeText(shareUrl);
-            }
-          }}
-          title="Share event"
-          className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
-        >
-          <Share2 size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={async (e) => {
-            e.stopPropagation();
-            const shareUrl = `${window.location.origin}/events/e/${event.id}`;
             if (navigator.share) {
               try {
                 await navigator.share({ title: event.title, url: shareUrl });
@@ -160,14 +136,12 @@ const OrganizerEventCard: React.FC<{
         >
           <Trash2 size={14} />
         </button>
-        {soldOut && (
-          <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
+                {soldOut && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
           </span>
         )}
-        {!soldOut && sellingFast && (
-          <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
+                {!soldOut && sellingFast && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
             Selling fast
           </span>
@@ -256,7 +230,6 @@ const OrganizerEventDiscover: React.FC = () => {
   const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
-  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -267,7 +240,7 @@ const OrganizerEventDiscover: React.FC = () => {
   ];
   const activeFormatLabel = formatOptions.find((f) => f.value === format)?.label ?? 'All formats';
 
-  const filtered = useMemo(() => {
+    const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return events
       .filter((e) => {
@@ -278,13 +251,7 @@ const OrganizerEventDiscover: React.FC = () => {
           !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
         const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
         return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
-        const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
-        return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
       })
-      .sort((a, b) =>
-        showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
-      ); // past view mein recent-most-past pehle dikhega
-  }, [events, activeCategory, format, search, showPastEvents]);
       .sort((a, b) =>
         showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
       ); // past view mein recent-most-past pehle dikhega

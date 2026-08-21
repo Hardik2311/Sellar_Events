@@ -7,6 +7,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, functions, db } from '../lib/firebase'
+import { mapGstRegistrationType } from '../lib/gstMapping';
 
 import {
   FiUser,
@@ -33,12 +34,14 @@ import {
 } from '../components/ui/AuthUIComponents';
 
 const eventCategoryOptions = [
-  { value: 'Wedding', label: 'Wedding' },
-  { value: 'Corporate', label: 'Corporate' },
-  { value: 'Birthday', label: 'Birthday' },
   { value: 'Concert', label: 'Concert / Show' },
   { value: 'Conference', label: 'Conference' },
   { value: 'Exhibition', label: 'Exhibition' },
+  { value: 'Fitness', label: 'Fitness / Run / Sports' },
+  { value: 'Workshop', label: 'Workshop / Masterclass' },
+  { value: 'Meetup', label: 'Meetup / Networking' },
+  { value: 'Festival', label: 'Festival / Fair' },
+  { value: 'Webinar', label: 'Webinar / Online Event' },
   { value: 'Other', label: 'Other' },
 ];
 
@@ -56,23 +59,6 @@ const gstRegistrationOptions = [
   { value: 'composition', label: 'Composite' },
   { value: 'none', label: 'Not Registered / NA' },
 ];
-
-// Maps the single signup dropdown to the two fields your Settings page /
-// checkout tax math actually use (CompanySettings.gstScheme + taxType).
-const mapGstRegistrationType = (
-  type: string
-): { gstScheme: 'regular' | 'composition' | 'none'; taxType: 'inclusive' | 'exclusive' } => {
-  switch (type) {
-    case 'regular_inclusive':
-      return { gstScheme: 'regular', taxType: 'inclusive' };
-    case 'regular_exclusive':
-      return { gstScheme: 'regular', taxType: 'exclusive' };
-    case 'composition':
-      return { gstScheme: 'composition', taxType: 'inclusive' };
-    default:
-      return { gstScheme: 'none', taxType: 'inclusive' };
-  }
-};
 
 interface SignupFormData {
   // Step 1 — account
@@ -147,6 +133,10 @@ const Signup: React.FC = () => {
       setError('Please fill out all required fields.');
       return false;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setError('Please enter a valid email address.');
+      return false;
+    }
     if (formData.phone.length !== 10) {
       setError('Phone number must be exactly 10 digits.');
       return false;
@@ -168,18 +158,12 @@ const Signup: React.FC = () => {
         ? formData.customEventCategory
         : formData.eventCategory;
 
-    if (
-      !formData.organizationName.trim() ||
-      !finalCategory.trim() ||
-      !formData.streetAddress.trim() ||
-      !formData.city.trim() ||
-      !formData.state.trim() ||
-      !formData.postalCode.trim()
-    ) {
+    if (!formData.organizationName.trim() || !finalCategory.trim()) {
       setError('Please fill out all required fields.');
       return false;
     }
-    if (formData.postalCode.length !== 6) {
+    // Pincode format sirf tab check hoga jab user ne kuch bhara ho
+    if (formData.postalCode.trim() && formData.postalCode.length !== 6) {
       setError('Pincode must be exactly 6 digits.');
       return false;
     }
@@ -326,8 +310,8 @@ const Signup: React.FC = () => {
       />
 
       {/* Right content */}
-      <div className="flex flex-col h-screen overflow-hidden bg-white w-full lg:w-1/2">
-        <div className="shrink-0 bg-white pt-4 pb-2 px-4 shadow-sm z-40 flex justify-center">
+      <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-slate-900 w-full lg:w-1/2">
+        <div className="shrink-0 bg-white dark:bg-slate-900 pt-4 pb-2 px-4 shadow-sm z-40 flex justify-center">
           <div className="w-full max-w-xs">
             <Stepper totalSteps={2} currentStep={step} onStepClick={handleStepClick} />
           </div>
@@ -335,19 +319,19 @@ const Signup: React.FC = () => {
 
         <div className="grow px-4 pb-32 overflow-y-auto">
           <div className="mt-3 mb-3">
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               {step === 1 ? 'Create your account' : 'Organizer Details'}
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {step === 1
                 ? 'Start with the basics — we’ll get your event profile set up next.'
                 : 'Tell us about the events you plan so guests know who they’re booking with.'}
             </p>
           </div>
 
-          <div className="bg-white py-4 w-full mx-auto">
+          <div className="bg-white dark:bg-slate-900 py-4 w-full mx-auto">
             {error && (
-              <div className="sticky top-0 z-50 bg-red-50 border border-red-200 text-red-600 text-sm text-center p-3 rounded-md font-medium shadow-sm mb-4">
+              <div className="sticky top-0 z-50 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-sm text-center p-3 rounded-md font-medium shadow-sm mb-4">
                 {error}
               </div>
             )}
@@ -434,7 +418,7 @@ const Signup: React.FC = () => {
               <form onSubmit={handleFinishSetup} className="flex flex-col space-y-4">
                 <FloatingLabelInput
                   id="organizationName"
-                  label="Organization / Brand Name"
+                  label="Organization / Brand Name *"
                   icon={<Building2Icon size={20} />}
                   value={formData.organizationName}
                   onChange={(e) => handleChange('organizationName', e.target.value)}
@@ -447,7 +431,7 @@ const Signup: React.FC = () => {
                 >
                   <FloatingLabelSelect
                     id="eventCategory"
-                    label="Primary Event Category"
+                    label="Primary Event Category *"
                     icon={<FiTag size={20} />}
                     value={formData.eventCategory}
                     onChange={(e) => handleChange('eventCategory', e.target.value)}
@@ -493,16 +477,20 @@ const Signup: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FloatingLabelSelect
                     id="gstRegistrationType"
-                    label="GST Registration Type"
+                    label="GST Registration Type *"
                     icon={<FiFileText size={20} />}
                     value={formData.gstRegistrationType}
-                    onChange={(e) => handleChange('gstRegistrationType', e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleChange('gstRegistrationType', value);
+                      if (value === 'none') handleChange('gstinNumber', '');
+                    }}
                     options={gstRegistrationOptions}
                     required
                   />
                   <FloatingLabelInput
                     id="gstinNumber"
-                    label={formData.gstRegistrationType === 'none' ? 'GSTIN (optional)' : 'GSTIN'}
+                    label={formData.gstRegistrationType === 'none' ? 'GSTIN (not applicable)' : 'GSTIN *'}
                     icon={<FiFileText size={20} />}
                     value={formData.gstinNumber}
                     onChange={(e) => {
@@ -512,30 +500,30 @@ const Signup: React.FC = () => {
                     maxLength={15}
                     placeholder=" "
                     required={formData.gstRegistrationType !== 'none'}
+                    disabled={formData.gstRegistrationType === 'none'}
+                    className={formData.gstRegistrationType === 'none' ? 'opacity-50 cursor-not-allowed' : ''}
                   />
                 </div>
 
                 <FloatingLabelInput
                   id="streetAddress"
-                  label="Street Address / Venue Area"
+                  label="Street Address / Venue Area (optional)"
                   icon={<FiMapPin size={20} />}
                   value={formData.streetAddress}
                   onChange={(e) => handleChange('streetAddress', e.target.value)}
-                  required
                 />
 
                 <div className="grid grid-cols-2 gap-4">
                   <FloatingLabelInput
                     id="city"
-                    label="City"
+                    label="City (optional)"
                     icon={<FiMapPin size={20} />}
                     value={formData.city}
                     onChange={(e) => handleChange('city', e.target.value)}
-                    required
                   />
                   <FloatingLabelInput
                     id="postalCode"
-                    label="Pincode"
+                    label="Pincode (optional)"
                     icon={<PinIcon size={20} />}
                     inputMode="numeric"
                     value={formData.postalCode}
@@ -543,19 +531,17 @@ const Signup: React.FC = () => {
                       const digits = e.target.value.replace(/\D/g, '');
                       if (digits.length <= 6) handleChange('postalCode', digits);
                     }}
-                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FloatingLabelSelect
                     id="state"
-                    label="State"
+                    label="State (optional)"
                     icon={<FiMap size={20} />}
                     value={formData.state}
                     onChange={(e) => handleChange('state', e.target.value)}
                     options={indianStates}
-                    required
                   />
                 </div>
               </form>
