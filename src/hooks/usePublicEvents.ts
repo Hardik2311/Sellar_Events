@@ -18,6 +18,10 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   organizerName,
   coverImage: d.coverImageUrls?.[0] || d.coverImageUrl || null,
   images: d.coverImageUrls || (d.coverImageUrl ? [d.coverImageUrl] : []),
+  // NEW
+  coverImageDesktop: d.coverImageDesktop ?? null,
+  coverImageMobile: d.coverImageMobile ?? null,
+  pastEventsGallery: d.pastEventsGallery ?? [],
   status: d.status,
   featured: d.featured || false,
   tiers: (d.tiers || []).map((t: any) => ({
@@ -26,6 +30,9 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
     price: t.price,
     quantity: t.quantity,
     sold: t.sold || 0,
+    dummyRemaining: typeof t.dummyRemaining === 'number' ? t.dummyRemaining : null,
+    tierEndDate: t.tierEndDate ?? null,
+    tierEndTime: t.tierEndTime ?? null,
   })),
   // NEW — keep in sync with useOrganizerEvents.ts
   registrationMode: d.registrationMode || 'tickets',
