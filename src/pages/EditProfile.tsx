@@ -449,31 +449,34 @@ const EditProfile: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <SectionCard title="Personal Information">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <LabeledField label="Full Name">
-                                    <input
-                                        type="text"
-                                        name="name"
-                                        value={formData.name}
-                                        onChange={handleInputChange}
-                                        className={inputClass}
-                                        placeholder="Full Name"
-                                    />
-                                </LabeledField>
-                                <LabeledField label="Phone Number">
-                                    <input
-                                        type="text"
-                                        name="phone"
-                                        value={formData.phone}
-                                        onChange={handlePhoneChange}
-                                        maxLength={10}
-                                        inputMode="numeric"
-                                        className={inputClass}
-                                        placeholder="10-digit Phone Number"
-                                    />
-                                    {phoneError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{phoneError}</p>}
-                                </LabeledField>
-
                                 <div className="sm:col-span-2">
+                                    <LabeledField label="Full Name">
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            value={formData.name}
+                                            onChange={handleInputChange}
+                                            className={inputClass}
+                                            placeholder="Full Name"
+                                        />
+                                    </LabeledField>
+                                </div>
+
+                                <div className="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
+                                    <LabeledField label="Phone Number">
+                                        <input
+                                            type="text"
+                                            name="phone"
+                                            value={formData.phone}
+                                            onChange={handlePhoneChange}
+                                            maxLength={10}
+                                            inputMode="numeric"
+                                            className={inputClass}
+                                            placeholder="10-digit Phone Number"
+                                        />
+                                        {phoneError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{phoneError}</p>}
+                                    </LabeledField>
+
                                     <LabeledField label="Email Address">
                                         <input
                                             type="email"
@@ -484,31 +487,33 @@ const EditProfile: React.FC = () => {
                                     </LabeledField>
                                 </div>
 
-                                <LabeledField label="Aadhar (12-Digit)">
-                                    <input
-                                        type="text"
-                                        name="aadhaarNumber"
-                                        value={formData.aadhaarNumber}
-                                        onChange={handleAadhaarChange}
-                                        maxLength={12}
-                                        inputMode="numeric"
-                                        className={inputClass}
-                                        placeholder="12-digit Aadhaar Number"
-                                    />
-                                    {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
-                                </LabeledField>
-                                <LabeledField label="PAN Number">
-                                    <input
-                                        type="text"
-                                        name="panNumber"
-                                        value={formData.panNumber}
-                                        onChange={handlePanChange}
-                                        maxLength={10}
-                                        className={`${inputClass} uppercase`}
-                                        placeholder="10-character PAN"
-                                    />
-                                    {panError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{panError}</p>}
-                                </LabeledField>
+                                <div className="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
+                                    <LabeledField label="Aadhar NUMBER">
+                                        <input
+                                            type="text"
+                                            name="aadhaarNumber"
+                                            value={formData.aadhaarNumber}
+                                            onChange={handleAadhaarChange}
+                                            maxLength={12}
+                                            inputMode="numeric"
+                                            className={inputClass}
+                                            placeholder="12-digit Aadhaar Number"
+                                        />
+                                        {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
+                                    </LabeledField>
+                                    <LabeledField label="PAN Number">
+                                        <input
+                                            type="text"
+                                            name="panNumber"
+                                            value={formData.panNumber}
+                                            onChange={handlePanChange}
+                                            maxLength={10}
+                                            className={`${inputClass} uppercase`}
+                                            placeholder="10-character PAN"
+                                        />
+                                        {panError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{panError}</p>}
+                                    </LabeledField>
+                                </div>
                             </div>
                         </SectionCard>
 
@@ -591,7 +596,7 @@ const EditProfile: React.FC = () => {
                                         <option value="none">Not Registered / NA</option>
                                     </select>
                                 </LabeledField>
-                                <LabeledField label={formData.gstType === 'none' ? 'GSTIN (not applicable)' : 'GSTIN'}>
+                                <LabeledField label={formData.gstType === 'none' ? 'GSTIN' : 'GSTIN'}>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -658,35 +663,37 @@ const EditProfile: React.FC = () => {
                                     />
                                 </LabeledField>
 
-                                <LabeledField label="State">
-                                    <select
-                                        name="state"
-                                        value={formData.state}
-                                        onChange={handleInputChange}
-                                        className={selectClass}
-                                        style={selectArrowStyle}
-                                    >
-                                        <option value="">Select State</option>
-                                        {indianStates.map((st) => (
-                                            <option key={st} value={st}>
-                                                {st}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </LabeledField>
-                                <LabeledField label="Pincode">
-                                    <input
-                                        type="text"
-                                        name="postalCode"
-                                        value={formData.postalCode}
-                                        onChange={handlePostalCodeChange}
-                                        maxLength={6}
-                                        inputMode="numeric"
-                                        className={inputClass}
-                                        placeholder="6-digit Pincode"
-                                    />
-                                    {postalCodeError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{postalCodeError}</p>}
-                                </LabeledField>
+                                <div className="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
+                                    <LabeledField label="State">
+                                        <select
+                                            name="state"
+                                            value={formData.state}
+                                            onChange={handleInputChange}
+                                            className={selectClass}
+                                            style={selectArrowStyle}
+                                        >
+                                            <option value="">Select State</option>
+                                            {indianStates.map((st) => (
+                                                <option key={st} value={st}>
+                                                    {st}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </LabeledField>
+                                    <LabeledField label="Pincode">
+                                        <input
+                                            type="text"
+                                            name="postalCode"
+                                            value={formData.postalCode}
+                                            onChange={handlePostalCodeChange}
+                                            maxLength={6}
+                                            inputMode="numeric"
+                                            className={inputClass}
+                                            placeholder="6-digit Pincode"
+                                        />
+                                        {postalCodeError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{postalCodeError}</p>}
+                                    </LabeledField>
+                                </div>
                             </div>
                         </SectionCard>
 
@@ -775,7 +782,7 @@ const EditProfile: React.FC = () => {
                     )}
 
                     {/* ── Submit button ── */}
-                    <div className="sticky bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] shadow-2xl md:shadow-none md:mt-1">
+                    <div className="sticky bottom-0 z-30 bg-transparent shadow-none md:mt-1">
                         <div className="max-w-6xl mx-auto px-4 py-3.5 md:px-0">
                             <button
                                 type="submit"

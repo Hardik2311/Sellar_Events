@@ -8,9 +8,8 @@ import {
   FloatingLabelSelect,
   FloatingLabelTextArea,
 } from '../components/ui/AuthUIComponents'
-import ImageUploadBox from '../components/ui/ImageUploadBox';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
+import CoverPhotoUpload from '../components/ui/CoverPhotoUpload';
+import PastEventsGallery from '../components/ui/PastEventsGallery';
 import TicketTierEditor from '../components/TicketTierEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
@@ -18,12 +17,16 @@ import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firesto
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import TimeSelect from '../components/ui/Timeselect';
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
   name: 'General',
   price: 0,
   quantity: 100,
+  dummyRemaining: undefined,
 });
 
 const INITIAL_STATE: EventFormState = {
@@ -37,6 +40,9 @@ const INITIAL_STATE: EventFormState = {
   venue: '',
   isOnline: false,
   images: [],
+  coverImageDesktop: null,
+  coverImageMobile: null,
+  pastEventsGallery: [],
   tiers: [createEmptyTier()],
   promoCode: '',
   promoDiscountPercent: 0,
@@ -45,8 +51,6 @@ const INITIAL_STATE: EventFormState = {
   rsvpButtonLabel: 'RSVP Now',
 };
 
-const MAX_IMAGES = 6;
-
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { settings: companySettings } = useCompanySettings();
@@ -54,7 +58,14 @@ const CreateEvent: React.FC = () => {
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
+  const toDate = (s: string) => (s ? new Date(`${s}T00:00:00`) : null);
+  const toDateStr = (d: Date | null) => {
+    if (!d) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
   useEffect(() => {
@@ -103,11 +114,11 @@ const CreateEvent: React.FC = () => {
         : null;
 
       let coverImageUrls: string[] = [];
+      const tempId = `evt-${Date.now()}`;
 
       // Images abhi base64 previews hain — Storage pe sab upload karke URLs lo,
       // pehli image hi list/cover thumbnail ke liye use hogi.
       if (form.images.length > 0) {
-        const tempId = `evt-${Date.now()}`;
         coverImageUrls = await Promise.all(
           form.images.map(async (preview, i) => {
             const imageRef = ref(storage, `companies/${profile.companyId}/events/${tempId}/photo-${i}.jpg`);
@@ -117,10 +128,48 @@ const CreateEvent: React.FC = () => {
         );
       }
 
+      // NEW — dedicated cover slots, uploaded the same way
+      const coverImageDesktopUrl = form.coverImageDesktop
+        ? await (async () => {
+          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/cover-desktop.jpg`);
+          await uploadString(r, form.coverImageDesktop as string, 'data_url');
+          return getDownloadURL(r);
+        })()
+        : null;
+
+      const coverImageMobileUrl = form.coverImageMobile
+        ? await (async () => {
+          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/cover-mobile.jpg`);
+          await uploadString(r, form.coverImageMobile as string, 'data_url');
+          return getDownloadURL(r);
+        })()
+        : null;
+
+      // NEW — past events gallery (mixed media, uploaded as-is; only plain
+      // images were already compressed client-side, GIFs/videos are already <1MB)
+      const pastEventsGalleryUploaded = await Promise.all(
+        form.pastEventsGallery.map(async (item, i) => {
+          const ext = item.type === 'video' ? 'mp4' : item.type === 'gif' ? 'gif' : 'jpg';
+          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/past-${i}.${ext}`);
+          await uploadString(r, item.url, 'data_url');
+          return { url: await getDownloadURL(r), type: item.type };
+        })
+      );
+
       const eventsRef = collection(db, 'companies', profile.companyId, 'events');
       const isRsvp = form.registrationMode === 'rsvp';
 
-      await addDoc(eventsRef, {
+      // Firestore rejects `undefined` inside array elements — dummyRemaining
+      // and the tier end date/time are all optional and undefined by default
+      // until an organizer fills them in.
+      const sanitizedTiers = form.tiers.map((tier) => ({
+        ...tier,
+        dummyRemaining: tier.dummyRemaining ?? null,
+        tierEndDate: tier.tierEndDate ?? null,
+        tierEndTime: tier.tierEndTime ?? null,
+      }));
+
+      const docRef = await addDoc(eventsRef, {
         title: form.title,
         category: form.category === 'Other' ? form.customCategory : form.category,
         description: form.description,
@@ -132,9 +181,12 @@ const CreateEvent: React.FC = () => {
         isOnline: form.isOnline,
         coverImageUrl: coverImageUrls[0] ?? null,
         coverImageUrls,
+        coverImageDesktop: coverImageDesktopUrl,
+        coverImageMobile: coverImageMobileUrl,
+        pastEventsGallery: pastEventsGalleryUploaded,
         registrationMode: form.registrationMode,
         // Keep tiers empty for RSVP events — no pricing/inventory to track
-        tiers: isRsvp ? [] : form.tiers,
+        tiers: isRsvp ? [] : sanitizedTiers,
         rsvpLink: isRsvp ? form.rsvpLink.trim() : null,
         rsvpButtonLabel: isRsvp ? (form.rsvpButtonLabel.trim() || 'RSVP Now') : null,
         promoCode: form.promoCode || null,
@@ -144,7 +196,7 @@ const CreateEvent: React.FC = () => {
         createdAt: serverTimestamp(),
       });
 
-      navigate('/events');
+      navigate(`/events/e/${docRef.id}`);
     } catch (err) {
       console.error('Failed to save event:', err);
       setSaveError('Failed to save event. Please try again.');
@@ -182,13 +234,17 @@ const CreateEvent: React.FC = () => {
         <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* ── Left column ────────────────────────────────────── */}
           <div className="lg:col-span-2 flex flex-col gap-4">
-            {/* Photo gallery uploader */}
+            {/* Cover photo — desktop + mobile */}
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <ImageUploadBox
-                  images={form.images}
-                  onChange={(images) => update('images', images)}
-                  maxImages={MAX_IMAGES}
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Cover Photo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CoverPhotoUpload
+                  desktopSrc={form.coverImageDesktop}
+                  mobileSrc={form.coverImageMobile}
+                  onChangeDesktop={(src) => update('coverImageDesktop', src)}
+                  onChangeMobile={(src) => update('coverImageMobile', src)}
                 />
               </CardContent>
             </Card>
@@ -207,53 +263,56 @@ const CreateEvent: React.FC = () => {
                   required
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                  <FloatingLabelSelect
-                    id="category"
-                    label="Category"
-                    value={form.category}
-                    options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                    onChange={(e) => {
-                      const value = e.target.value as EventFormState['category'];
-                      update('category', value);
-                      if (value !== 'Other') update('customCategory', '');
-                    }}
-                  />
+                <div className={`grid grid-cols-1 ${isOtherCategory ? 'sm:grid-cols-2' : ''} gap-4 items-start`}>
+                  <div>
+                    <FloatingLabelSelect
+                      id="category"
+                      label="Category"
+                      value={form.category}
+                      options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                      onChange={(e) => {
+                        const value = e.target.value as EventFormState['category'];
+                        update('category', value);
+                        if (value !== 'Other') update('customCategory', '');
+                      }}
+                    />
+                    {/* invisible spacer keeps height identical to the helper text under Custom category */}
+                    {isOtherCategory && <p className="text-xs mt-1 invisible select-none">spacer</p>}
+                  </div>
 
-                  <FormField label="Format" htmlFor="format">
-                    <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => update('isOnline', false)}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
-                          }`}
-                      >
-                        In-person
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => update('isOnline', true)}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
-                          }`}
-                      >
-                        Online
-                      </button>
+                  {isOtherCategory && (
+                    <div>
+                      <FloatingLabelInput
+                        id="custom-category"
+                        label="Custom category *"
+                        value={form.customCategory}
+                        onChange={(e) => update('customCategory', e.target.value)}
+                        required
+                      />
                     </div>
-                  </FormField>
+                  )}
                 </div>
 
-                {isOtherCategory && (
-                  <div>
-                    <FloatingLabelInput
-                      id="custom-category"
-                      label="Custom category *"
-                      value={form.customCategory}
-                      onChange={(e) => update('customCategory', e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Tell us what kind of event this is</p>
+                <FormField label="Format" htmlFor="format">
+                  <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => update('isOnline', false)}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                        }`}
+                    >
+                      In-person
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update('isOnline', true)}
+                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                        }`}
+                    >
+                      Online
+                    </button>
                   </div>
-                )}
+                </FormField>
 
                 <FloatingLabelTextArea
                   id="description"
@@ -303,7 +362,15 @@ const CreateEvent: React.FC = () => {
                 )}
 
                 {form.registrationMode === 'tickets' ? (
-                  <TicketTierEditor tiers={form.tiers} onChange={(tiers) => update('tiers', tiers)} />
+                  <TicketTierEditor
+                    tiers={form.tiers}
+                    onChange={(tiers) => update('tiers', tiers)}
+                    showDummyQuantity={
+                      companySettings.ticketDisplay.showTicketsRemaining &&
+                      companySettings.ticketDisplay.useDummyThreshold
+                    }
+                    showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
+                  />
                 ) : (
                   <div className="space-y-3">
                     <FloatingLabelInput
@@ -329,6 +396,20 @@ const CreateEvent: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Past events gallery */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Past Events Gallery</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PastEventsGallery
+                  media={form.pastEventsGallery}
+                  onChange={(media) => update('pastEventsGallery', media)}
+                  maxItems={6}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {/* ── Right column: Logistics + Pro-tips ────────────── */}
@@ -336,45 +417,71 @@ const CreateEvent: React.FC = () => {
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
-                  <Calendar size={16} className="text-[#007A78] dark:text-[#2DD4BF]" /> Logistics
+                  <Calendar size={16} className="text-[#007A78] dark:text-[#2DD4BF]" /> Event Logistics
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <FloatingLabelInput
-                    id="date"
-                    label="Start date *"
-                    type="date"
-                    icon={<Calendar size={16} />}
-                    value={form.date}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      update('date', value);
-                      if (form.endDate && form.endDate < value) update('endDate', value);
-                    }}
-                    required
-                  />
-                  <FloatingLabelInput
-                    id="end-date"
-                    label={req.endDate ? 'End date *' : 'End date'}
-                    type="date"
-                    icon={<Calendar size={16} />}
-                    min={form.date || undefined}
-                    value={form.endDate}
-                    onChange={(e) => update('endDate', e.target.value)}
-                    required={req.endDate}
-                  />
+                  <FormField label="Start date *" htmlFor="date">
+                    <div className="relative">
+                      <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+                      <DatePicker
+                        id="date"
+                        selected={toDate(form.date)}
+                        onChange={(d: Date | null) => {
+                          const value = toDateStr(d);
+                          update('date', value);
+                          if (form.endDate && form.endDate < value) update('endDate', value);
+                        }}
+                        dateFormat="dd/MM/yyyy"
+                        placeholderText="Select date"
+                        wrapperClassName="w-full block"
+                        popperClassName="react-datepicker-popper-custom"
+                        popperPlacement="bottom-start"
+                        showPopperArrow={false}
+                        className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                        required
+                      />
+                    </div>
+                  </FormField>
+
+                  <FormField label={req.endDate ? 'End date *' : 'End date'} htmlFor="end-date">
+                    <div className="relative">
+                      <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+                      <DatePicker
+                        id="end-date"
+                        selected={toDate(form.endDate)}
+                        onChange={(d: Date | null) => update('endDate', toDateStr(d))}
+                        minDate={toDate(form.date) || undefined}
+                        dateFormat="dd/MM/yyyy"
+                        placeholderText="Select date"
+                        wrapperClassName="w-full block"
+                        popperClassName="react-datepicker-popper-custom"
+                        popperPlacement="bottom-start"
+                        showPopperArrow={false}
+                        className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                        required={req.endDate}
+                      />
+                    </div>
+                  </FormField>
                 </div>
 
-                <FloatingLabelInput
-                  id="time"
-                  label="Time *"
-                  type="time"
-                  icon={<Clock size={16} />}
-                  value={form.time}
-                  onChange={(e) => update('time', e.target.value)}
-                  required
-                />
+                <FormField label="Time *" htmlFor="time">
+                  <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+                    <Clock size={16} className="text-gray-400 shrink-0" />
+                    <TimeSelect
+                      value={form.time ? form.time.split(':')[0] : '00'}
+                      options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                      onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
+                    />
+                    <span className="text-slate-400">:</span>
+                    <TimeSelect
+                      value={form.time ? form.time.split(':')[1] : '00'}
+                      options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                      onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
+                    />
+                  </div>
+                </FormField>
 
                 {!form.isOnline && (
                   <div>
@@ -385,7 +492,27 @@ const CreateEvent: React.FC = () => {
                       onChange={(e) => update('venue', e.target.value)}
                       required
                     />
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Full address helps attendees find it on the day</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-gray-500 dark:text-slate-500">Full address helps attendees find it on the day</p>
+                      {form.venue.trim().length > 2 && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.venue)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-[#007A78] dark:text-[#2DD4BF] hover:underline shrink-0 ml-2"
+                        >
+                          View on map ↗
+                        </a>
+                      )}
+                    </div>
+                    {form.venue.trim().length > 2 && (
+                      <iframe
+                        title="venue-map-preview"
+                        className="w-full h-32 mt-2 rounded-sm border border-gray-200 dark:border-slate-700"
+                        loading="lazy"
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
+                      />
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -425,7 +552,7 @@ const CreateEvent: React.FC = () => {
             disabled={!isPublishable || isSaving}
             className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
           >
-            {isSaving ? 'Saving…' : 'Preview & Publish Event'}
+            {isSaving ? 'Publishing…' : 'Publish Event'}
           </button>
         </div>
       </div>

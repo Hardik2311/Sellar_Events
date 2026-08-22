@@ -70,19 +70,41 @@ export const estimateDataUrlSizeKB = (dataUrl: string): number => {
   return Math.round((base64Length * 0.75) / 1024);
 };
 
+export const HARD_MAX_SIZE_KB = 1024; // absolute ceiling — nothing should ever cross 1MB
+
 export const compressImageToTargetSize = async (
   input: string | File,
   targetSizeKB = 500,
   options: CompressImageOptions = {}
 ): Promise<string> => {
   let quality = options.quality ?? DEFAULT_OPTIONS.quality;
-  let result = await compressImage(input, { ...options, quality });
+  let maxWidth = options.maxWidth ?? DEFAULT_OPTIONS.maxWidth;
+  let maxHeight = options.maxHeight ?? DEFAULT_OPTIONS.maxHeight;
 
+  let result = await compressImage(input, { ...options, quality, maxWidth, maxHeight });
+
+  // Pass 1: reduce quality only (cheap, preserves resolution)
   let attempts = 0;
   while (estimateDataUrlSizeKB(result) > targetSizeKB && attempts < 5 && quality > 0.2) {
     quality -= 0.15;
-    result = await compressImage(result, { ...options, quality });
+    result = await compressImage(result, { ...options, quality, maxWidth, maxHeight });
     attempts += 1;
+  }
+
+  // Pass 2: quality floor hit but still too big → shrink dimensions too
+  let shrinkAttempts = 0;
+  while (estimateDataUrlSizeKB(result) > targetSizeKB && shrinkAttempts < 4) {
+    maxWidth = Math.round(maxWidth * 0.8);
+    maxHeight = Math.round(maxHeight * 0.8);
+    quality = Math.max(quality, 0.5);
+    result = await compressImage(result, { ...options, quality, maxWidth, maxHeight });
+    shrinkAttempts += 1;
+  }
+
+  // Hard safety net: guarantee under 1MB no matter what, for storage
+  if (estimateDataUrlSizeKB(result) > HARD_MAX_SIZE_KB) {
+    console.warn(`Image still ${estimateDataUrlSizeKB(result)}KB after normal passes, forcing aggressive downscale`);
+    result = await compressImage(result, { ...options, quality: 0.4, maxWidth: 800, maxHeight: 800 });
   }
 
   return result;

@@ -48,11 +48,17 @@ export interface TicketTierDraft {
   name: string;
   price: number;
   quantity: number;
+  dummyRemaining?: number;
+  tierEndDate?: string; // YYYY-MM-DD — only used when the company setting is ON
+  tierEndTime?: string; // HH:mm — only used when the company setting is ON
 }
 
 export const REGISTRATION_MODES = ['tickets', 'rsvp'] as const;
 export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
-
+export interface GalleryMediaItem {
+  url: string;
+  type: 'image' | 'gif' | 'video';
+}
 export interface EventFormState {
   title: string;
   category: EventCategory;
@@ -63,7 +69,12 @@ export interface EventFormState {
   time: string; // HH:mm
   venue: string;
   isOnline: boolean;
-  images: string[]; 
+  images: string[];
+  // NEW — dedicated cover slots, separate from the gallery `images` above
+  coverImageDesktop: string | null;
+  coverImageMobile: string | null;
+  // NEW — past-events media strip (photos/gifs/compressed videos)
+  pastEventsGallery: GalleryMediaItem[];
   tiers: TicketTierDraft[];
   promoCode: string;
   promoDiscountPercent: number;
