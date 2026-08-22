@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil, CheckCircle } from 'lucide-react';
 import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent } from '../components/ui/card';
@@ -12,6 +12,7 @@ import {
   type PublicEvent,
 } from '../data/events';
 import EditEventModal from '../components/EditEventModal';
+import CoverImageDisplay from '../components/ui/CoverImageDisplay';
 import type { EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
@@ -44,6 +45,9 @@ const useEvent = (companyId?: string, id?: string) => {
           organizerName: '', // niche component profile se overwrite karega
           coverImage: d.coverImageUrls?.[0] || d.coverImageUrl || null,
           images: d.coverImageUrls || (d.coverImageUrl ? [d.coverImageUrl] : []),
+          coverImageDesktop: d.coverImageDesktop ?? null,
+          coverImageMobile: d.coverImageMobile ?? null,
+          pastEventsGallery: d.pastEventsGallery ?? [],
           status: d.status,
           featured: d.featured || false,
           tiers: (d.tiers || []).map((t: any) => ({
@@ -52,6 +56,9 @@ const useEvent = (companyId?: string, id?: string) => {
             price: t.price,
             quantity: t.quantity,
             sold: t.sold || 0,
+            dummyRemaining: typeof t.dummyRemaining === 'number' ? t.dummyRemaining : null,
+            tierEndDate: t.tierEndDate ?? null,
+            tierEndTime: t.tierEndTime ?? null,
           })),
           // NEW
           registrationMode: d.registrationMode || 'tickets',
@@ -77,9 +84,11 @@ const OrganizerEventDetail: React.FC = () => {
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [pastEventIndex, setPastEventIndex] = useState(0);
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
+    setPastEventIndex(0);
   }, [event?.id]);
 
   const goToPrevImage = () => {
@@ -126,42 +135,60 @@ const OrganizerEventDetail: React.FC = () => {
       console.log('Share cancelled:', error);
     }
   };
+const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-  const handleSaveEdit = async (updated: EventFormState) => {
-    if (!profile?.companyId || !id) return;
+useEffect(() => {
+  if (!showSaveConfirmation) return;
+  const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
+  return () => clearTimeout(t);
+}, [showSaveConfirmation]);
+  // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
+const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
+  if (!img) return null;
+  if (!img.startsWith('data:')) return img;
+  const imageRef = ref(storage, `companies/${profile!.companyId}/events/${id}/${filename}.jpg`);
+  await uploadString(imageRef, img, 'data_url');
+  return getDownloadURL(imageRef);
+};
 
-    // Each entry is either an existing https URL (kept as-is) or a fresh
-    // base64 data URL (newly picked file) that needs uploading.
-    const coverImageUrls: string[] = await Promise.all(
-      updated.images.map(async (img, i) => {
-        if (!img.startsWith('data:')) return img;
-        const imageRef = ref(storage, `companies/${profile.companyId}/events/${id}/photo-${i}.jpg`);
-        await uploadString(imageRef, img, 'data_url');
-        return getDownloadURL(imageRef);
-      })
-    );
+const handleSaveEdit = async (updated: EventFormState) => {
+  if (!profile?.companyId || !id) return;
 
-    const isRsvp = updated.registrationMode === 'rsvp';
+  const coverImageUrls: string[] = await Promise.all(
+    updated.images.map((img, i) => uploadIfNeeded(img, `photo-${i}`) as Promise<string>)
+  );
 
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-      title: updated.title,
-      category: updated.category === 'Other' ? updated.customCategory : updated.category,
-      description: updated.description,
-      date: updated.date,
-      endDate: updated.endDate,
-      time: updated.time,
-      venue: updated.isOnline ? null : updated.venue,
-      isOnline: updated.isOnline,
-      coverImageUrl: coverImageUrls[0] ?? null,
-      coverImageUrls,
-      registrationMode: updated.registrationMode,
-      tiers: isRsvp ? [] : updated.tiers,
-      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
-      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
-      updatedAt: serverTimestamp(),
-    });
-    setIsEditOpen(false);
-  };
+  // NEW — these were captured on the form but never uploaded/saved before
+  const [coverImageDesktopUrl, coverImageMobileUrl] = await Promise.all([
+    uploadIfNeeded(updated.coverImageDesktop, 'cover-desktop'),
+    uploadIfNeeded(updated.coverImageMobile, 'cover-mobile'),
+  ]);
+
+  const isRsvp = updated.registrationMode === 'rsvp';
+
+  await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+    title: updated.title,
+    category: updated.category === 'Other' ? updated.customCategory : updated.category,
+    description: updated.description,
+    date: updated.date,
+    endDate: updated.endDate,
+    time: updated.time,
+    venue: updated.isOnline ? null : updated.venue,
+    isOnline: updated.isOnline,
+    coverImageUrl: coverImageUrls[0] ?? null,
+    coverImageUrls,
+    coverImageDesktop: coverImageDesktopUrl,   // NEW — actually persisted now
+    coverImageMobile: coverImageMobileUrl,     // NEW — actually persisted now
+    registrationMode: updated.registrationMode,
+    tiers: isRsvp ? [] : updated.tiers,
+    rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+    rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+    updatedAt: serverTimestamp(),
+  });
+
+  setIsEditOpen(false);          // close edit modal
+  setShowSaveConfirmation(true); // show success confirmation
+};
 
   if (loading) {
     return (
@@ -193,7 +220,9 @@ const OrganizerEventDetail: React.FC = () => {
     <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
-        {event.images && event.images.length > 0 && (
+        {(event.coverImageDesktop || event.coverImageMobile) ? (
+          <CoverImageDisplay desktopSrc={event.coverImageDesktop} mobileSrc={event.coverImageMobile} alt={event.title} />
+        ) : event.images && event.images.length > 0 && (
           <>
             {event.images.map((src, i) => (
               <img
@@ -239,11 +268,11 @@ const OrganizerEventDetail: React.FC = () => {
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <button
-  onClick={() => navigate(-1)}
-  className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
->
-  <ArrowLeft size={18} />
-</button>
+            onClick={() => navigate(-1)}
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditOpen(true)}
@@ -252,11 +281,11 @@ const OrganizerEventDetail: React.FC = () => {
               <Pencil size={14} /> Edit
             </button>
             <button
-  onClick={handleShareEvent}
-  className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
->
-  <Share2 size={18} />
-</button>
+              onClick={handleShareEvent}
+              className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+            >
+              <Share2 size={18} />
+            </button>
           </div>
         </div>
 
@@ -313,6 +342,59 @@ const OrganizerEventDetail: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Past events gallery slider */}
+          {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
+                <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
+                <div className="relative h-48 w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800">
+                  {event.pastEventsGallery.map((item, i) => (
+                    <div
+                      key={item.url + i}
+                      className={`absolute inset-0 transition-opacity duration-500 ${i === pastEventIndex ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                      {item.type === 'video' ? (
+                        <video src={item.url} className="h-full w-full object-cover" muted loop playsInline autoPlay />
+                      ) : (
+                        <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                  ))}
+                  {event.pastEventsGallery.length > 1 && (
+                    <>
+                      <button
+                        onClick={() =>
+                          setPastEventIndex((i) => (i - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length)
+                        }
+                        className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                        aria-label="Previous"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() => setPastEventIndex((i) => (i + 1) % event.pastEventsGallery.length)}
+                        className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                        aria-label="Next"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                        {event.pastEventsGallery.map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setPastEventIndex(i)}
+                            className={`h-1.5 rounded-full transition-all ${i === pastEventIndex ? 'w-4 bg-[#007A78] dark:bg-[#2DD4BF]' : 'w-1.5 bg-slate-300 dark:bg-slate-600'}`}
+                            aria-label={`Slide ${i + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Registration — ticket tiers, or the RSVP link if this is an RSVP event */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
@@ -366,6 +448,14 @@ const OrganizerEventDetail: React.FC = () => {
           onSave={handleSaveEdit}
         />
       )}
+      {showSaveConfirmation && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">
+      <CheckCircle size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
+      <p className="text-sm font-semibold text-slate-800 dark:text-white">Event updated successfully</p>
+    </div>
+  </div>
+)}
     </div >
   );
 };

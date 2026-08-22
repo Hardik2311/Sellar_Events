@@ -2,29 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, Ticket, User, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
 import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
   formatDateRange,
   formatTime,
+  isTierExpired,
 } from '../data/events';
 import { usePublicEvent } from '../hooks/usePublicEvents';
+import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
 
 const CustomerEventDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const id = slug ? parseEventIdFromSlug(slug) : undefined;
   const navigate = useNavigate();
-const { event, loading } = usePublicEvent(id);
+  const { event, loading } = usePublicEvent(id);
+  const { settings } = useCompanySettings();
 
-  // Quantity selected per tier id
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [pastEventIndex, setPastEventIndex] = useState(0);
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
+    setPastEventIndex(0);
   }, [event?.id]);
   if (loading) {
     return (
@@ -57,14 +59,32 @@ const { event, loading } = usePublicEvent(id);
     return tier ? tier.quantity - tier.sold : 0;
   };
 
+  // Number to actually DISPLAY to the customer — real remaining, unless the
+  // organizer has turned on a dummy threshold for this tier
+  const displayRemainingFor = (tierId: string) => {
+    const tier = event.tiers.find((t) => t.id === tierId);
+    if (!tier) return 0;
+    if (settings.ticketDisplay.useDummyThreshold && typeof tier.dummyRemaining === 'number') {
+      return tier.dummyRemaining;
+    }
+    return tier.quantity - tier.sold;
+  };
+
   const setQty = (tierId: string, next: number) => {
     const max = remainingFor(tierId);
     const clamped = Math.max(0, Math.min(next, max, 10)); // 10-per-order cap, same as most ticketing flows
     setQuantities((q) => ({ ...q, [tierId]: clamped }));
   };
 
+  // When the company setting is off, ignore any stray end-date data —
+  // every tier stays visible exactly as before.
+  const visibleTiers = settings.ticketDisplay.enableTierAvailabilityWindow
+    ? event.tiers.filter((t) => !isTierExpired(t))
+    : event.tiers;
+
   const totalTickets = Object.values(quantities).reduce((s, n) => s + n, 0);
-  const allSoldOut = event.tiers.every((t) => t.sold >= t.quantity);
+  const allSoldOut =
+    visibleTiers.length === 0 || visibleTiers.every((t) => t.sold >= t.quantity);
 
   const handleGetTickets = () => {
     navigate(`/checkout/${event.id}`, { state: { quantities } });
@@ -81,9 +101,8 @@ const { event, loading } = usePublicEvent(id);
                 key={src + i}
                 src={src}
                 alt={`${event.title} photo ${i + 1}`}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-                  i === activeImageIndex ? 'opacity-100' : 'opacity-0'
-                }`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'
+                  }`}
               />
             ))}
             {event.images.length > 1 && (
@@ -111,9 +130,8 @@ const { event, loading } = usePublicEvent(id);
                     <button
                       key={i}
                       onClick={() => setActiveImageIndex(i)}
-                      className={`h-1.5 rounded-sm transition-all ${
-                        i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
-                      }`}
+                      className={`h-1.5 rounded-sm transition-all ${i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                        }`}
                       aria-label={`Photo ${i + 1}`}
                     />
                   ))}
@@ -192,6 +210,59 @@ const { event, loading } = usePublicEvent(id);
             </CardContent>
           </Card>
 
+          {/* Past events gallery slider */}
+          {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
+                <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
+                <div className="relative h-48 w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800">
+                  {event.pastEventsGallery.map((item, i) => (
+                    <div
+                      key={item.url + i}
+                      className={`absolute inset-0 transition-opacity duration-500 ${i === pastEventIndex ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                      {item.type === 'video' ? (
+                        <video src={item.url} className="h-full w-full object-cover" muted loop playsInline autoPlay />
+                      ) : (
+                        <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                  ))}
+                  {event.pastEventsGallery.length > 1 && (
+                    <>
+                      <button
+                        onClick={() =>
+                          setPastEventIndex((i) => (i - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length)
+                        }
+                        className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                        aria-label="Previous"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() => setPastEventIndex((i) => (i + 1) % event.pastEventsGallery.length)}
+                        className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                        aria-label="Next"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                        {event.pastEventsGallery.map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setPastEventIndex(i)}
+                            className={`h-1.5 rounded-sm transition-all ${i === pastEventIndex ? 'w-4 bg-[#007A78] dark:bg-[#2DD4BF]' : 'w-1.5 bg-slate-300 dark:bg-slate-600'}`}
+                            aria-label={`Slide ${i + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Tickets, or RSVP link if this is an RSVP event */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
@@ -220,11 +291,13 @@ const { event, loading } = usePublicEvent(id);
 
                   {allSoldOut ? (
                     <p className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 text-sm text-slate-500 dark:text-slate-400">
-                      All tickets for this event are sold out.
+                      {visibleTiers.length === 0
+                        ? 'No tickets are available for this event right now.'
+                        : 'All tickets for this event are sold out.'}
                     </p>
                   ) : (
                     <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800">
-                      {event.tiers.map((tier) => {
+                      {visibleTiers.map((tier) => {
                         const remaining = remainingFor(tier.id);
                         const soldOut = remaining <= 0;
                         const qty = quantities[tier.id] ?? 0;
@@ -236,9 +309,11 @@ const { event, loading } = usePublicEvent(id);
                               <p className="text-sm font-semibold text-[#007A78]">
                                 {tier.price === 0 ? 'Free' : `\u20B9${tier.price.toLocaleString('en-IN')}`}
                               </p>
-                              <p className="text-xs text-slate-400 dark:text-slate-500">
-                                {soldOut ? 'Sold out' : `${remaining} left`}
-                              </p>
+                              {settings.ticketDisplay.showTicketsRemaining && (
+                                <p className="text-xs text-slate-400 dark:text-slate-500">
+                                  {soldOut ? 'Sold out' : `${displayRemainingFor(tier.id)} left`}
+                                </p>
+                              )}
                             </div>
 
                             {soldOut ? (

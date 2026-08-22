@@ -40,25 +40,27 @@ const EventFieldSettings: React.FC = () => {
   const { profile } = useAuth();
   const { settings, loading } = useCompanySettings();
 
- type DraftEventSettings = Pick<typeof settings, 'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest'>;
+  type DraftEventSettings = Pick<typeof settings,
+    'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay'
+  >;
   const [draft, setDraft] = useState<DraftEventSettings>({
     rsvpEnabled: settings.rsvpEnabled,
     eventFieldRequirements: settings.eventFieldRequirements,
     autoFeatureNearest: settings.autoFeatureNearest,
+    ticketDisplay: settings.ticketDisplay,
   });
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Seed the draft from Firestore once loading finishes. Guarded by
-  // `initialized` so a live onSnapshot update doesn't clobber unsaved edits.
   useEffect(() => {
     if (!loading && !initialized) {
       setDraft({
         rsvpEnabled: settings.rsvpEnabled,
         eventFieldRequirements: settings.eventFieldRequirements,
         autoFeatureNearest: settings.autoFeatureNearest,
+        ticketDisplay: settings.ticketDisplay,
       });
       setInitialized(true);
     }
@@ -137,6 +139,73 @@ const EventFieldSettings: React.FC = () => {
 
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Ticket availability display</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Show tickets remaining</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Display a "X tickets left" badge on the public event page.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.ticketDisplay.showTicketsRemaining}
+                  disabled={loading}
+                  onChange={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      ticketDisplay: { ...prev.ticketDisplay, showTicketsRemaining: !prev.ticketDisplay.showTicketsRemaining },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 py-2 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Use dummy threshold</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Show a manually-set "remaining" number instead of the real quantity, per tier. Doesn't affect actual ticket sales.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.ticketDisplay.useDummyThreshold}
+                  disabled={loading || !draft.ticketDisplay.showTicketsRemaining}
+                  onChange={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      ticketDisplay: { ...prev.ticketDisplay, useDummyThreshold: !prev.ticketDisplay.useDummyThreshold },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 py-2 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Tier availability window</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Let organizers set an end date &amp; time per ticket tier (e.g. Early Bird). Once that time passes, the tier is hidden from customers.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.ticketDisplay.enableTierAvailabilityWindow}
+                  disabled={loading}
+                  onChange={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      ticketDisplay: {
+                        ...prev.ticketDisplay,
+                        enableTierAvailabilityWindow: !prev.ticketDisplay.enableTierAvailabilityWindow,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+            <CardHeader>
               <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Required fields</CardTitle>
             </CardHeader>
             <CardContent>
@@ -191,8 +260,8 @@ const EventFieldSettings: React.FC = () => {
             onClick={handleSaveSettings}
             disabled={isSaving}
             className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
-                ? 'bg-emerald-600 dark:bg-emerald-400'
-                : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
+              ? 'bg-emerald-600 dark:bg-emerald-400'
+              : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
               }`}
           >
             {isSaving ? 'Saving Settings…' : saveSuccess ? 'Settings Saved' : 'Save Settings'}
