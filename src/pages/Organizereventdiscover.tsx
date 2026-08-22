@@ -1,10 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle } from 'lucide-react';
 import { Card } from '../components/ui/card';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
 import type { EventFormState } from '../types/event.types';
@@ -68,9 +65,10 @@ const OrganizerEventCard: React.FC<{
   onOpen: () => void;
   onToggleLive: (id: string) => void;
   onToggleFeatured: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDeleteRequest: (event: PublicEvent) => void;
   onEdit: (event: PublicEvent) => void;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDelete, onEdit }) => {
+  onDuplicate: (id: string) => void;
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -87,7 +85,6 @@ const OrganizerEventCard: React.FC<{
         {event.coverImage && (
           <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         )}
-        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
         <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
           {label}
         </span>
@@ -118,26 +115,6 @@ const OrganizerEventCard: React.FC<{
         </button>
         <button
           type="button"
-          onClick={async (e) => {
-            e.stopPropagation();
-            const shareUrl = `${window.location.origin}/events/e/${event.id}`;
-            if (navigator.share) {
-              try {
-                await navigator.share({ title: event.title, url: shareUrl });
-              } catch {
-                // user cancelled share sheet, no-op
-              }
-            } else {
-              await navigator.clipboard.writeText(shareUrl);
-            }
-          }}
-          title="Share event"
-          className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
-        >
-          <Share2 size={14} />
-        </button>
-        <button
-          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onEdit(event);
@@ -151,9 +128,18 @@ const OrganizerEventCard: React.FC<{
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete "${event.title}"? This can't be undone.`)) {
-              onDelete(event.id);
-            }
+            onDuplicate(event.id);
+          }}
+          title="Duplicate event"
+          className="absolute bottom-2 right-11 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+        >
+          <Copy size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteRequest(event);
           }}
           title="Delete event"
           className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
@@ -162,12 +148,10 @@ const OrganizerEventCard: React.FC<{
         </button>
         {soldOut && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
-          <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
           </span>
         )}
         {!soldOut && sellingFast && (
-          <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
           <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
             Selling fast
           </span>
@@ -247,7 +231,7 @@ const OrganizerEventCard: React.FC<{
 const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { events, loading, toggleLive, toggleFeatured, deleteEvent, updateEvent } = useOrganizerEvents();
+  const { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [format, setFormat] = useState<FormatFilter>('all');
@@ -256,7 +240,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
-  const [showPastEvents, setShowPastEvents] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState<PublicEvent | null>(null);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -278,13 +262,7 @@ const OrganizerEventDiscover: React.FC = () => {
           !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
         const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
         return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
-        const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
-        return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
       })
-      .sort((a, b) =>
-        showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
-      ); // past view mein recent-most-past pehle dikhega
-  }, [events, activeCategory, format, search, showPastEvents]);
       .sort((a, b) =>
         showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
       ); // past view mein recent-most-past pehle dikhega
@@ -297,11 +275,24 @@ const OrganizerEventDiscover: React.FC = () => {
   };
 
   const openEvent = (event: PublicEvent) => navigate(`/events/e/${event.id}`);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  useEffect(() => {
+    if (!showSaveConfirmation) return;
+    const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
+    return () => clearTimeout(t);
+  }, [showSaveConfirmation]);
 
   const handleSaveEdit = async (updated: EventFormState) => {
     if (!editingEvent) return;
     await updateEvent(editingEvent.id, updated);
-    setEditingEvent(null);
+    setEditingEvent(null);          // close edit modal
+    setShowSaveConfirmation(true);  // show success confirmation
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingEvent) return;
+    await deleteEvent(deletingEvent.id);
+    setDeletingEvent(null);
   };
 
   return (
@@ -382,8 +373,8 @@ const OrganizerEventDiscover: React.FC = () => {
               type="button"
               onClick={() => setShowPastEvents((v) => !v)}
               className={`flex items-center gap-1 rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors shrink-0 ${showPastEvents
-                  ? 'border-[#007A78] bg-teal-50 text-[#007A78] dark:bg-teal-950'
-                  : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                ? 'border-[#007A78] bg-teal-50 text-[#007A78] dark:bg-teal-950'
+                : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
             >
               {showPastEvents ? 'Past events' : 'Upcoming'}
@@ -457,8 +448,9 @@ const OrganizerEventDiscover: React.FC = () => {
                     onOpen={() => openEvent(event)}
                     onToggleLive={(evId) => toggleLive(evId, event.status)}
                     onToggleFeatured={(evId) => toggleFeatured(evId, !!event.featured)}
-                    onDelete={deleteEvent}
+                    onDeleteRequest={setDeletingEvent}
                     onEdit={setEditingEvent}
+                    onDuplicate={duplicateEvent}
                   />
                 ))}
               </div>
@@ -481,6 +473,43 @@ const OrganizerEventDiscover: React.FC = () => {
           onClose={() => setEditingEvent(null)}
           onSave={handleSaveEdit}
         />
+      )}
+
+      {deletingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Delete event?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Delete "{deletingEvent.title}"? This can't be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingEvent(null)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="rounded-sm bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSaveConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">
+            <CheckCircle size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">Event updated successfully</p>
+          </div>
+        </div>
       )}
     </div>
   );

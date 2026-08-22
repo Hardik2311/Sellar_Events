@@ -6,6 +6,12 @@ import { TextInput } from './ui/FormField';
 interface TicketTierEditorProps {
   tiers: TicketTierDraft[];
   onChange: (tiers: TicketTierDraft[]) => void;
+  /** When true, shows an editable "dummy remaining" field per tier that is
+   *  purely cosmetic and displayed on the public page instead of real quantity. */
+  showDummyQuantity?: boolean;
+  /** When true, shows End date + End time fields per tier — the tier stops
+   *  being shown to customers once that date/time has passed. */
+  showEndDateTime?: boolean;
 }
 
 const createEmptyTier = (): TicketTierDraft => ({
@@ -20,7 +26,12 @@ const createEmptyTier = (): TicketTierDraft => ({
  * (General, VIP, Early Bird, ...). Mirrors the numbered-badge visual
  * language used in TicketTierBreakdown on the dashboard.
  */
-export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onChange }) => {
+export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({
+  tiers,
+  onChange,
+  showDummyQuantity = false,
+  showEndDateTime = false,
+}) => {
   const updateTier = (id: string, patch: Partial<TicketTierDraft>) => {
     onChange(tiers.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
@@ -40,35 +51,86 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({ tiers, onCha
             {index + 1}
           </span>
 
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Tier Name</label>
-              <TextInput
-                placeholder="e.g. General Admission"
-                value={tier.name}
-                onChange={(e) => updateTier(tier.id, { name: e.target.value })}
-              />
+          <div className="flex-1 space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Tier Name</label>
+                <TextInput
+                  placeholder="e.g. General Admission"
+                  value={tier.name}
+                  onChange={(e) => updateTier(tier.id, { name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Price (₹)</label>
+                <TextInput
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 500"
+                  value={tier.price || ''}
+                  onChange={(e) => updateTier(tier.id, { price: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Quantity</label>
+                <TextInput
+                  type="number"
+                  min={1}
+                  placeholder="e.g. 100"
+                  value={tier.quantity || ''}
+                  onChange={(e) => updateTier(tier.id, { quantity: Number(e.target.value) || 0 })}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Price (₹)</label>
-              <TextInput
-                type="number"
-                min={0}
-                placeholder="e.g. 500"
-                value={tier.price || ''}
-                onChange={(e) => updateTier(tier.id, { price: Number(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Quantity</label>
-              <TextInput
-                type="number"
-                min={1}
-                placeholder="e.g. 100"
-                value={tier.quantity || ''}
-                onChange={(e) => updateTier(tier.id, { quantity: Number(e.target.value) || 0 })}
-              />
-            </div>
+
+            {showDummyQuantity && (
+              <div className="flex items-center gap-3 rounded-sm border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">
+                    Dummy remaining (shown publicly)
+                  </label>
+                  <TextInput
+                    type="number"
+                    min={0}
+                    placeholder="Leave blank to show the real quantity"
+                    value={tier.dummyRemaining ?? ''}
+                    onChange={(e) =>
+                      updateTier(tier.id, {
+                        dummyRemaining: e.target.value === '' ? undefined : Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {showEndDateTime && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 px-3 py-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    Tier end date
+                  </label>
+                  <TextInput
+                    type="date"
+                    value={tier.tierEndDate ?? ''}
+                    onChange={(e) => updateTier(tier.id, { tierEndDate: e.target.value || undefined })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    Tier end time
+                  </label>
+                  <TextInput
+                    type="time"
+                    value={tier.tierEndTime ?? ''}
+                    onChange={(e) => updateTier(tier.id, { tierEndTime: e.target.value || undefined })}
+                  />
+                </div>
+                <p className="sm:col-span-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  Optional — leave blank to keep this tier available for the whole event. Once this date/time passes, the tier is hidden from customers.
+                </p>
+              </div>
+            )}
           </div>
 
           <button

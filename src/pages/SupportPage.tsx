@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+// import { db } from '../lib/firebase';
+// import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+// import { getAuth } from 'firebase/auth';
 
 import {
   ChevronDown,
@@ -55,80 +55,80 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, icon, children, is
 const SupportPage: React.FC = () => {
   const [openSection, setOpenSection] = useState<string | null>('faq-1');
 
-  const [userProfile, setUserProfile] = useState({ fullName: '', email: '', phone: '' });
-  const [formData, setFormData] = useState({ subject: '', description: '' });
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  // const [userProfile, setUserProfile] = useState({ fullName: '', email: '', phone: '' });
+  // const [formData, setFormData] = useState({ subject: '', description: '' });
+  // const [submitting, setSubmitting] = useState(false);
+  // const [submitted, setSubmitted] = useState(false);
 
   // --- FETCH LOGGED-IN ORGANIZER PROFILE ---
-  useEffect(() => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+  // useEffect(() => {
+  //   const auth = getAuth();
+  //   const currentUser = auth.currentUser;
+  //   if (!currentUser) return;
 
-    const fetchProfile = async () => {
-      const companiesSnapshot = await getDocs(collection(db, "companies"));
+  //   const fetchProfile = async () => {
+  //     const companiesSnapshot = await getDocs(collection(db, "companies"));
 
-      for (const companyDoc of companiesSnapshot.docs) {
-        const userDoc = await getDoc(doc(db, "companies", companyDoc.id, "users", currentUser.uid));
+  //     for (const companyDoc of companiesSnapshot.docs) {
+  //       const userDoc = await getDoc(doc(db, "companies", companyDoc.id, "users", currentUser.uid));
 
-        if (userDoc.exists()) {
-          const data = userDoc.data();
+  //       if (userDoc.exists()) {
+  //         const data = userDoc.data();
 
-          setUserProfile({
-            fullName: data.name || currentUser.email || 'Unknown',
-            email: currentUser.email || 'N/A',
-            phone: data.phoneNumber || 'N/A',
-          });
-          break;
-        }
-      }
-    };
+  //         setUserProfile({
+  //           fullName: data.name || currentUser.email || 'Unknown',
+  //           email: currentUser.email || 'N/A',
+  //           phone: data.phoneNumber || 'N/A',
+  //         });
+  //         break;
+  //       }
+  //     }
+  //   };
 
-    fetchProfile();
-  }, []);
+  //   fetchProfile();
+  // }, []);
 
-  const generateRefNumber = async () => {
-    const counterRef = doc(db, "counters", "support_tickets");
-    const counterSnap = await getDoc(counterRef);
+  // const generateRefNumber = async () => {
+  //   const counterRef = doc(db, "counters", "support_tickets");
+  //   const counterSnap = await getDoc(counterRef);
 
-    let nextNumber = 1;
-    if (counterSnap.exists()) {
-      nextNumber = (counterSnap.data().count || 0) + 1;
-    }
+  //   let nextNumber = 1;
+  //   if (counterSnap.exists()) {
+  //     nextNumber = (counterSnap.data().count || 0) + 1;
+  //   }
 
-    await setDoc(counterRef, { count: nextNumber });
+  //   await setDoc(counterRef, { count: nextNumber });
 
-    return `TKT-${String(nextNumber).padStart(4, '0')}`;
-  };
+  //   return `TKT-${String(nextNumber).padStart(4, '0')}`;
+  // };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.subject || !formData.description) {
-      alert("Please fill all fields.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const refNumber = await generateRefNumber();
-      await addDoc(collection(db, "support_tickets"), {
-        referenceNumber: refNumber,
-        fullName: userProfile.fullName,
-        email: userProfile.email,
-        phone: userProfile.phone,
-        subject: formData.subject,
-        description: formData.description,
-        status: 'received',
-        createdAt: serverTimestamp(),
-      });
-      setSubmitted(true);
-      setFormData({ subject: '', description: '' });
-    } catch (err) {
-      alert("Failed to submit ticket. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // const handleSubmit = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (!formData.subject || !formData.description) {
+  //     alert("Please fill all fields.");
+  //     return;
+  //   }
+  //   setSubmitting(true);
+  //   try {
+  //     const refNumber = await generateRefNumber();
+  //     await addDoc(collection(db, "support_tickets"), {
+  //       referenceNumber: refNumber,
+  //       fullName: userProfile.fullName,
+  //       email: userProfile.email,
+  //       phone: userProfile.phone,
+  //       subject: formData.subject,
+  //       description: formData.description,
+  //       status: 'received',
+  //       createdAt: serverTimestamp(),
+  //     });
+  //     setSubmitted(true);
+  //     setFormData({ subject: '', description: '' });
+  //   } catch (err) {
+  //     alert("Failed to submit ticket. Please try again.");
+  //   } finally {
+  //     setSubmitting(false);
+  //   }
+  // };
 
   const toggleSection = (id: string) => {
     setOpenSection(prev => (prev === id ? null : id));
@@ -183,13 +183,13 @@ const SupportPage: React.FC = () => {
           </AccordionItem>
 
           <AccordionItem
-            title="How do I reset my password?"
-            icon={<HelpCircle className="w-5 h-5" />}
-            isOpen={openSection === 'faq-4'}
-            onClick={() => toggleSection('faq-4')}
-          >
-            If you're logged out, click "Forgot Password" on the login screen. If logged in, go to <strong>Account &gt; Edit Profile</strong> to update your credentials.
-          </AccordionItem>
+  title="How do I reset my password?"
+  icon={<HelpCircle className="w-5 h-5" />}
+  isOpen={openSection === 'faq-4'}
+  onClick={() => toggleSection('faq-4')}
+>
+  Click "Forgot Password" on the login screen and follow the instructions sent to your registered email to reset your password.
+</AccordionItem>
 
           <AccordionItem
             title="Is my event and attendee data safe?"
@@ -257,57 +257,18 @@ const SupportPage: React.FC = () => {
             Report an Issue
           </h2>
 
-          <AccordionItem
-            title="Raise a Support Ticket (Coming soon)"
-            icon={<Send className="w-5 h-5" />}
-            isOpen={openSection === 'ticket'}
-            onClick={() => toggleSection('ticket')}
-          >
-            {submitted ? (
-              <div className="text-center py-6">
-                <p className="text-green-600 dark:text-green-400 font-bold text-lg">✓ Ticket Submitted!</p>
-                <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Our team will reach out to you soon.</p>
-                <button
-                  onClick={() => setSubmitted(false)}
-                  className="mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Raise another ticket
-                </button>
+          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-700 mb-3 text-gray-400 dark:text-slate-500 cursor-not-allowed shadow-sm">
+            <div className="flex items-center gap-3">
+              <Send className="w-5 h-5 text-gray-300 dark:text-slate-600" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+                  Coming Soon
+                </span>
+                <span className="font-semibold text-sm sm:text-base">Raise a Support Ticket</span>
               </div>
-            ) : (
-              <form className="space-y-4" onSubmit={handleSubmit}>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Issue Subject</label>
-                  <input
-                    type="text"
-                    value={formData.subject}
-                    disabled
-                    onChange={(e) => setFormData(p => ({ ...p, subject: e.target.value }))}
-                    placeholder="e.g., Unable to publish my event"
-                    className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-sm p-2 text-sm focus:ring-1 focus:ring-gray-900 dark:focus:ring-[#2DD4BF] outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Description</label>
-                  <textarea
-                    rows={4}
-                    value={formData.description}
-                    disabled
-                    onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
-                    placeholder="Describe the issue with your event, attendees, or account..."
-                    className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-sm p-2 text-sm focus:ring-1 focus:ring-gray-900 dark:focus:ring-[#2DD4BF] outline-none"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled
-                  className="w-full bg-gray-900 dark:bg-slate-700 text-white font-bold py-2 rounded-sm hover:bg-gray-800 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                >
-                  {submitting ? 'Submitting...' : 'Submit Ticket'}
-                </button>
-              </form>
-            )}
-          </AccordionItem>
+            </div>
+            <span className="text-xl text-gray-300 dark:text-slate-600">→</span>
+          </div>
         </div>
 
       </div>

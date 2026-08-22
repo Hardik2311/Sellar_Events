@@ -4,8 +4,14 @@ export interface PublicTicketTier {
   price: number;
   quantity: number;
   sold: number;
+  dummyRemaining?: number | null;
+  tierEndDate?: string | null; // YYYY-MM-DD
+  tierEndTime?: string | null; // HH:mm
 }
-
+export interface GalleryMediaItem {
+  url: string;
+  type: 'image' | 'gif' | 'video';
+}
 export interface PublicEvent {
   id: string;
   companyId: string;
@@ -19,8 +25,12 @@ export interface PublicEvent {
   venue: string;
   isOnline: boolean;
   organizerName: string;
-  coverImage: string | null;  // kept for back-compat = images[0]
-  images: string[];           // NEW — full gallery
+  coverImage: string | null;
+  images: string[];
+  // NEW
+  coverImageDesktop: string | null;
+  coverImageMobile: string | null;
+  pastEventsGallery: GalleryMediaItem[];
   tiers: PublicTicketTier[];
   status: 'draft' | 'published' | 'completed' | 'cancelled';
   featured?: boolean;
@@ -54,6 +64,11 @@ export const formatTime = (time: string) => {
   const period = h >= 12 ? 'PM' : 'AM';
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+};
+export const isTierExpired = (tier: Pick<PublicTicketTier, 'tierEndDate' | 'tierEndTime'>) => {
+  if (!tier.tierEndDate) return false;
+  const end = new Date(`${tier.tierEndDate}T${tier.tierEndTime || '23:59'}:00`);
+  return !isNaN(end.getTime()) && end.getTime() < Date.now();
 };
 
 export const getPriceLabel = (tiers: PublicTicketTier[]) => {
