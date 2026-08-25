@@ -1,3 +1,4 @@
+import type { CustomField } from '../types/event.types';
 export interface PublicTicketTier {
   id: string;
   name: string;
@@ -37,6 +38,7 @@ export interface PublicEvent {
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
+  customFields: CustomField[];
 }
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {

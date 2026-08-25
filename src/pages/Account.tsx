@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings } from 'react-icons/fi';
+import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { ROUTES } from '../constants/routes.constants';
@@ -27,7 +28,7 @@ const Account: React.FC = () => {
                 <div className="flex-1 text-center">
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Account</h1>
                 </div>
-                {/* <ThemeToggle /> */}
+                <BackButton />
             </header>
 
             {/* ── Profile section ── */}

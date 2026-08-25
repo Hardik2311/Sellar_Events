@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
 import {
@@ -11,6 +12,7 @@ import {
 import CoverPhotoUpload from '../components/ui/CoverPhotoUpload';
 import PastEventsGallery from '../components/ui/PastEventsGallery';
 import TicketTierEditor from '../components/TicketTierEditor';
+import CustomFieldsEditor from '../components/CustomFieldsEditor';
 import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
@@ -49,6 +51,7 @@ const INITIAL_STATE: EventFormState = {
   registrationMode: 'tickets',
   rsvpLink: '',
   rsvpButtonLabel: 'RSVP Now',
+  customFields: [],
 };
 
 const CreateEvent: React.FC = () => {
@@ -190,6 +193,7 @@ const CreateEvent: React.FC = () => {
         rsvpLink: isRsvp ? form.rsvpLink.trim() : null,
         rsvpButtonLabel: isRsvp ? (form.rsvpButtonLabel.trim() || 'RSVP Now') : null,
         promoCode: form.promoCode || null,
+        customFields: form.customFields,
         promoDiscountPercent: form.promoDiscountPercent || 0,
         status,
         createdBy: user.uid,
@@ -220,13 +224,7 @@ const CreateEvent: React.FC = () => {
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/events')}
-            className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            title="Back to Events"
-          >
-            <ArrowLeft size={18} />
-          </button>
+          <BackButton />
         </div>
       </header>
 
@@ -410,6 +408,21 @@ const CreateEvent: React.FC = () => {
                 />
               </CardContent>
             </Card>
+
+            {/* Custom attendee questions */}
+            {companySettings.attendeeQuestionsEnabled && (
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Attendee Questions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CustomFieldsEditor
+                    fields={form.customFields}
+                    onChange={(fields) => update('customFields', fields)}
+                  />
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* ── Right column: Logistics + Pro-tips ────────────── */}

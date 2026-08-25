@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 //import ThemeToggle from '../components/ui/ThemeToggle';
@@ -37,15 +38,15 @@ const Settings: React.FC = () => {
   const { settings, loading, updateSetting } = useCompanySettings();
 
   const [showGstModal, setShowGstModal] = useState(false);
-const [pendingScheme, setPendingScheme] = useState<'regular' | 'composition' | null>(null);
-const [gstInput, setGstInput] = useState('');
-const [gstError, setGstError] = useState<string | null>(null);
-const [savingGst, setSavingGst] = useState(false);
+  const [pendingScheme, setPendingScheme] = useState<'regular' | 'composition' | null>(null);
+  const [gstInput, setGstInput] = useState('');
+  const [gstError, setGstError] = useState<string | null>(null);
+  const [savingGst, setSavingGst] = useState(false);
 
-// GSTIN shown/edited directly on this page, linked to profile.gstinNumber
-const [gstinDraft, setGstinDraft] = useState(profile?.gstinNumber ?? '');
-const [gstinDraftError, setGstinDraftError] = useState<string | null>(null);
-const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
+  // GSTIN shown/edited directly on this page, linked to profile.gstinNumber
+  const [gstinDraft, setGstinDraft] = useState(profile?.gstinNumber ?? '');
+  const [gstinDraftError, setGstinDraftError] = useState<string | null>(null);
+  const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
 
   type DraftSettings = Pick<typeof settings, 'gstScheme' | 'taxType' | 'defaultTaxRate' | 'enableRounding' | 'roundingInterval'>;
   const [draft, setDraft] = useState<DraftSettings>({
@@ -63,27 +64,27 @@ const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
   // Seed the draft from Firestore once loading finishes. Guarded by
   // `initialized` so a live onSnapshot update doesn't clobber unsaved edits.
   React.useEffect(() => {
-  if (!loading && !initialized) {
-    setDraft({
-      gstScheme: settings.gstScheme,
-      taxType: settings.taxType,
-      defaultTaxRate: settings.defaultTaxRate,
-      enableRounding: settings.enableRounding,
-      roundingInterval: settings.roundingInterval,
-    });
-    setInitialized(true);
-  }
-}, [loading, initialized, settings]);
+    if (!loading && !initialized) {
+      setDraft({
+        gstScheme: settings.gstScheme,
+        taxType: settings.taxType,
+        defaultTaxRate: settings.defaultTaxRate,
+        enableRounding: settings.enableRounding,
+        roundingInterval: settings.roundingInterval,
+      });
+      setInitialized(true);
+    }
+  }, [loading, initialized, settings]);
 
-// Keep this page's GSTIN field in sync with Edit Profile.
-// Only auto-overwrite while the user hasn't started typing here,
-// so an in-progress edit on this page isn't clobbered by a live update.
-React.useEffect(() => {
-  if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
-    setGstinDraft(profile?.gstinNumber ?? '');
-    setGstinDraftInitialized(true);
-  }
-}, [profile?.gstinNumber, gstinDraftInitialized]);
+  // Keep this page's GSTIN field in sync with Edit Profile.
+  // Only auto-overwrite while the user hasn't started typing here,
+  // so an in-progress edit on this page isn't clobbered by a live update.
+  React.useEffect(() => {
+    if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
+      setGstinDraft(profile?.gstinNumber ?? '');
+      setGstinDraftInitialized(true);
+    }
+  }, [profile?.gstinNumber, gstinDraftInitialized]);
 
   const handleSchemeSelect = (value: 'none' | 'regular' | 'composition') => {
     const needsGstin = (value === 'regular' || value === 'composition') && !profile?.gstinNumber;
@@ -98,46 +99,46 @@ React.useEffect(() => {
   };
 
   const handleSaveSettings = async () => {
-  if (!profile?.companyId) {
-    setSaveError('Company not found. Please try again.');
-    return;
-  }
-
-  // Validate GSTIN only if it was actually changed or is required by the chosen scheme
-  const trimmedGstin = gstinDraft.trim().toUpperCase();
-  const gstinChanged = trimmedGstin !== (profile?.gstinNumber ?? '');
-  const gstinRequired = draft.gstScheme === 'regular' || draft.gstScheme === 'composition';
-
-  if ((gstinChanged || gstinRequired) && trimmedGstin && !GSTIN_REGEX.test(trimmedGstin)) {
-    setGstinDraftError('Please enter a valid 15-character GSTIN.');
-    return;
-  }
-  if (gstinRequired && !trimmedGstin) {
-    setGstinDraftError('GSTIN is required for this GST scheme.');
-    return;
-  }
-
-  setIsSaving(true);
-  setSaveError(null);
-  setSaveSuccess(false);
-  try {
-    const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
-    await setDoc(settingsRef, { ...draft }, { merge: true });
-
-    if (gstinChanged) {
-      const businessRef = doc(db, 'companies', profile.companyId, 'business_info', 'profile');
-      await setDoc(businessRef, { gstinNumber: trimmedGstin }, { merge: true });
+    if (!profile?.companyId) {
+      setSaveError('Company not found. Please try again.');
+      return;
     }
 
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-  } catch (err) {
-    console.error('Failed to save settings:', err);
-    setSaveError('Failed to save settings. Please try again.');
-  } finally {
-    setIsSaving(false);
-  }
-};
+    // Validate GSTIN only if it was actually changed or is required by the chosen scheme
+    const trimmedGstin = gstinDraft.trim().toUpperCase();
+    const gstinChanged = trimmedGstin !== (profile?.gstinNumber ?? '');
+    const gstinRequired = draft.gstScheme === 'regular' || draft.gstScheme === 'composition';
+
+    if ((gstinChanged || gstinRequired) && trimmedGstin && !GSTIN_REGEX.test(trimmedGstin)) {
+      setGstinDraftError('Please enter a valid 15-character GSTIN.');
+      return;
+    }
+    if (gstinRequired && !trimmedGstin) {
+      setGstinDraftError('GSTIN is required for this GST scheme.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
+      await setDoc(settingsRef, { ...draft }, { merge: true });
+
+      if (gstinChanged) {
+        const businessRef = doc(db, 'companies', profile.companyId, 'business_info', 'profile');
+        await setDoc(businessRef, { gstinNumber: trimmedGstin }, { merge: true });
+      }
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+      setSaveError('Failed to save settings. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const handleGstCancel = () => {
     setShowGstModal(false);
     setPendingScheme(null);
@@ -175,18 +176,12 @@ React.useEffect(() => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-          title="Back"
-        >
-          <ArrowLeft size={18} />
-        </button>
+        <div className="w-9" />
         <div className="flex-1 text-center flex flex-col items-center justify-center">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Company Settings</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tax and pricing rules</p>
         </div>
-        {/* <ThemeToggle /> */}
+        <BackButton />
       </header>
 
       <main className="grow overflow-y-auto p-2">
@@ -197,31 +192,31 @@ React.useEffect(() => {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-4 py-2">
-  <div>
-    <label htmlFor="settings-gstin-input" className="mb-1 block text-sm font-medium text-slate-800 dark:text-slate-100">
-      GSTIN
-    </label>
-    <input
-      id="settings-gstin-input"
-      type="text"
-      value={gstinDraft}
-      maxLength={15}
-      disabled={loading}
-      onChange={(e) => {
-        setGstinDraft(e.target.value.toUpperCase());
-        setGstinDraftError(null);
-      }}
-      placeholder="15-character GSTIN"
-      className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm uppercase text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
-    />
-    {gstinDraftError && (
-      <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstinDraftError}</p>
-    )}
-    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-      Linked with your business profile — updating it here updates Edit Profile too, and vice versa.
-    </p>
-  </div>
-  <div>
+                <div>
+                  <label htmlFor="settings-gstin-input" className="mb-1 block text-sm font-medium text-slate-800 dark:text-slate-100">
+                    GSTIN
+                  </label>
+                  <input
+                    id="settings-gstin-input"
+                    type="text"
+                    value={gstinDraft}
+                    maxLength={15}
+                    disabled={loading}
+                    onChange={(e) => {
+                      setGstinDraft(e.target.value.toUpperCase());
+                      setGstinDraftError(null);
+                    }}
+                    placeholder="15-character GSTIN"
+                    className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm uppercase text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+                  />
+                  {gstinDraftError && (
+                    <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstinDraftError}</p>
+                  )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Linked with your business profile — updating it here updates Edit Profile too, and vice versa.
+                  </p>
+                </div>
+                <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-2">GST scheme</p>
                   <div className="grid grid-cols-3 gap-2">
                     {(
@@ -332,8 +327,8 @@ React.useEffect(() => {
             onClick={handleSaveSettings}
             disabled={isSaving}
             className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
-                ? 'bg-emerald-600 dark:bg-emerald-400'
-                : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
+              ? 'bg-emerald-600 dark:bg-emerald-400'
+              : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
               }`}
           >
             {isSaving ? 'Saving Settings…' : saveSuccess ? 'Settings Saved' : 'Save Settings'}

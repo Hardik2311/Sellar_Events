@@ -38,6 +38,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   registrationMode: d.registrationMode || 'tickets',
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
+  customFields: d.customFields || [],
 });
 
 export function usePublicEvents() {

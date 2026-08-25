@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import {
   collection,
   onSnapshot,
@@ -13,15 +14,14 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
 import { buildEventSlugId } from '../data/events';
-import EventSelector from '../components/ui/EventSelector';
+import EventListCard from '../components/EventListCard';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
 import QRScanner from '../components/QrScannerModal';
+import ConfirmCheckInModal from '../components/ConfirmCheckInModal';
 import SearchBar from '../components/SearchBar';
 import ExportMenu from '../components/ExportMenu';
 import type { ExportColumn } from '../components/ExportMenu';
@@ -56,7 +56,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
   return {
     id,
     title: data.title,
-    coverImage: data.coverImageUrl ?? undefined,
+    coverImage: data.coverImageDesktop || data.coverImageMobile || data.coverImageUrl || undefined,
     category: data.category,
     status: data.status,
     startDate: data.date,
@@ -86,6 +86,7 @@ const Attendees: React.FC = () => {
   const [events, setEvents] = useState<EventSummary[]>([]);
 
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [eventSearchValue, setEventSearchValue] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -93,6 +94,7 @@ const Attendees: React.FC = () => {
   const [sortOption, setSortOption] = useState<SortOption>('name_asc');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
 
   // Organizer ke saare events real-time load karo
   useEffect(() => {
@@ -136,14 +138,39 @@ const Attendees: React.FC = () => {
   const handleCheckIn = useCallback(
     (id: string) => {
       if (!profile?.companyId || !selectedEventId) return;
+      const current = attendees.find((a) => a.id === id);
+      const isCurrentlyCheckedIn = current?.status === 'checked_in';
+      const nextStatus: Attendee['status'] = isCurrentlyCheckedIn ? 'valid' : 'checked_in';
+
       // Optimistic update — UI turant respond kare, snapshot listener khud bhi confirm kar dega
       setAttendees((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: 'checked_in', checkedInAt: new Date().toISOString() } : a))
+        prev.map((a) =>
+          a.id === id ? { ...a, status: nextStatus, checkedInAt: isCurrentlyCheckedIn ? null : new Date().toISOString() } : a
+        )
       );
       const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
-      updateDoc(attendeeRef, { status: 'checked_in', checkedInAt: serverTimestamp() }).catch((err) => {
-        console.error('Check-in failed:', err);
-        setScanFeedback({ type: 'error', message: 'Check-in failed, please retry.' });
+      updateDoc(attendeeRef, {
+        status: nextStatus,
+        checkedInAt: isCurrentlyCheckedIn ? null : serverTimestamp(),
+      }).catch((err) => {
+        console.error('Check-in update failed:', err);
+        setScanFeedback({ type: 'error', message: 'Check-in update failed, please retry.' });
+      });
+    },
+    [profile?.companyId, selectedEventId, attendees]
+  );
+
+  const handleCancel = useCallback(
+    (id: string) => {
+      if (!profile?.companyId || !selectedEventId) return;
+      // Optimistic update — turant UI me cancelled dikhao, listener confirm kar dega
+      setAttendees((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status: 'cancelled' } : a))
+      );
+      const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
+      updateDoc(attendeeRef, { status: 'cancelled' }).catch((err) => {
+        console.error('Cancel failed:', err);
+        setScanFeedback({ type: 'error', message: 'Cancel failed, please retry.' });
       });
     },
     [profile?.companyId, selectedEventId]
@@ -162,16 +189,29 @@ const Attendees: React.FC = () => {
         setScanFeedback({ type: 'error', message: `${match.name}'s ticket is cancelled.` });
         return;
       }
-      if (match.status === 'checked_in') {
-        setScanFeedback({ type: 'error', message: `${match.name} is already checked in.` });
-        return;
-      }
 
-      handleCheckIn(match.id);
-      setScanFeedback({ type: 'success', message: `${match.name} checked in.` });
+      // Don't check in immediately — show the attendee's details and
+      // require an explicit confirmation tap first.
+      setPendingAttendee(match);
     },
-    [attendees, handleCheckIn]
+    [attendees]
   );
+
+  const handleConfirmCheckIn = useCallback(() => {
+    if (!pendingAttendee) return;
+    handleCheckIn(pendingAttendee.id);
+    setScanFeedback({
+      type: 'success',
+      message: pendingAttendee.status === 'checked_in'
+        ? `${pendingAttendee.name}'s check-in undone.`
+        : `${pendingAttendee.name} checked in.`,
+    });
+    setPendingAttendee(null);
+  }, [pendingAttendee, handleCheckIn]);
+
+  const handleCancelConfirm = useCallback(() => {
+    setPendingAttendee(null);
+  }, []);
 
   // Auto-clear the scan feedback banner after a few seconds
   useEffect(() => {
@@ -216,24 +256,24 @@ const Attendees: React.FC = () => {
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <button
-          onClick={() => navigate('/events')}
-          className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-          title="Back to Events"
-        >
-          <ArrowLeft size={18} />
-        </button>
+        <div className="w-9" /> {/* left spacer for symmetry */}
         <div className="flex-1 text-center flex flex-col items-center justify-center">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Attendees</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Guest list & real-time check-in manager</p>
         </div>
-        {/* <ThemeToggle /> */}
+        <BackButton />
       </header>
 
       <main className="grow overflow-y-auto p-2">
         <div className="mx-auto max-w-3xl flex flex-col gap-3">
           {/* 1. Event dropdown */}
-          <EventSelector events={events} selectedEventId={selectedEventId} onChange={handleEventChange} />
+          <EventListCard
+            events={events}
+            selectedEventId={selectedEventId}
+            onSelect={handleEventChange}
+            searchValue={eventSearchValue}
+            onSearchChange={setEventSearchValue}
+          />
 
           {selectedEvent && (
             <>
@@ -327,6 +367,7 @@ const Attendees: React.FC = () => {
                       isExpanded={expandedId === attendee.id}
                       onToggle={() => setExpandedId(expandedId === attendee.id ? null : attendee.id)}
                       onCheckIn={handleCheckIn}
+                      onCancel={handleCancel}
                       eventTitle={selectedEvent.title}
                       eventDate={selectedEvent.startDate}
                     />
@@ -343,6 +384,12 @@ const Attendees: React.FC = () => {
         onClose={() => setIsScannerOpen(false)}
         onScan={handleQrScan}
         title="Scan ticket to check in"
+      />
+
+      <ConfirmCheckInModal
+        attendee={pendingAttendee}
+        onConfirm={handleConfirmCheckIn}
+        onCancel={handleCancelConfirm}
       />
     </div>
   );

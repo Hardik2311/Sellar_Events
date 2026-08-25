@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, CalendarDays } from 'lucide-react';
 import type { EventSummary } from '../types/event.types';
 import SearchBar from './ui/SearchBar';
 import StatusBadge from './ui/StatusBadge';
@@ -85,7 +85,15 @@ export const EventListCard: React.FC<EventListCardProps> = ({
 
           <div className="max-h-[300px] overflow-y-auto space-y-2">
             {loading ? (
-              [1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-sm bg-gray-100 dark:bg-slate-800" />)
+              [1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3 p-2 animate-pulse">
+                  <div className="w-14 h-14 rounded-sm bg-gray-100 dark:bg-slate-800 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-2/3 rounded bg-gray-100 dark:bg-slate-800" />
+                    <div className="h-3 w-1/3 rounded bg-gray-100 dark:bg-slate-800" />
+                  </div>
+                </div>
+              ))
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-500 dark:text-slate-400">No events match your search</p>
@@ -97,22 +105,34 @@ export const EventListCard: React.FC<EventListCardProps> = ({
                   <button
                     key={event.id}
                     onClick={() => handleSelect(event.id)}
-                    className={`w-full text-left rounded-sm border p-3 transition-all ${
-                      isActive
-                        ? 'border-[#007A78]/40 bg-[#007A78]/10 dark:border-[#2DD4BF]/40 dark:bg-[#2DD4BF]/15 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                    className={`w-full text-left rounded-sm border p-2 transition-all flex items-center gap-3 ${isActive
+                      ? 'border-[#007A78]/40 bg-[#007A78]/10 dark:border-[#2DD4BF]/40 dark:bg-[#2DD4BF]/15'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                   >
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{event.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                          {new Date(event.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} ·{' '}
-                          {event.ticketsSold}/{event.ticketsTotal} sold
-                        </p>
+                    {event.coverImage ? (
+                      <img
+                        src={event.coverImage}
+                        alt=""
+                        className="w-14 h-14 rounded-sm object-cover shrink-0 border border-slate-100 dark:border-slate-800"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-sm shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                        <CalendarDays size={20} className="text-slate-400" />
                       </div>
-                      <StatusBadge status={event.status} />
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm truncate ${isActive ? 'font-bold text-gray-900 dark:text-white' : 'font-medium text-gray-900 dark:text-white'}`}>
+                        {event.title}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+                        {new Date(event.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {event.venue} ·{' '}
+                        {event.ticketsSold}/{event.ticketsTotal} sold
+                      </p>
                     </div>
+
+                    <StatusBadge status={event.status} />
                   </button>
                 );
               })

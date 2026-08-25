@@ -10,6 +10,7 @@ import {
 import CoverPhotoUpload from './ui/CoverPhotoUpload';
 import PastEventsGallery from './ui/PastEventsGallery';
 import TicketTierEditor from './TicketTierEditor';
+import CustomFieldsEditor from './CustomFieldsEditor';
 import { EVENT_CATEGORIES, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
 import type { PublicEvent } from '../data/events';
@@ -59,6 +60,7 @@ const toFormState = (event: EventItem): EventFormState => ({
   registrationMode: event.registrationMode ?? 'tickets',
   rsvpLink: event.rsvpLink ?? '',
   rsvpButtonLabel: event.rsvpButtonLabel ?? 'RSVP Now',
+  customFields: event.customFields ?? [],
 });
 
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
@@ -403,6 +405,20 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 />
               </CardContent>
             </Card>
+
+            {companySettings.attendeeQuestionsEnabled && (
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Attendee questions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CustomFieldsEditor
+                    fields={form.customFields}
+                    onChange={(fields) => update('customFields', fields)}
+                  />
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 

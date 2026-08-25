@@ -38,6 +38,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   registrationMode: d.registrationMode || 'tickets',
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
+  customFields: d.customFields || [],
 });
 
 export const useOrganizerEvents = () => {
@@ -107,6 +108,7 @@ export const useOrganizerEvents = () => {
       registrationMode: original.registrationMode,
       rsvpLink: original.rsvpLink,
       rsvpButtonLabel: original.rsvpButtonLabel,
+      customFields: original.customFields || [],
       tiers: original.tiers.map((t) => ({
         id: t.id,
         name: t.name,
@@ -160,6 +162,7 @@ export const useOrganizerEvents = () => {
       registrationMode: form.registrationMode,
       rsvpLink: form.rsvpLink,
       rsvpButtonLabel: form.rsvpButtonLabel,
+      customFields: form.customFields || [],
     };
 
     if (form.registrationMode === 'tickets') {

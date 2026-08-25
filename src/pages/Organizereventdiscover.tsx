@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -68,7 +68,8 @@ const OrganizerEventCard: React.FC<{
   onDeleteRequest: (event: PublicEvent) => void;
   onEdit: (event: PublicEvent) => void;
   onDuplicate: (id: string) => void;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate }) => {
+  onLiveView: (event: PublicEvent) => void;
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -82,8 +83,12 @@ const OrganizerEventCard: React.FC<{
     <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden flex flex-col hover:shadow-md transition-shadow">
       <div className="relative h-36 w-full cursor-pointer" onClick={onOpen}>
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
-        {event.coverImage && (
-          <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
+        {(event.coverImageMobile || event.coverImageDesktop || event.coverImage) && (
+          <img
+            src={event.coverImageMobile || event.coverImageDesktop || event.coverImage || undefined}
+            alt={event.title}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         )}
         <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
           {label}
@@ -209,17 +214,28 @@ const OrganizerEventCard: React.FC<{
           <div className="flex items-center gap-1.5">
             <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{isLive ? 'Live' : 'Draft'}</span>
+            <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
           </div>
-          <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
-        </div>
 
-        <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
+            <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
           </div>
-          <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
         </div>
+
+        {isLive && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onLiveView(event);
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Eye size={14} /> Live view
+          </button>
+        )}
       </div>
     </Card>
   );
@@ -275,6 +291,7 @@ const OrganizerEventDiscover: React.FC = () => {
   };
 
   const openEvent = (event: PublicEvent) => navigate(`/events/e/${event.id}`);
+  const openLiveView = (event: PublicEvent) => window.open(`/e/${buildEventSlugId(event.title, event.id)}`, '_blank');
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   useEffect(() => {
     if (!showSaveConfirmation) return;
@@ -451,6 +468,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     onDeleteRequest={setDeletingEvent}
                     onEdit={setEditingEvent}
                     onDuplicate={duplicateEvent}
+                    onLiveView={openLiveView}
                   />
                 ))}
               </div>
