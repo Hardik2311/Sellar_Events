@@ -1,5 +1,12 @@
 export type EventStatus = 'draft' | 'published' | 'completed' | 'cancelled';
-
+export type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox';
+export interface CustomField {
+  id: string;
+  label: string;
+  type: CustomFieldType;
+  required: boolean;
+  options?: string[]; // only used when type === 'select'
+}
 export interface TicketTier {
   id: string;
   name: string;
@@ -80,6 +87,7 @@ export interface EventFormState {
   promoDiscountPercent: number;
   // NEW — how attendees sign up for this event
   registrationMode: RegistrationMode;
+  customFields: CustomField[];
   rsvpLink: string;          // e.g. Google Form URL, only used when registrationMode === 'rsvp'
   rsvpButtonLabel: string;   // e.g. "RSVP Now" / "Register" — organizer-editable CTA text
 }

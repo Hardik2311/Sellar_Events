@@ -32,6 +32,7 @@ export interface CompanySettings {
   // When no event is manually marked Featured, auto-pick the soonest
   // upcoming event to lead with on Discover. OFF = show nothing instead.
   autoFeatureNearest: boolean;
+  attendeeQuestionsEnabled: boolean;
   // more settings go here later
 }
 
@@ -57,6 +58,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   roundingInterval: 1,
   ticketDisplay: DEFAULT_TICKET_DISPLAY,
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,
+  attendeeQuestionsEnabled: true,
   autoFeatureNearest: true, // preserves current behaviour by default
 };
 

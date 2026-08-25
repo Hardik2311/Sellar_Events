@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, Ticket, User, Loader2 } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
+import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
 import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
@@ -23,6 +25,7 @@ const CustomerEventDetail: React.FC = () => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [pastEventIndex, setPastEventIndex] = useState(0);
+  const [shareToast, setShareToast] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -89,20 +92,60 @@ const CustomerEventDetail: React.FC = () => {
   const handleGetTickets = () => {
     navigate(`/checkout/${event.id}`, { state: { quantities } });
   };
+  const handleShare = async () => {
+    const shareData = {
+      title: event.title,
+      text: `Check out ${event.title}`,
+      url: window.location.href,
+    };
 
+    try {
+      if (navigator.share) {
+        // Native share sheet — mobile par best UX
+        await navigator.share(shareData);
+      } else if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareToast('Link copied to clipboard!');
+        setTimeout(() => setShareToast(null), 2000);
+      } else {
+        // Fallback for insecure context / old browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = window.location.href;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        setShareToast('Link copied to clipboard!');
+        setTimeout(() => setShareToast(null), 2000);
+      }
+    } catch (err) {
+      // User cancelled share sheet — usually not a real error
+      if ((err as Error)?.name !== 'AbortError') {
+        setShareToast('Could not share. Please copy the link manually.');
+        setTimeout(() => setShareToast(null), 2500);
+      }
+    }
+  };
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
-        {event.images && event.images.length > 0 && (
+        {(event.coverImageDesktop || event.coverImageMobile) ? (
+          <CoverImageDisplay
+            desktopSrc={event.coverImageDesktop}
+            mobileSrc={event.coverImageMobile}
+            alt={event.title}
+          />
+        ) : event.images && event.images.length > 0 && (
           <>
             {event.images.map((src, i) => (
               <img
                 key={src + i}
                 src={src}
                 alt={`${event.title} photo ${i + 1}`}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'
-                  }`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'}`}
               />
             ))}
             {event.images.length > 1 && (
@@ -142,19 +185,14 @@ const CustomerEventDetail: React.FC = () => {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 p-3">
           <button
-            onClick={() => navigate(-1)}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <button
-            onClick={() => navigator.clipboard?.writeText(window.location.href)}
+            onClick={handleShare}
             className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
           >
             <Share2 size={18} />
           </button>
+          <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-4">

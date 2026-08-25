@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil, CheckCircle } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent } from '../components/ui/card';
@@ -64,6 +65,7 @@ const useEvent = (companyId?: string, id?: string) => {
           registrationMode: d.registrationMode || 'tickets',
           rsvpLink: d.rsvpLink || '',
           rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
+          customFields: d.customFields || [],
         });
       } else {
         setEvent(undefined);
@@ -135,60 +137,60 @@ const OrganizerEventDetail: React.FC = () => {
       console.log('Share cancelled:', error);
     }
   };
-const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-useEffect(() => {
-  if (!showSaveConfirmation) return;
-  const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
-  return () => clearTimeout(t);
-}, [showSaveConfirmation]);
+  useEffect(() => {
+    if (!showSaveConfirmation) return;
+    const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
+    return () => clearTimeout(t);
+  }, [showSaveConfirmation]);
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
-const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
-  if (!img) return null;
-  if (!img.startsWith('data:')) return img;
-  const imageRef = ref(storage, `companies/${profile!.companyId}/events/${id}/${filename}.jpg`);
-  await uploadString(imageRef, img, 'data_url');
-  return getDownloadURL(imageRef);
-};
+  const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
+    if (!img) return null;
+    if (!img.startsWith('data:')) return img;
+    const imageRef = ref(storage, `companies/${profile!.companyId}/events/${id}/${filename}.jpg`);
+    await uploadString(imageRef, img, 'data_url');
+    return getDownloadURL(imageRef);
+  };
 
-const handleSaveEdit = async (updated: EventFormState) => {
-  if (!profile?.companyId || !id) return;
+  const handleSaveEdit = async (updated: EventFormState) => {
+    if (!profile?.companyId || !id) return;
 
-  const coverImageUrls: string[] = await Promise.all(
-    updated.images.map((img, i) => uploadIfNeeded(img, `photo-${i}`) as Promise<string>)
-  );
+    const coverImageUrls: string[] = await Promise.all(
+      updated.images.map((img, i) => uploadIfNeeded(img, `photo-${i}`) as Promise<string>)
+    );
 
-  // NEW — these were captured on the form but never uploaded/saved before
-  const [coverImageDesktopUrl, coverImageMobileUrl] = await Promise.all([
-    uploadIfNeeded(updated.coverImageDesktop, 'cover-desktop'),
-    uploadIfNeeded(updated.coverImageMobile, 'cover-mobile'),
-  ]);
+    // NEW — these were captured on the form but never uploaded/saved before
+    const [coverImageDesktopUrl, coverImageMobileUrl] = await Promise.all([
+      uploadIfNeeded(updated.coverImageDesktop, 'cover-desktop'),
+      uploadIfNeeded(updated.coverImageMobile, 'cover-mobile'),
+    ]);
 
-  const isRsvp = updated.registrationMode === 'rsvp';
+    const isRsvp = updated.registrationMode === 'rsvp';
 
-  await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-    title: updated.title,
-    category: updated.category === 'Other' ? updated.customCategory : updated.category,
-    description: updated.description,
-    date: updated.date,
-    endDate: updated.endDate,
-    time: updated.time,
-    venue: updated.isOnline ? null : updated.venue,
-    isOnline: updated.isOnline,
-    coverImageUrl: coverImageUrls[0] ?? null,
-    coverImageUrls,
-    coverImageDesktop: coverImageDesktopUrl,   // NEW — actually persisted now
-    coverImageMobile: coverImageMobileUrl,     // NEW — actually persisted now
-    registrationMode: updated.registrationMode,
-    tiers: isRsvp ? [] : updated.tiers,
-    rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
-    rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
-    updatedAt: serverTimestamp(),
-  });
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      title: updated.title,
+      category: updated.category === 'Other' ? updated.customCategory : updated.category,
+      description: updated.description,
+      date: updated.date,
+      endDate: updated.endDate,
+      time: updated.time,
+      venue: updated.isOnline ? null : updated.venue,
+      isOnline: updated.isOnline,
+      coverImageUrl: coverImageUrls[0] ?? null,
+      coverImageUrls,
+      coverImageDesktop: coverImageDesktopUrl,   // NEW — actually persisted now
+      coverImageMobile: coverImageMobileUrl,     // NEW — actually persisted now
+      registrationMode: updated.registrationMode,
+      tiers: isRsvp ? [] : updated.tiers,
+      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+      updatedAt: serverTimestamp(),
+    });
 
-  setIsEditOpen(false);          // close edit modal
-  setShowSaveConfirmation(true); // show success confirmation
-};
+    setIsEditOpen(false);          // close edit modal
+    setShowSaveConfirmation(true); // show success confirmation
+  };
 
   if (loading) {
     return (
@@ -268,24 +270,19 @@ const handleSaveEdit = async (updated: EventFormState) => {
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <button
-            onClick={() => navigate(-1)}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+            onClick={() => setIsEditOpen(true)}
+            className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
           >
-            <ArrowLeft size={18} />
+            <Pencil size={14} /> Edit
           </button>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsEditOpen(true)}
-              className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
-            >
-              <Pencil size={14} /> Edit
-            </button>
             <button
               onClick={handleShareEvent}
               className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
             >
               <Share2 size={18} />
             </button>
+            <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
           </div>
         </div>
 
@@ -449,13 +446,13 @@ const handleSaveEdit = async (updated: EventFormState) => {
         />
       )}
       {showSaveConfirmation && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-    <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">
-      <CheckCircle size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
-      <p className="text-sm font-semibold text-slate-800 dark:text-white">Event updated successfully</p>
-    </div>
-  </div>
-)}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">
+            <CheckCircle size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">Event updated successfully</p>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

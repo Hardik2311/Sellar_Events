@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { FiCamera, FiCheck, FiX, FiArrowLeft, FiUser } from 'react-icons/fi';
+import { FiCamera, FiCheck, FiX, FiUser } from 'react-icons/fi';
+import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
 import { storage } from '../lib/firebase';
@@ -376,20 +377,11 @@ const EditProfile: React.FC = () => {
         <div className="min-h-screen bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
             {/* ── Page Header ── */}
             <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-                <div className="flex items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={() => navigate(-1)}
-                        className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-                        aria-label="Go back"
-                    >
-                        <FiArrowLeft size={18} />
-                    </button>
-                    <div>
-                        <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Edit Profile</h1>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update account, organizer & address details</p>
-                    </div>
+                <div>
+                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Edit Profile</h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update account, organizer & address details</p>
                 </div>
+                <BackButton />
             </header>
 
             <div className="max-w-6xl mx-auto px-4 py-5 pb-36 md:pb-8">

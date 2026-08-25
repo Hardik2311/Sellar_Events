@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Ticket, Smartphone, CreditCard, Landmark, Loader2 } from 'lucide-react';
+import { Ticket, Smartphone, CreditCard, Landmark, Loader2 } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -43,12 +44,45 @@ const CheckoutPage: React.FC = () => {
   const { event, loading } = usePublicEvent(id);
   const quantities: Record<string, number> = (location.state as { quantities?: Record<string, number> })?.quantities ?? {};
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  interface AttendeeFormEntry {
+    name: string;
+    email: string;
+    phone: string;
+  }
+
+  // Ek ticket = ek attendee slot, tier order me flatten kiya — hooks se pehle chahiye isliye
+  // yaha `event` null-safe rakha hai (early return se pehle hi call hoga)
+  const ticketSlots = useMemo(() => {
+    if (!event) return [] as { tierId: string; tierName: string }[];
+    return event.tiers.flatMap((t) => {
+      const rawQty = quantities[t.id] ?? 0;
+      const qty = Number.isInteger(rawQty) && rawQty > 0 ? rawQty : 0;
+      return Array.from({ length: qty }, () => ({ tierId: t.id, tierName: t.name }));
+    });
+  }, [event, quantities]);
+
+  const [attendeeDetails, setAttendeeDetails] = useState<AttendeeFormEntry[]>([]);
   const [method, setMethod] = useState<PaymentMethod>('upi');
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
-  const [purchasedTickets, setPurchasedTickets] = useState<{ ticketId: string; tierName: string }[]>([]);
+  interface PurchasedTicket {
+    ticketId: string;
+    tierName: string;
+    attendeeName: string;
+  }
+
+  const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
+
+  // Slot count badalne par attendeeDetails ko resize karo (naya attendee blank, purana preserve)
+  useEffect(() => {
+    setAttendeeDetails((prev) => {
+      if (prev.length === ticketSlots.length) return prev;
+      return Array.from({ length: ticketSlots.length }, (_, i) => prev[i] ?? { name: '', email: '', phone: '' });
+    });
+  }, [ticketSlots.length]);
+
+  const updateAttendee = (index: number, field: keyof AttendeeFormEntry, value: string) => {
+    setAttendeeDetails((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  };
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
 
@@ -91,7 +125,11 @@ const CheckoutPage: React.FC = () => {
   }
 
   const lineItems = event.tiers
-    .map((t) => ({ tier: t, qty: quantities[t.id] ?? 0 }))
+    .map((t) => {
+      const rawQty = quantities[t.id] ?? 0;
+      const qty = Number.isInteger(rawQty) && rawQty > 0 ? rawQty : 0;
+      return { tier: t, qty };
+    })
     .filter((item) => item.qty > 0);
 
   const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
@@ -140,10 +178,25 @@ const CheckoutPage: React.FC = () => {
 
   const roundOffAmt = Number((total - subtotal).toFixed(2));
   const totalQty = lineItems.reduce((s, item) => s + item.qty, 0);
-  const detailsComplete = name.trim().length > 0 && email.trim().length > 0 && phone.trim().length >= 10;
+  const isValidPhone = (value: string) => /^[6-9]\d{9}$/.test(value.trim());
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+  const detailsComplete =
+    attendeeDetails.length === totalQty &&
+    totalQty > 0 &&
+    attendeeDetails.every((a) => a.name.trim().length > 0 && isValidEmail(a.email) && isValidPhone(a.phone));
 
   const handlePay = async () => {
     if (!detailsComplete || lineItems.length === 0) return;
+
+    const oversold = lineItems.find((item) => {
+      const remaining = item.tier.quantity - (item.tier.sold ?? 0);
+      return item.qty > remaining;
+    });
+    if (oversold) {
+      console.error(`Not enough tickets left for "${oversold.tier.name}".`);
+      return;
+    }
 
     const companyId = event.companyId;
     if (!companyId) {
@@ -163,8 +216,12 @@ const CheckoutPage: React.FC = () => {
         amountCollected: number;
         baseAmount: number;
         taxAmount: number;
+        attendeeName: string;
+        attendeeEmail: string;
+        attendeePhone: string;
       }[] = [];
 
+      let slotIndex = 0;
       for (const item of lineItems) {
         const unitPrice = item.tier.price;
         let unitBase = unitPrice;
@@ -185,20 +242,24 @@ const CheckoutPage: React.FC = () => {
 
         for (let i = 0; i < item.qty; i++) {
           const attendeeRef = doc(collection(db, 'companies', companyId, 'events', event.id, 'attendees'));
+          const attendee = attendeeDetails[slotIndex] ?? { name: '', email: '', phone: '' };
           attendeeWrites.push({
             ref: attendeeRef,
             tierName: item.tier.name,
             tierId: item.tier.id,
-            price: item.tier.price,               // nominal tier list price
-            amountCollected: Number(unitTotal.toFixed(2)), // what the customer actually paid for this ticket
+            price: item.tier.price,
+            amountCollected: Number(unitTotal.toFixed(2)),
             baseAmount: Number(unitBase.toFixed(2)),
             taxAmount: Number(unitTax.toFixed(2)),
+            attendeeName: attendee.name,
+            attendeeEmail: attendee.email,
+            attendeePhone: attendee.phone,
           });
+          slotIndex += 1;
         }
       }
-
       const initials = getEventInitials(event.title);
-      const created: { ticketId: string; tierName: string }[] = [];
+      const created: PurchasedTicket[] = [];
 
       await runTransaction(db, async (transaction) => {
         const eventSnap = await transaction.get(eventRef);
@@ -231,31 +292,36 @@ const CheckoutPage: React.FC = () => {
 
         transaction.update(eventRef, { tiers: updatedTiers });
 
-        attendeeWrites.forEach(({ ref, tierName, tierId, price, amountCollected, baseAmount, taxAmount }, index) => {
-          const ticketNumber = totalAlreadySold + index + 1;
-          const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+        attendeeWrites.forEach(
+          (
+            { ref, tierName, tierId, price, amountCollected, baseAmount, taxAmount, attendeeName, attendeeEmail, attendeePhone },
+            index
+          ) => {
+            const ticketNumber = totalAlreadySold + index + 1;
+            const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
 
-          transaction.set(ref, {
-            name,
-            email,
-            phone,
-            tierName,
-            ticketTierId: tierId,
-            amountPaid: amountCollected,   // dashboard's revenue totals read this — must be tax-inclusive
-            tierPrice: price,              // nominal tier list price, for reference/receipts
-            baseAmount,
-            taxAmount,
-            taxRate,
-            taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
-            ticketId,
-            status: 'valid',
-            checkedInAt: null,
-            createdAt: serverTimestamp(),
-            purchasedAt: serverTimestamp(),
-          });
+            transaction.set(ref, {
+              name: attendeeName,
+              email: attendeeEmail,
+              phone: attendeePhone,
+              tierName,
+              ticketTierId: tierId,
+              amountPaid: amountCollected,
+              tierPrice: price,
+              baseAmount,
+              taxAmount,
+              taxRate,
+              taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
+              ticketId,
+              status: 'valid',
+              checkedInAt: null,
+              createdAt: serverTimestamp(),
+              purchasedAt: serverTimestamp(),
+            });
 
-          created.push({ ticketId, tierName });
-        });
+            created.push({ ticketId, tierName, attendeeName });
+          }
+        );
       });
 
       setPurchasedTickets(created);
@@ -271,7 +337,6 @@ const CheckoutPage: React.FC = () => {
       <TicketConfirmation
         eventTitle={event.title}
         eventDate={event.date}
-        attendeeName={name}
         tickets={purchasedTickets}
         onDone={() => navigate('/discover')}
       />
@@ -281,14 +346,12 @@ const CheckoutPage: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-slate-900">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <button onClick={() => navigate(-1)} className="rounded-sm p-1.5 text-slate-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800">
-          <ArrowLeft size={20} />
-        </button>
+      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
         <div className="min-w-0">
           <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Checkout</h1>
           <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{event.title}</p>
         </div>
+        <BackButton />
       </header>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
@@ -335,40 +398,59 @@ const CheckoutPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Attendee details */}
+          {/* Attendee details — ek form per ticket */}
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Attendee details</h2>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="As it should appear on the ticket"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="10-digit mobile number"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
-                  />
-                </div>
+              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">
+                Attendee details{totalQty > 1 ? ` · ${totalQty} tickets` : ''}
+              </h2>
+              {!detailsComplete && attendeeDetails.some((a) => a.name || a.email || a.phone) && (
+                <p className="mb-3 text-xs font-medium text-amber-600">
+                  Enter a name, valid email, and a 10-digit mobile number (starting 6-9) for every ticket.
+                </p>
+              )}
+              <div className="flex flex-col gap-5">
+                {attendeeDetails.map((entry, index) => (
+                  <div key={index} className="flex flex-col gap-3">
+                    {totalQty > 1 && (
+                      <p className="text-xs font-bold text-[#007A78]">
+                        Ticket {index + 1} · {ticketSlots[index]?.tierName}
+                      </p>
+                    )}
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
+                      <input
+                        value={entry.name}
+                        onChange={(e) => updateAttendee(index, 'name', e.target.value)}
+                        placeholder="As it should appear on the ticket"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                      <input
+                        type="email"
+                        value={entry.email}
+                        onChange={(e) => updateAttendee(index, 'email', e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={entry.phone}
+                        onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        maxLength={10}
+                        placeholder="10-digit mobile number"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
+                      />
+                    </div>
+                    {index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

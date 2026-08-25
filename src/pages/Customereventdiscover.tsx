@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
-//import ThemeToggle from '../components/ui/ThemeToggle';
-//import ThemeToggle from '../components/ui/ThemeToggle';
+import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
 import {
     type PublicEvent,
     CATEGORY_GRADIENTS,
@@ -34,7 +33,13 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
             onClick={onOpen}
         >
             <div className={`relative h-36 w-full bg-gradient-to-br ${gradient}`}>
-                {event.coverImage && (
+                {(event.coverImageDesktop || event.coverImageMobile) ? (
+                    <CoverImageDisplay
+                        desktopSrc={event.coverImageDesktop}
+                        mobileSrc={event.coverImageMobile}
+                        alt={event.title}
+                    />
+                ) : event.coverImage && (
                     <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
                 )}
                 <span className="absolute top-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
@@ -311,10 +316,15 @@ const CustomerEventDiscover: React.FC = () => {
                             {!hasFiltersApplied && featured && (
                                 <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden cursor-pointer" onClick={() => openEvent(featured)}>
                                     <div
-                                        className={`relative flex h-52 w-full flex-col justify-end bg-gradient-to-br ${CATEGORY_GRADIENTS[featured.category] ?? CATEGORY_GRADIENTS.Other
-                                            } p-4`}
+                                        className={`relative flex h-52 w-full flex-col justify-end bg-gradient-to-br ${CATEGORY_GRADIENTS[featured.category] ?? CATEGORY_GRADIENTS.Other} p-4`}
                                     >
-                                        {featured.coverImage && (
+                                        {(featured.coverImageDesktop || featured.coverImageMobile) ? (
+                                            <CoverImageDisplay
+                                                desktopSrc={featured.coverImageDesktop}
+                                                mobileSrc={featured.coverImageMobile}
+                                                alt={featured.title}
+                                            />
+                                        ) : featured.coverImage && (
                                             <img src={featured.coverImage} alt={featured.title} className="absolute inset-0 h-full w-full object-cover" />
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />

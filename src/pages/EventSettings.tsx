@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 //import ThemeToggle from '../components/ui/ThemeToggle';
@@ -41,13 +41,14 @@ const EventFieldSettings: React.FC = () => {
   const { settings, loading } = useCompanySettings();
 
   type DraftEventSettings = Pick<typeof settings,
-    'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay'
+    'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay' | 'attendeeQuestionsEnabled'
   >;
   const [draft, setDraft] = useState<DraftEventSettings>({
     rsvpEnabled: settings.rsvpEnabled,
     eventFieldRequirements: settings.eventFieldRequirements,
     autoFeatureNearest: settings.autoFeatureNearest,
     ticketDisplay: settings.ticketDisplay,
+    attendeeQuestionsEnabled: settings.attendeeQuestionsEnabled,
   });
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -61,6 +62,7 @@ const EventFieldSettings: React.FC = () => {
         eventFieldRequirements: settings.eventFieldRequirements,
         autoFeatureNearest: settings.autoFeatureNearest,
         ticketDisplay: settings.ticketDisplay,
+        attendeeQuestionsEnabled: settings.attendeeQuestionsEnabled,
       });
       setInitialized(true);
     }
@@ -100,18 +102,12 @@ const EventFieldSettings: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-          title="Back"
-        >
-          <ArrowLeft size={18} />
-        </button>
+        <div className="w-9" />
         <div className="flex-1 text-center flex flex-col items-center justify-center">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Event Settings</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">RSVP and required fields for Create Event</p>
         </div>
-        {/* <ThemeToggle /> */}
+        <BackButton />
       </header>
 
       <main className="grow overflow-y-auto p-2">
@@ -220,6 +216,26 @@ const EventFieldSettings: React.FC = () => {
                   checked={draft.rsvpEnabled}
                   disabled={loading}
                   onChange={() => setDraft((prev) => ({ ...prev, rsvpEnabled: !prev.rsvpEnabled }))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Attendee Questions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Enable attendee questions</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Let organizers add custom questions attendees must answer during registration. Turn off to hide this section entirely from Create/Edit Event.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.attendeeQuestionsEnabled}
+                  disabled={loading}
+                  onChange={() => setDraft((prev) => ({ ...prev, attendeeQuestionsEnabled: !prev.attendeeQuestionsEnabled }))}
                 />
               </div>
             </CardContent>

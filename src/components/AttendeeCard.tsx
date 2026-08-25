@@ -163,12 +163,16 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           </div>
 
           <div className="flex rounded-sm overflow-hidden mt-3 gap-2">
-            {attendee.status === 'valid' && (
+            {attendee.status !== 'cancelled' && (
               <button
                 onClick={() => onCheckIn(attendee.id)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 text-xs font-extrabold shadow-xs"
+                title={attendee.status === 'checked_in' ? 'Tap to undo check-in' : 'Check in this attendee'}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-sm text-xs font-extrabold shadow-xs transition-colors ${attendee.status === 'checked_in'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950'
+                  }`}
               >
-                <CheckCircle2 size={14} /> Check In
+                <CheckCircle2 size={14} /> {attendee.status === 'checked_in' ? 'Checked In' : 'Check In'}
               </button>
             )}
             <a
