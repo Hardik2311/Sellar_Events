@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 // import { db } from '../lib/firebase';
 // import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 // import { getAuth } from 'firebase/auth';
+import BackButton from '../components/ui/BackButton';
 
 import {
   ChevronDown,
@@ -141,8 +142,9 @@ const SupportPage: React.FC = () => {
       <div className="bg-white dark:bg-[#1E293B] shadow-sm border-b border-gray-200 dark:border-slate-800 sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <h1 className="text-xl font-bold text-gray-800 dark:text-white">Help & Support</h1>
             <div className="w-10"></div>
+            <h1 className="text-xl font-bold text-gray-800 dark:text-white">Help & Support</h1>
+            <BackButton />
           </div>
         </div>
       </div>
@@ -183,13 +185,13 @@ const SupportPage: React.FC = () => {
           </AccordionItem>
 
           <AccordionItem
-  title="How do I reset my password?"
-  icon={<HelpCircle className="w-5 h-5" />}
-  isOpen={openSection === 'faq-4'}
-  onClick={() => toggleSection('faq-4')}
->
-  Click "Forgot Password" on the login screen and follow the instructions sent to your registered email to reset your password.
-</AccordionItem>
+            title="How do I reset my password?"
+            icon={<HelpCircle className="w-5 h-5" />}
+            isOpen={openSection === 'faq-4'}
+            onClick={() => toggleSection('faq-4')}
+          >
+            Click "Forgot Password" on the login screen and follow the instructions sent to your registered email to reset your password.
+          </AccordionItem>
 
           <AccordionItem
             title="Is my event and attendee data safe?"

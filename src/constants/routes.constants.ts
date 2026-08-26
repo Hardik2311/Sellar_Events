@@ -15,7 +15,14 @@ export const ROUTES = {
   EVENTS_SETTINGS_EVENT: 'settings/event',
   EVENTS_SETTINGS_COMPANY: 'settings/company',
   EVENTS_SETTINGS_APP: 'settings/app',
-   EVENTS_SUPPORT: 'support',
+  EVENTS_SETTINGS_USERS: 'settings/users',      // NEW – list/manage users
+  EVENTS_USER_ADD: 'settings/users/add',        // NEW – add user form
+  EVENTS_SUPPORT: 'support',
+  EVENTS_REPORTS: 'reports',
+  EVENTS_REPORTS_EXPENSE: 'reports/expense/:eventId',
+  EVENTS_REPORTS_SALES: 'reports/sales/:eventId',
+  EVENTS_REPORTS_CUSTOMER: 'reports/customer/:eventId',
+  EVENTS_REPORTS_PNL: 'reports/pnl/:eventId',
 
   // Public, customer-facing routes
   // :slug is "event-title--<firestoreId>" — id is parsed out after the last "--"

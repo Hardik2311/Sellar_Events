@@ -14,7 +14,7 @@ interface UserProfile {
   panNumber?: string;
   gstinNumber?: string;
   gstType?: string;
-    aadhaarDocUrls?: DocFile[];
+  aadhaarDocUrls?: DocFile[];
   panDocUrls?: DocFile[];
   instagram?: string;
   facebook?: string;
@@ -99,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             panNumber: userData.panNumber || mergedCompany.panNumber,
             gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
             gstType: userData.gstType || mergedCompany.gstType,
-                        aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
+            aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
             panDocUrls: normalizeDocFiles(userData.panDocUrls),
             instagram: userData.instagram || mergedCompany.instagram,
             facebook: userData.facebook || mergedCompany.facebook,

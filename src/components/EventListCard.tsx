@@ -14,7 +14,7 @@ interface EventListCardProps {
 }
 
 export const EventListCard: React.FC<EventListCardProps> = ({
-  events,
+  events = [],
   selectedEventId,
   onSelect,
   searchValue,

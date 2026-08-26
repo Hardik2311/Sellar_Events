@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings } from 'react-icons/fi';
+import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings, FiBarChart2 } from 'react-icons/fi';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
@@ -69,11 +69,11 @@ const Account: React.FC = () => {
             </div>
 
             {/* ── Theme selector & Quick links ── */}
-            <div className="flex-1 p-4">
-                <div className="w-full max-w-2xl mx-auto space-y-4">
+            <div className="flex-1 p-4 sm:p-6">
+                <div className="w-full max-w-4xl mx-auto space-y-4">
                     <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">Quick Actions</h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div
                             className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70"
                         >
@@ -96,9 +96,19 @@ const Account: React.FC = () => {
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
 
+                        <Link to={`${ROUTES.EVENTS}/${ROUTES.EVENTS_REPORTS}`}
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                        >
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+                                <FiBarChart2 className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-bold flex-1">Reports</span>
+                            <span className="text-slate-400 font-bold">→</span>
+                        </Link>
+
                         <Link
                             to="/events/settings"
-                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all sm:col-span-2"
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
                             <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-500 dark:text-slate-400">
                                 <FiSettings className="w-5 h-5" />
