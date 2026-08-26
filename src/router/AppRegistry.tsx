@@ -13,6 +13,11 @@ const EventFieldSettings = lazy(() => import('../pages/EventSettings'));
 const CompanySettings = lazy(() => import('../pages/CompanySetting'));
 const AppSettings = lazy(() => import('../pages/AppSettings'));
 const SupportPage = lazy(() => import('../pages/SupportPage'));
+const ReportsHub = lazy(() => import('../pages/ReportsHub'));
+const ExpenseReportPage = lazy(() => import('../pages/Reports/ExpenseReport'));
+const SalesReportPage = lazy(() => import('../pages/Reports/SalesReport'));
+const CustomerReportPage = lazy(() => import('../pages/Reports/CustomerReport'));
+const PnlReportPage = lazy(() => import('../pages/Reports/PNLReport'));
 
 export interface AppRoute {
   path?: string;
@@ -45,6 +50,11 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_SETTINGS_COMPANY, component: CompanySettings },
       { path: ROUTES.EVENTS_SETTINGS_APP, component: AppSettings },
       { path: ROUTES.EVENTS_SUPPORT, component: SupportPage },
+      { path: ROUTES.EVENTS_REPORTS, component: ReportsHub },
+      { path: ROUTES.EVENTS_REPORTS_EXPENSE, component: ExpenseReportPage },
+      { path: ROUTES.EVENTS_REPORTS_SALES, component: SalesReportPage },
+      { path: ROUTES.EVENTS_REPORTS_CUSTOMER, component: CustomerReportPage },
+      { path: ROUTES.EVENTS_REPORTS_PNL, component: PnlReportPage },
     ],
   },
   // Adding a new module later (e.g. "billing") just means pushing another

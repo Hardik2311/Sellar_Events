@@ -1,8 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, type ReactNode } from 'react';
 import { ChevronDown, Calendar } from 'lucide-react';
 
-// Same local-date helper as the catalogue app's Filter.tsx —
-// avoids UTC offset bugs when comparing "today" against stored dates.
 const getLocalDateString = (date: Date = new Date()) => {
   const offset = date.getTimezoneOffset() * 60000;
   const localDate = new Date(date.getTime() - offset);

@@ -51,6 +51,11 @@ service cloud.firestore {
         match /attendees/{attendeeId} {
           allow read, write: if isCompanyMember(companyId);
         }
+
+        // Expenses (Event budgeting/expenses)
+        match /expenses/{expenseId} {
+          allow read, write: if isCompanyMember(companyId);
+        }
       }
 
       // Catch-all for any other company subcollections
