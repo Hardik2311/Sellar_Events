@@ -1,11 +1,13 @@
 import { Suspense, useRef, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, Receipt } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, Receipt, UserPlus } from 'lucide-react'; // + UserPlus
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { ExpenseModal } from '../components/ExpenseModal';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import type { EventSummary } from '../types/event.types';
+import { UserAddModal } from '../pages/UserAdd'; 
+import { canManageUsers } from '../enum/enum'; // NEW
 
 const NAV_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -15,24 +17,31 @@ const NAV_ITEMS = [
   { to: '/events/account', label: 'Account', icon: <UserCircle size={18} /> },
 ];
 
-// Mobile bottom nav: only edges stay visible, rest live inside the "+" quick actions popup
-const MOBILE_EDGE_ITEMS = [
+// NEW — only shown when canManageUsers(profile.role) is true — opens Add User as a popup (not a route)
+const USER_MANAGEMENT_ITEM = { label: 'Add User', icon: <UserPlus size={18} /> };
+
+const MOBILE_LEFT_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} /> },
+];
+
+const MOBILE_RIGHT_ITEMS = [
+  { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} /> },
   { to: '/events/account', label: 'Account', icon: <UserCircle size={18} /> },
 ];
 
 const MOBILE_QUICK_LINKS = [
   { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={20} /> },
-  { to: '/events/discover', label: 'Discover', icon: <Compass size={20} /> },
-  { to: '/events/attendees', label: 'Attendees', icon: <Users size={20} /> },
 ];
 
 const EventsLayout = () => {
   const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { profile } = useAuth();
+  const showManageUsers = canManageUsers(profile?.role); // NEW
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false); // NEW
+const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const { addExpense } = useExpenses(profile?.companyId, 'general');
@@ -91,6 +100,15 @@ const EventsLayout = () => {
               <span>{label}</span>
             </NavLink>
           ))}
+          {showManageUsers && (
+  <button
+    onClick={() => setIsUserAddModalOpen(true)}
+    className={sidebarLinkClass(false)}
+  >
+    <span>{USER_MANAGEMENT_ITEM.icon}</span>
+    <span>{USER_MANAGEMENT_ITEM.label}</span>
+  </button>
+)}
           <button
             onClick={() => setIsExpenseModalOpen(true)}
             className={sidebarLinkClass(false)}
@@ -127,7 +145,6 @@ const EventsLayout = () => {
           />
         )}
 
-        {/* Quick actions popup */}
         {isQuickActionsOpen && (
           <div className="absolute bottom-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-40 w-60 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] shadow-xl p-2 grid grid-cols-2 gap-1.5">
             {MOBILE_QUICK_LINKS.map(({ to, icon, label }) => (
@@ -147,6 +164,18 @@ const EventsLayout = () => {
                 <span className="truncate">{label}</span>
               </NavLink>
             ))}
+            {showManageUsers && (
+  <button
+    onClick={() => {
+      setIsQuickActionsOpen(false);
+      setIsUserAddModalOpen(true);
+    }}
+    className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+  >
+    {USER_MANAGEMENT_ITEM.icon}
+    <span className="truncate">{USER_MANAGEMENT_ITEM.label}</span>
+  </button>
+)}
             <button
               onClick={() => {
                 setIsQuickActionsOpen(false);
@@ -158,26 +187,32 @@ const EventsLayout = () => {
               <span className="truncate">Add Expense</span>
             </button>
           </div>
-        )}
+        )
+        }
 
         <div className="relative flex justify-around items-center gap-1 px-2 py-2 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] shadow-lg">
-          {/* Dashboard - left */}
-          <NavLink
-            to={MOBILE_EDGE_ITEMS[0].to}
-            end
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
-                ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
-              }`
-            }
-          >
-            {MOBILE_EDGE_ITEMS[0].icon}
-            <span className="truncate">{MOBILE_EDGE_ITEMS[0].label}</span>
-          </NavLink>
+          {/* Left group */}
+          <div className="flex-1 flex items-center gap-1">
+            {MOBILE_LEFT_ITEMS.map(({ to, icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end
+                className={({ isActive }) =>
+                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
+                    ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                  }`
+                }
+              >
+                {icon}
+                <span className="truncate">{label}</span>
+              </NavLink>
+            ))}
+          </div>
 
           {/* Center quick actions "+" button */}
-          <div className="flex-1 flex justify-center">
+          <div className="shrink-0 flex justify-center px-1">
             <button
               onClick={() => setIsQuickActionsOpen((v) => !v)}
               aria-label="Quick actions"
@@ -190,22 +225,27 @@ const EventsLayout = () => {
             </button>
           </div>
 
-          {/* Account - right */}
-          <NavLink
-            to={MOBILE_EDGE_ITEMS[1].to}
-            end
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
-                ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
-              }`
-            }
-          >
-            {MOBILE_EDGE_ITEMS[1].icon}
-            <span className="truncate">{MOBILE_EDGE_ITEMS[1].label}</span>
-          </NavLink>
+          {/* Right group */}
+          <div className="flex-1 flex items-center gap-1">
+            {MOBILE_RIGHT_ITEMS.map(({ to, icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end
+                className={({ isActive }) =>
+                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
+                    ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                  }`
+                }
+              >
+                {icon}
+                <span className="truncate">{label}</span>
+              </NavLink>
+            ))}
+          </div>
         </div>
-      </nav>
+      </nav >
 
       <ExpenseModal
         isOpen={isExpenseModalOpen}
@@ -217,7 +257,11 @@ const EventsLayout = () => {
           await addExpense(profile.companyId, 'general', data);
         }}
       />
-    </div>
+      <UserAddModal
+  isOpen={isUserAddModalOpen}
+  onClose={() => setIsUserAddModalOpen(false)}
+/>
+    </div >
   );
 };
 

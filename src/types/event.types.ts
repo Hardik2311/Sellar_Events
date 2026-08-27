@@ -46,7 +46,19 @@ export interface EventDashboardData {
 // ─── Create Event form types ──────────────────────────────────────────────────
 // Separate from TicketTier/EventSummary above because a draft tier has no
 // `sold` count yet — that only exists once an order has been placed.
+export interface TextStyleConfig {
+  fontSize: number;                 // px
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  color: string;                    // hex, e.g. '#111827'
+}
 
+export const DEFAULT_TEXT_STYLE: TextStyleConfig = {
+  fontSize: 16,
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  color: '#111827',
+};
 export const EVENT_CATEGORIES = ['Music', 'Comedy', 'Workshop', 'Networking', 'Market', 'Sports', 'Other'] as const;
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 
@@ -77,6 +89,8 @@ export interface EventFormState {
   venue: string;
   isOnline: boolean;
   images: string[];
+  titleStyle: TextStyleConfig;
+  descriptionStyle: TextStyleConfig;
   // NEW — dedicated cover slots, separate from the gallery `images` above
   coverImageDesktop: string | null;
   coverImageMobile: string | null;

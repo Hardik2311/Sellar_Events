@@ -11,12 +11,13 @@ import CoverPhotoUpload from './ui/CoverPhotoUpload';
 import PastEventsGallery from './ui/PastEventsGallery';
 import TicketTierEditor from './TicketTierEditor';
 import CustomFieldsEditor from './CustomFieldsEditor';
-import { EVENT_CATEGORIES, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
+import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
 import type { PublicEvent } from '../data/events';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from './ui/Timeselect';
+import TextStyleControls from './ui/TextStyleControls';
 
 type EventItem = PublicEvent;
 
@@ -61,6 +62,8 @@ const toFormState = (event: EventItem): EventFormState => ({
   rsvpLink: event.rsvpLink ?? '',
   rsvpButtonLabel: event.rsvpButtonLabel ?? 'RSVP Now',
   customFields: event.customFields ?? [],
+  titleStyle: event.titleStyle ?? { ...DEFAULT_TEXT_STYLE },
+  descriptionStyle: event.descriptionStyle ?? { ...DEFAULT_TEXT_STYLE, fontSize: 14 },
 });
 
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
@@ -154,13 +157,32 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   />
                 </div>
 
-                <FloatingLabelInput
-                  id="edit-title"
-                  label="Event title *"
-                  value={form.title}
-                  onChange={(e) => update('title', e.target.value)}
-                  required
-                />
+                <div>
+                  <TextStyleControls
+                    value={form.titleStyle}
+                    onChange={(s) => update('titleStyle', s)}
+                  />
+                  <FloatingLabelInput
+                    id="edit-title"
+                    label="Event title *"
+                    value={form.title}
+                    onChange={(e) => update('title', e.target.value)}
+                    required
+                  />
+                  {form.title.trim().length > 0 && (
+                    <p
+                      className="mt-1 text-xs text-slate-500 dark:text-slate-400"
+                      style={{
+                        fontSize: form.titleStyle.fontSize,
+                        fontWeight: form.titleStyle.fontWeight,
+                        fontStyle: form.titleStyle.fontStyle,
+                        color: form.titleStyle.color,
+                      }}
+                    >
+                      {form.title}
+                    </p>
+                  )}
+                </div>
 
                 {/*
                   Layout rule:
@@ -311,14 +333,33 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </div>
                 )}
 
-                <FloatingLabelTextArea
-                  id="edit-description"
-                  label={req.description ? 'Description *' : 'Description'}
-                  rows={4}
-                  value={form.description}
-                  onChange={(e) => update('description', e.target.value)}
-                  required={req.description}
-                />
+                <div>
+                  <TextStyleControls
+                    value={form.descriptionStyle}
+                    onChange={(s) => update('descriptionStyle', s)}
+                  />
+                  <FloatingLabelTextArea
+                    id="edit-description"
+                    label={req.description ? 'Description *' : 'Description'}
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => update('description', e.target.value)}
+                    required={req.description}
+                  />
+                  {form.description.trim().length > 0 && (
+                    <p
+                      className="mt-1 whitespace-pre-wrap"
+                      style={{
+                        fontSize: form.descriptionStyle.fontSize,
+                        fontWeight: form.descriptionStyle.fontWeight,
+                        fontStyle: form.descriptionStyle.fontStyle,
+                        color: form.descriptionStyle.color,
+                      }}
+                    >
+                      {form.description}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

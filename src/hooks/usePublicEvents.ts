@@ -39,6 +39,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
   customFields: d.customFields || [],
+  titleStyle: d.titleStyle ?? undefined,
+  descriptionStyle: d.descriptionStyle ?? undefined,
 });
 
 export function usePublicEvents() {

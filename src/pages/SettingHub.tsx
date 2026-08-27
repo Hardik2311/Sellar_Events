@@ -1,12 +1,15 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarCog, Landmark, Settings2 } from 'lucide-react';
-//import ThemeToggle from '../components/ui/ThemeToggle';
+import { CalendarCog, Landmark, Settings2, Users } from 'lucide-react'; // + Users
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
+import { useAuth } from '../context/AuthContext';   // NEW
+import { canManageUsers } from '../enum/enum';
 
 const SettingsHub: React.FC = () => {
     const navigate = useNavigate();
+    const { profile } = useAuth();
+    const showManageUsers = canManageUsers(profile?.role);
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -62,6 +65,24 @@ const SettingsHub: React.FC = () => {
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Theme and app-wide preferences</p>
                         </div>
                     </Link>
+
+                    {/* NEW BLOCK */}
+                    {showManageUsers && (
+                        <Link
+                            to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_USERS}`.replace('//', '/')}
+                            className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                        >
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                                <Users className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold">Manage Users</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Add Team Leaders and Team Members
+                                </p>
+                            </div>
+                        </Link>
+                    )}
                 </div>
             </main>
         </div>

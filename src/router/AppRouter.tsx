@@ -7,6 +7,8 @@ import { AppRegistry } from './AppRegistry';
 
 const Login = lazy(() => import('../pages/LoginPage'));
 const Signup = lazy(() => import('../pages/SignUp'));
+const ForgotPasswordPage = lazy(() => import('../pages/ForgotPasswordPage'));
+const ResetPassword = lazy(() => import('../pages/ResetPassword'));
 const CustomerEventDiscover = lazy(() => import('../pages/Customereventdiscover'));
 const CustomerEventDetail = lazy(() => import('../pages/Customereventdetail'));
 const CheckoutPage = lazy(() => import('../pages/Checkout'));
@@ -37,6 +39,8 @@ const router = createBrowserRouter([
 
       { path: ROUTES.LOGIN, element: <Login /> },
       { path: ROUTES.SIGNUP, element: <Signup /> },
+      { path: ROUTES.FORGOT_PASSWORD, element: <ForgotPasswordPage /> },
+      { path: ROUTES.RESET_PASSWORD, element: <ResetPassword /> },
 
       // Protected organizer app
       {

@@ -66,6 +66,8 @@ const useEvent = (companyId?: string, id?: string) => {
           rsvpLink: d.rsvpLink || '',
           rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
           customFields: d.customFields || [],
+          titleStyle: d.titleStyle ?? undefined,
+          descriptionStyle: d.descriptionStyle ?? undefined,
         });
       } else {
         setEvent(undefined);
@@ -185,6 +187,8 @@ const OrganizerEventDetail: React.FC = () => {
       tiers: isRsvp ? [] : updated.tiers,
       rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
       rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+      titleStyle: updated.titleStyle,
+      descriptionStyle: updated.descriptionStyle,
       updatedAt: serverTimestamp(),
     });
 
