@@ -176,8 +176,10 @@ const CustomerEventDiscover: React.FC = () => {
     // The featured pick is independent of filters — it's always the
     // organizer/admin-flagged event (or soonest upcoming as fallback), and
     // only shown on the unfiltered view so it doesn't fight the search results.
-    const featured = useMemo(
-        () => getFeaturedEvent(upcomingEvents, settings.autoFeatureNearest),
+        const featured = useMemo(
+        // helper ka "autoFeatureNearest" arg ka purana matlab hai "fallback allowed" —
+        // naye setting mapping mein ON = manual-only, isliye yahan invert karke bhej rahe hain
+        () => getFeaturedEvent(upcomingEvents, !settings.autoFeatureNearest),
         [upcomingEvents, settings.autoFeatureNearest]
     );
     const gridEvents = hasFiltersApplied ? filtered : filtered.filter((e) => e.id !== featured?.id);

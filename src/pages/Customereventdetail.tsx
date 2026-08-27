@@ -195,11 +195,25 @@ const CustomerEventDetail: React.FC = () => {
           <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 p-4">
+                <div className="absolute inset-x-0 bottom-0 p-4">
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <h1 className="text-2xl font-bold text-white">{event.title}</h1>
+          <h1
+            className="text-2xl font-bold text-white"
+            style={
+              event.titleStyle
+                ? {
+                    fontSize: event.titleStyle.fontSize + 8, // hero heading is naturally larger — offset keeps proportion
+                    fontWeight: event.titleStyle.fontWeight,
+                    fontStyle: event.titleStyle.fontStyle,
+                    color: event.titleStyle.color,
+                  }
+                : undefined
+            }
+          >
+            {event.title}
+          </h1>
         </div>
       </div>
 
@@ -241,10 +255,24 @@ const CustomerEventDetail: React.FC = () => {
             </CardContent>
           </Card>
           {/* About */}
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+                    <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{event.description}</p>
+              <p
+                className="whitespace-pre-line leading-relaxed"
+                style={
+                  event.descriptionStyle
+                    ? {
+                        fontSize: event.descriptionStyle.fontSize,
+                        fontWeight: event.descriptionStyle.fontWeight,
+                        fontStyle: event.descriptionStyle.fontStyle,
+                        color: event.descriptionStyle.color,
+                      }
+                    : undefined
+                }
+              >
+                {event.description}
+              </p>
             </CardContent>
           </Card>
 

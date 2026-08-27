@@ -12,6 +12,8 @@ const SettingsHub = lazy(() => import('../pages/SettingHub'));
 const EventFieldSettings = lazy(() => import('../pages/EventSettings'));
 const CompanySettings = lazy(() => import('../pages/CompanySetting'));
 const AppSettings = lazy(() => import('../pages/AppSettings'));
+const ManageUsersPage = lazy(() => import('../pages/Reports/ManageUsersPage')); // NEW
+const UserAdd = lazy(() => import('../pages/UserAdd'));
 const SupportPage = lazy(() => import('../pages/SupportPage'));
 const ReportsHub = lazy(() => import('../pages/ReportsHub'));
 const ExpenseReportPage = lazy(() => import('../pages/Reports/ExpenseReport'));
@@ -49,6 +51,8 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_SETTINGS_EVENT, component: EventFieldSettings },
       { path: ROUTES.EVENTS_SETTINGS_COMPANY, component: CompanySettings },
       { path: ROUTES.EVENTS_SETTINGS_APP, component: AppSettings },
+      { path: ROUTES.EVENTS_SETTINGS_USERS, component: ManageUsersPage }, // NEW
+      { path: ROUTES.EVENTS_USER_ADD, component: UserAdd },
       { path: ROUTES.EVENTS_SUPPORT, component: SupportPage },
       { path: ROUTES.EVENTS_REPORTS, component: ReportsHub },
       { path: ROUTES.EVENTS_REPORTS_EXPENSE, component: ExpenseReportPage },

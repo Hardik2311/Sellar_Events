@@ -17,6 +17,7 @@ import {
   buildEventSlugId,
 } from '../data/events';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
+import { useCompanySettings } from '../hooks/useSettings';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -69,7 +70,8 @@ const OrganizerEventCard: React.FC<{
   onEdit: (event: PublicEvent) => void;
   onDuplicate: (id: string) => void;
   onLiveView: (event: PublicEvent) => void;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView }) => {
+  showFeaturedToggle: boolean;
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView, showFeaturedToggle }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -210,18 +212,27 @@ const OrganizerEventCard: React.FC<{
         </div>
 
         {/* ── Organizer controls ─────────────────────────────────── */}
-        <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
+                <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
           <div className="flex items-center gap-1.5">
             <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{isLive ? 'Live' : 'Draft'}</span>
             <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
-            <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
-          </div>
+          {showFeaturedToggle ? (
+            <div className="flex items-center gap-1.5">
+              <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
+              <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
+            </div>
+          ) : (
+            event.featured && (
+              <div className="flex items-center gap-1.5">
+                <Star size={13} className="fill-[#007A78] text-[#007A78]" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Auto-featured</span>
+              </div>
+            )
+          )}
         </div>
 
         {isLive && (
@@ -248,6 +259,9 @@ const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
+  const { settings } = useCompanySettings();
+  // OFF => auto-feature nearest (toggle hidden); ON => organizer feature manually karega
+  const showFeaturedToggle = settings.autoFeatureNearest;
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [format, setFormat] = useState<FormatFilter>('all');
@@ -459,7 +473,7 @@ const OrganizerEventDiscover: React.FC = () => {
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((event) => (
-                  <OrganizerEventCard
+                                    <OrganizerEventCard
                     key={event.id}
                     event={event}
                     onOpen={() => openEvent(event)}
@@ -469,6 +483,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     onEdit={setEditingEvent}
                     onDuplicate={duplicateEvent}
                     onLiveView={openLiveView}
+                    showFeaturedToggle={showFeaturedToggle}
                   />
                 ))}
               </div>

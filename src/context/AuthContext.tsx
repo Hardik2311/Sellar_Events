@@ -88,7 +88,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const rootData = rootSnap && rootSnap.exists() ? rootSnap.data() : {};
 
           const mergedCompany = { ...rootData, ...companyData };
-
+ const finalRole = userData.role || mergedCompany.role || 'admin';
+          console.log('[AuthContext] Resolved role for current user:', JSON.stringify(finalRole)); // NEW — check exact value/casinga
           setProfile({
             fullName: userData.fullName || userData.name || mergedCompany.fullName || firebaseUser.displayName || 'Organizer User',
             email: userData.email || mergedCompany.email || firebaseUser.email || '',

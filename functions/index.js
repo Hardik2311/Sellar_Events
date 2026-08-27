@@ -11,8 +11,12 @@ const { setGlobalOptions } = require("firebase-functions");
 const { onRequest } = require("firebase-functions/https");
 const logger = require("firebase-functions/logger");
 const { createUser } = require("./users/CreateUser");
+const { addTeamMember } = require("./users/AddTeamMember");
+const { deleteTeamMember } = require("./users/DeleteTeamMember");
 const { createCompany } = require("./companies/CreateCompany");
 exports.createUser = createUser;
+exports.addTeamMember = addTeamMember;
+exports.deleteTeamMember = deleteTeamMember; // NEW
 exports.createCompany = createCompany;
 
 // For cost control, you can set the maximum number of containers that can be

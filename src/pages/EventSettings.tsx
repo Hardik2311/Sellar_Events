@@ -121,7 +121,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Auto-feature nearest event</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    When no event is manually marked Featured, automatically lead with the soonest upcoming one. Turn off to show nothing until you feature one yourself.
+                    When off, the soonest upcoming event is featured automatically and the Featured toggle is hidden on your event cards. Turn on to pick the Featured event yourself from the Discover page.
                   </p>
                 </div>
                 <SettingToggle

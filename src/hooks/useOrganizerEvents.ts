@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import type { PublicEvent } from '../data/events';
@@ -39,6 +39,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
   customFields: d.customFields || [],
+  titleStyle: d.titleStyle ?? undefined,
+  descriptionStyle: d.descriptionStyle ?? undefined,
 });
 
 export const useOrganizerEvents = () => {
@@ -74,8 +76,24 @@ export const useOrganizerEvents = () => {
 
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {
     if (!profile?.companyId) return;
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { featured: !currentFeatured });
-  };
+    const nextFeatured = !currentFeatured;
+    const batch = writeBatch(db);
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+    batch.update(eventRef, { featured: nextFeatured });
+
+    // Ek time pe sirf ek hi event featured ho sakta hai —
+    // isko ON kar rahe hain to baaki sab jo already featured hain unko OFF karo
+    if (nextFeatured) {
+        events
+            .filter((e) => e.id !== id && e.featured)
+            .forEach((e) => {
+                const otherRef = doc(db, 'companies', profile.companyId, 'events', e.id);
+                batch.update(otherRef, { featured: false });
+            });
+    }
+
+    await batch.commit();
+};
 
   const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
@@ -163,6 +181,8 @@ export const useOrganizerEvents = () => {
       rsvpLink: form.rsvpLink,
       rsvpButtonLabel: form.rsvpButtonLabel,
       customFields: form.customFields || [],
+      titleStyle: form.titleStyle,
+      descriptionStyle: form.descriptionStyle,
     };
 
     if (form.registrationMode === 'tickets') {

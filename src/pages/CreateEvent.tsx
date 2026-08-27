@@ -13,7 +13,7 @@ import CoverPhotoUpload from '../components/ui/CoverPhotoUpload';
 import PastEventsGallery from '../components/ui/PastEventsGallery';
 import TicketTierEditor from '../components/TicketTierEditor';
 import CustomFieldsEditor from '../components/CustomFieldsEditor';
-import { EVENT_CATEGORIES, type EventFormState, type TicketTierDraft } from '../types/event.types';
+import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -22,6 +22,7 @@ import { db, storage } from '../lib/firebase';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
+import TextStyleControls from '../components/ui/TextStyleControls';
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
@@ -52,6 +53,8 @@ const INITIAL_STATE: EventFormState = {
   rsvpLink: '',
   rsvpButtonLabel: 'RSVP Now',
   customFields: [],
+  titleStyle: { ...DEFAULT_TEXT_STYLE },
+  descriptionStyle: { ...DEFAULT_TEXT_STYLE, fontSize: 14 },
 };
 
 const CreateEvent: React.FC = () => {
@@ -174,8 +177,10 @@ const CreateEvent: React.FC = () => {
 
       const docRef = await addDoc(eventsRef, {
         title: form.title,
+        titleStyle: form.titleStyle,
         category: form.category === 'Other' ? form.customCategory : form.category,
         description: form.description,
+        descriptionStyle: form.descriptionStyle,
         startDate,
         date: form.date,
         endDate: form.endDate,
@@ -253,13 +258,32 @@ const CreateEvent: React.FC = () => {
                 <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Basic Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <FloatingLabelInput
-                  id="title"
-                  label="Event title *"
-                  value={form.title}
-                  onChange={(e) => update('title', e.target.value)}
-                  required
-                />
+                <div>
+                  <TextStyleControls
+                    value={form.titleStyle}
+                    onChange={(s) => update('titleStyle', s)}
+                  />
+                  <FloatingLabelInput
+                    id="title"
+                    label="Event title *"
+                    value={form.title}
+                    onChange={(e) => update('title', e.target.value)}
+                    required
+                  />
+                  {form.title.trim().length > 0 && (
+                    <p
+                      className="mt-1 text-xs text-slate-500 dark:text-slate-400"
+                      style={{
+                        fontSize: form.titleStyle.fontSize,
+                        fontWeight: form.titleStyle.fontWeight,
+                        fontStyle: form.titleStyle.fontStyle,
+                        color: form.titleStyle.color,
+                      }}
+                    >
+                      {form.title}
+                    </p>
+                  )}
+                </div>
 
                 <div className={`grid grid-cols-1 ${isOtherCategory ? 'sm:grid-cols-2' : ''} gap-4 items-start`}>
                   <div>
@@ -312,14 +336,33 @@ const CreateEvent: React.FC = () => {
                   </div>
                 </FormField>
 
-                <FloatingLabelTextArea
-                  id="description"
-                  label={req.description ? 'Description *' : 'Description'}
-                  rows={4}
-                  value={form.description}
-                  onChange={(e) => update('description', e.target.value)}
-                  required={req.description}
-                />
+                <div>
+                  <TextStyleControls
+                    value={form.descriptionStyle}
+                    onChange={(s) => update('descriptionStyle', s)}
+                  />
+                  <FloatingLabelTextArea
+                    id="description"
+                    label={req.description ? 'Description *' : 'Description'}
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => update('description', e.target.value)}
+                    required={req.description}
+                  />
+                  {form.description.trim().length > 0 && (
+                    <p
+                      className="mt-1 whitespace-pre-wrap"
+                      style={{
+                        fontSize: form.descriptionStyle.fontSize,
+                        fontWeight: form.descriptionStyle.fontWeight,
+                        fontStyle: form.descriptionStyle.fontStyle,
+                        color: form.descriptionStyle.color,
+                      }}
+                    >
+                      {form.description}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
