@@ -18,6 +18,11 @@ import type { EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { buildEventSlugId } from '../data/events';
+import { usePermissions } from '../hooks/usePermissions';
+import { Permission } from '../types/permissions.types';
+import { useCompanySettings } from '../hooks/useSettings';
+import { ShareOptionsModal } from '../components/ShareOptionsModal';
+import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
 
 // Real-time single event listener
 const useEvent = (companyId?: string, id?: string) => {
@@ -84,6 +89,7 @@ const OrganizerEventDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { can } = usePermissions();
   const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -105,15 +111,30 @@ const OrganizerEventDetail: React.FC = () => {
     setActiveImageIndex((i) => (i + 1) % event.images.length);
   };
 
-  const handleShareEvent = async () => {
-    if (!event) return;
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [linkCopiedToast, setLinkCopiedToast] = useState(false); // NEW — separate toast from "event updated"
 
+  useEffect(() => {
+    if (!showSaveConfirmation) return;
+    const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
+    return () => clearTimeout(t);
+  }, [showSaveConfirmation]);
+
+  useEffect(() => {
+    if (!linkCopiedToast) return;
+    const t = setTimeout(() => setLinkCopiedToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [linkCopiedToast]);
+
+  // NEW — WhatsApp / Copy link share flow
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [resolvedShareUrl, setResolvedShareUrl] = useState('');
+  const { settings } = useCompanySettings();
+
+  const resolveShareUrl = async () => {
+    if (!event) return '';
     const slugId = buildEventSlugId(event.title, event.id);
-
-    // Safe fallback in case the organizer hasn't claimed a subdomain yet —
-    // points at the public customer route, ends in the readable title
     let shareUrl = `${window.location.origin}/e/${slugId}`;
-
     try {
       if (profile?.companyId) {
         const companySnap = await getDoc(doc(db, 'companies', profile.companyId));
@@ -124,28 +145,29 @@ const OrganizerEventDetail: React.FC = () => {
     } catch (error) {
       console.error('Error fetching subdomain for sharing:', error);
     }
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: event.title,
-          text: `Check out ${event.title}${event.organizerName ? ` by ${event.organizerName}` : ''} on Sellar Events`,
-          url: shareUrl,
-        });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-      }
-    } catch (error) {
-      console.log('Share cancelled:', error);
-    }
+    return shareUrl;
   };
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-  useEffect(() => {
-    if (!showSaveConfirmation) return;
-    const t = setTimeout(() => setShowSaveConfirmation(false), 2000);
-    return () => clearTimeout(t);
-  }, [showSaveConfirmation]);
+  const handleOpenShare = async () => {
+    const url = await resolveShareUrl();
+    setResolvedShareUrl(url);
+    setIsShareModalOpen(true);
+  };
+
+  const handleWhatsAppShare = () => {
+    if (!event) return;
+    const text = buildWhatsAppShareText(
+      settings.whatsappShareTemplate || 'Check out {{eventTitle}}! {{link}}',
+      event.title,
+      resolvedShareUrl
+    );
+    openWhatsAppShare(text);
+  };
+
+  const handleCopyLink = async () => {
+    await navigator.clipboard.writeText(resolvedShareUrl);
+    setLinkCopiedToast(true);
+  };
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
   const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
     if (!img) return null;
@@ -273,15 +295,19 @@ const OrganizerEventDetail: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          <button
-            onClick={() => setIsEditOpen(true)}
-            className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
-          >
-            <Pencil size={14} /> Edit
-          </button>
+          {can(Permission.EDIT_EVENT) ? (
+            <button
+              onClick={() => setIsEditOpen(true)}
+              className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+          ) : (
+            <span />
+          )}
           <div className="flex items-center gap-2">
             <button
-              onClick={handleShareEvent}
+              onClick={handleOpenShare}
               className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
             >
               <Share2 size={18} />
@@ -442,7 +468,7 @@ const OrganizerEventDetail: React.FC = () => {
           </Card>
         </div>
       </main >
-      {isEditOpen && (
+      {isEditOpen && can(Permission.EDIT_EVENT) && (
         <EditEventModal
           event={event}
           onClose={() => setIsEditOpen(false)}
@@ -457,6 +483,21 @@ const OrganizerEventDetail: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* NEW — link copied toast */}
+      {linkCopiedToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 dark:bg-slate-700 px-4 py-2 text-xs font-semibold text-white shadow-lg">
+          Link copied to clipboard!
+        </div>
+      )}
+
+      {/* NEW — WhatsApp / Copy link share popup */}
+      <ShareOptionsModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        shareUrl={resolvedShareUrl}
+        onWhatsAppShare={handleWhatsAppShare}
+      />
     </div >
   );
 };

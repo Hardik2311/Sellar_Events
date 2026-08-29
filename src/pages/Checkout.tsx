@@ -48,6 +48,7 @@ const CheckoutPage: React.FC = () => {
     name: string;
     email: string;
     phone: string;
+    customAnswers: Record<string, string>;
   }
 
   // Ek ticket = ek attendee slot, tier order me flatten kiya — hooks se pehle chahiye isliye
@@ -72,16 +73,26 @@ const CheckoutPage: React.FC = () => {
 
   const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
 
-  // Slot count badalne par attendeeDetails ko resize karo (naya attendee blank, purana preserve)
   useEffect(() => {
     setAttendeeDetails((prev) => {
       if (prev.length === ticketSlots.length) return prev;
-      return Array.from({ length: ticketSlots.length }, (_, i) => prev[i] ?? { name: '', email: '', phone: '' });
+      return Array.from(
+        { length: ticketSlots.length },
+        (_, i) => prev[i] ?? { name: '', email: '', phone: '', customAnswers: {} }
+      );
     });
   }, [ticketSlots.length]);
 
   const updateAttendee = (index: number, field: keyof AttendeeFormEntry, value: string) => {
     setAttendeeDetails((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  };
+
+  const updateCustomAnswer = (index: number, fieldId: string, value: string) => {
+    setAttendeeDetails((prev) =>
+      prev.map((a, i) =>
+        i === index ? { ...a, customAnswers: { ...a.customAnswers, [fieldId]: value } } : a
+      )
+    );
   };
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
@@ -181,10 +192,22 @@ const CheckoutPage: React.FC = () => {
   const isValidPhone = (value: string) => /^[6-9]\d{9}$/.test(value.trim());
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
+  const customFields = event.customFields ?? [];
+
   const detailsComplete =
     attendeeDetails.length === totalQty &&
     totalQty > 0 &&
-    attendeeDetails.every((a) => a.name.trim().length > 0 && isValidEmail(a.email) && isValidPhone(a.phone));
+    attendeeDetails.every(
+      (a) =>
+        a.name.trim().length > 0 &&
+        isValidEmail(a.email) &&
+        isValidPhone(a.phone) &&
+        customFields.every((f) => {
+          if (!f.required) return true;
+          const val = a.customAnswers[f.id] ?? '';
+          return f.type === 'checkbox' ? val === 'true' : val.trim().length > 0;
+        })
+    );
 
   const handlePay = async () => {
     if (!detailsComplete || lineItems.length === 0) return;
@@ -219,6 +242,7 @@ const CheckoutPage: React.FC = () => {
         attendeeName: string;
         attendeeEmail: string;
         attendeePhone: string;
+        customFieldAnswers: Record<string, string>;
       }[] = [];
 
       let slotIndex = 0;
@@ -254,6 +278,7 @@ const CheckoutPage: React.FC = () => {
             attendeeName: attendee.name,
             attendeeEmail: attendee.email,
             attendeePhone: attendee.phone,
+            customFieldAnswers: attendee.customAnswers ?? {},
           });
           slotIndex += 1;
         }
@@ -294,7 +319,19 @@ const CheckoutPage: React.FC = () => {
 
         attendeeWrites.forEach(
           (
-            { ref, tierName, tierId, price, amountCollected, baseAmount, taxAmount, attendeeName, attendeeEmail, attendeePhone },
+            {
+              ref,
+              tierName,
+              tierId,
+              price,
+              amountCollected,
+              baseAmount,
+              taxAmount,
+              attendeeName,
+              attendeeEmail,
+              attendeePhone,
+              customFieldAnswers,
+            },
             index
           ) => {
             const ticketNumber = totalAlreadySold + index + 1;
@@ -305,6 +342,7 @@ const CheckoutPage: React.FC = () => {
               email: attendeeEmail,
               phone: attendeePhone,
               tierName,
+              customFieldAnswers,
               ticketTierId: tierId,
               amountPaid: amountCollected,
               tierPrice: price,
@@ -448,6 +486,65 @@ const CheckoutPage: React.FC = () => {
                         className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
                       />
                     </div>
+
+                    {customFields.map((field) => {
+                      const value = entry.customAnswers[field.id] ?? '';
+                      const baseClass =
+                        'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]';
+
+                      return (
+                        <div key={field.id}>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">
+                            {field.label}{field.required ? ' *' : ''}
+                          </label>
+
+                          {field.type === 'textarea' && (
+                            <textarea
+                              rows={3}
+                              value={value}
+                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                              placeholder={field.label}
+                              className={baseClass}
+                            />
+                          )}
+
+                          {field.type === 'select' && (
+                            <select
+                              value={value}
+                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                              className={baseClass}
+                            >
+                              <option value="">Select…</option>
+                              {(field.options ?? []).map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )}
+
+                          {field.type === 'checkbox' && (
+                            <label className="flex items-center gap-2 text-sm text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={value === 'true'}
+                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
+                              />
+                              {field.label}
+                            </label>
+                          )}
+
+                          {field.type === 'text' && (
+                            <input
+                              type="text"
+                              value={value}
+                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                              placeholder={field.label}
+                              className={baseClass}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+
                     {index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
                   </div>
                 ))}

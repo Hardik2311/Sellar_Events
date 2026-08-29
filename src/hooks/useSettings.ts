@@ -33,6 +33,7 @@ export interface CompanySettings {
   // upcoming event to lead with on Discover. OFF = show nothing instead.
   autoFeatureNearest: boolean;
   attendeeQuestionsEnabled: boolean;
+   whatsappShareTemplate: string;
   // more settings go here later
 }
 
@@ -59,6 +60,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   ticketDisplay: DEFAULT_TICKET_DISPLAY,
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,
   attendeeQuestionsEnabled: true,
+  whatsappShareTemplate: 'Check out {{eventTitle}} on Sellar Events! {{link}}',
   autoFeatureNearest: true, // preserves current behaviour by default
 };
 

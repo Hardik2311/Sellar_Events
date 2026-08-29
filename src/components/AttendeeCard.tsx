@@ -2,17 +2,17 @@ import React, { useRef } from 'react';
 import { Phone, Mail, ChevronDown, Share2, Ban, CheckCircle2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
+import type { CustomField } from '../types/event.types';
 
 interface AttendeeCardProps {
   attendee: Attendee;
   isExpanded: boolean;
   onToggle: () => void;
-  onCheckIn: (id: string) => void;
-  onCancel?: (id: string) => void;
+  onCheckIn?: (id: string) => void; // optional — hidden/disabled when the user lacks CHECK_IN_ATTENDEE permission
+  onCancel?: (id: string) => void;  // optional — hidden/disabled when the user lacks CANCEL_ATTENDEE permission
   eventTitle?: string;
   eventDate?: string;
-  // TODO — backend wiring: parent (Attendees.tsx) needs to pass a real
-  // cancel handler that updates ticket status to 'cancelled' server-side.
+  customFields?: CustomField[];
 }
 
 const STATUS_STYLES: Record<Attendee['status'], string> = {
@@ -35,6 +35,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   onCancel,
   eventTitle,
   eventDate,
+  customFields = [],
 }) => {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -162,14 +163,30 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             )}
           </div>
 
+          {attendee.customFieldAnswers && Object.keys(attendee.customFieldAnswers).length > 0 && (
+            <div className="rounded-sm bg-slate-50 dark:bg-slate-800/60 p-2.5 space-y-1">
+              {Object.entries(attendee.customFieldAnswers).map(([fieldId, value]) => {
+                const field = customFields.find((f) => f.id === fieldId);
+                const label = field?.label || fieldId;
+                const display = field?.type === 'checkbox' ? (value === 'true' ? 'Yes' : 'No') : (value || '—');
+                return (
+                  <div key={fieldId} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{display}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex rounded-sm overflow-hidden mt-3 gap-2">
-            {attendee.status !== 'cancelled' && (
+            {attendee.status !== 'cancelled' && onCheckIn && (
               <button
                 onClick={() => onCheckIn(attendee.id)}
                 title={attendee.status === 'checked_in' ? 'Tap to undo check-in' : 'Check in this attendee'}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-sm text-xs font-extrabold shadow-xs transition-colors ${attendee.status === 'checked_in'
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
-                    : 'bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950'
+                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                  : 'bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950'
                   }`}
               >
                 <CheckCircle2 size={14} /> {attendee.status === 'checked_in' ? 'Checked In' : 'Check In'}
@@ -187,9 +204,9 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             >
               <Share2 size={14} /> Share
             </button>
-            {attendee.status !== 'cancelled' && (
+            {attendee.status !== 'cancelled' && onCancel && (
               <button
-                onClick={() => onCancel?.(attendee.id)}
+                onClick={() => onCancel(attendee.id)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#FF3B30] text-white text-xs font-bold"
               >
                 <Ban size={14} /> Cancel

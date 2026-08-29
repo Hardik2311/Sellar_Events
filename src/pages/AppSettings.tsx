@@ -1,13 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, MessageCircle } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { useTheme } from '../context/ThemeContext';
+import { useCompanySettings } from '../hooks/useSettings'; // NEW
 import { ROUTES } from '../constants/routes.constants';
 
 const AppSettings: React.FC = () => {
     const navigate = useNavigate();
     const { theme, setTheme } = useTheme();
+    const { settings, updateSetting } = useCompanySettings(); // NEW
+    const [whatsappTemplate, setWhatsappTemplate] = useState(''); // NEW
+    const [isSaved, setIsSaved] = useState(false); // NEW
+
+    useEffect(() => {
+        setWhatsappTemplate(settings.whatsappShareTemplate);
+    }, [settings.whatsappShareTemplate]);
+
+    const handleSaveTemplate = async () => {
+        await updateSetting('whatsappShareTemplate', whatsappTemplate.trim());
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+    };
 
     const themeOptions = [
         { value: 'light', label: 'Light Mode', icon: Sun },
@@ -27,7 +41,7 @@ const AppSettings: React.FC = () => {
             </header>
 
             <main className="grow overflow-y-auto p-4">
-                <div className="mx-auto max-w-3xl">
+                <div className="mx-auto max-w-3xl space-y-4">
                     <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
                         <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Theme Preferences</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -44,6 +58,32 @@ const AppSettings: React.FC = () => {
                                     {label}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* NEW — WhatsApp share message template */}
+                    <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
+                        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                            <MessageCircle size={13} /> WhatsApp Share Message
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
+                            This text will be used when sharing the event link on WhatsApp.
+                        </p>
+                        <textarea
+                            value={whatsappTemplate}
+                            onChange={(e) => setWhatsappTemplate(e.target.value)}
+                            rows={3}
+                            placeholder="Check out {{eventTitle}} on Sellar Events! {{link}}"
+                            className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+                        />
+                        <div className="mt-2 flex items-center gap-3">
+                            <button
+                                onClick={handleSaveTemplate}
+                                className="rounded-sm bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-950 text-white text-xs font-bold py-2 px-4 transition-colors"
+                            >
+                                Save
+                            </button>
+                            {isSaved && <span className="text-xs font-semibold text-green-600">Saved!</span>}
                         </div>
                     </div>
                 </div>

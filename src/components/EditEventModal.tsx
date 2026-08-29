@@ -162,26 +162,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     value={form.titleStyle}
                     onChange={(s) => update('titleStyle', s)}
                   />
-                  <FloatingLabelInput
+                                    <FloatingLabelInput
                     id="edit-title"
                     label="Event title *"
                     value={form.title}
                     onChange={(e) => update('title', e.target.value)}
                     required
                   />
-                  {form.title.trim().length > 0 && (
-                    <p
-                      className="mt-1 text-xs text-slate-500 dark:text-slate-400"
-                      style={{
-                        fontSize: form.titleStyle.fontSize,
-                        fontWeight: form.titleStyle.fontWeight,
-                        fontStyle: form.titleStyle.fontStyle,
-                        color: form.titleStyle.color,
-                      }}
-                    >
-                      {form.title}
-                    </p>
-                  )}
                 </div>
 
                 {/*
@@ -338,7 +325,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     value={form.descriptionStyle}
                     onChange={(s) => update('descriptionStyle', s)}
                   />
-                  <FloatingLabelTextArea
+                                    <FloatingLabelTextArea
                     id="edit-description"
                     label={req.description ? 'Description *' : 'Description'}
                     rows={4}
@@ -346,19 +333,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     onChange={(e) => update('description', e.target.value)}
                     required={req.description}
                   />
-                  {form.description.trim().length > 0 && (
-                    <p
-                      className="mt-1 whitespace-pre-wrap"
-                      style={{
-                        fontSize: form.descriptionStyle.fontSize,
-                        fontWeight: form.descriptionStyle.fontWeight,
-                        fontStyle: form.descriptionStyle.fontStyle,
-                        color: form.descriptionStyle.color,
-                      }}
-                    >
-                      {form.description}
-                    </p>
-                  )}
                 </div>
               </CardContent>
             </Card>

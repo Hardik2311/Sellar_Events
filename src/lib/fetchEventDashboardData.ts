@@ -47,7 +47,7 @@ export async function fetchEventDashboardData(
     // The selected date range only scopes ticketsSold/revenue/tier stats below.
     const eventsSnap = await getDocs(query(
         collection(db, 'companies', companyId, 'events'),
-        orderBy('startDate', 'asc')
+        orderBy('date', 'asc')
     ));
 
     // 3. Aggregate each event's attendees subcollection.
@@ -59,9 +59,22 @@ export async function fetchEventDashboardData(
         salesByDate[d.toLocaleDateString('en-CA')] = 0;
     }
 
-    const events: EventSummary[] = await Promise.all(
-        eventsSnap.docs.map(async (eventDoc) => {
+    const eventResults: PromiseSettledResult<EventSummary>[] = await Promise.allSettled(
+        eventsSnap.docs.map(async (eventDoc): Promise<EventSummary> => {
             const e = eventDoc.data();
+
+            const rawDate = e.date;
+            const parsedDate =
+                rawDate instanceof Timestamp
+                    ? rawDate.toDate()
+                    : typeof rawDate === 'string'
+                        ? new Date(rawDate)
+                        : null;
+
+            if (!parsedDate || isNaN(parsedDate.getTime())) {
+                throw new Error(`Event "${eventDoc.id}" is missing a valid date`);
+            }
+
             const attendeesSnap = await getDocs(
                 collection(db, 'companies', companyId, 'events', eventDoc.id, 'attendees')
             );
@@ -69,7 +82,6 @@ export async function fetchEventDashboardData(
             let ticketsSold = 0;
             let revenue = 0;
             const tierSold: Record<string, number> = {};
-
             const tierByName = new Map<string, any>((e.tiers || []).map((t: any) => [t.name, t]));
 
             attendeesSnap.forEach((a) => {
@@ -102,11 +114,7 @@ export async function fetchEventDashboardData(
             });
 
             const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({
-                id: t.id,
-                name: t.name,
-                price: t.price,
-                total: t.quantity,
-                sold: tierSold[t.id] || 0,
+                id: t.id, name: t.name, price: t.price, total: t.quantity, sold: tierSold[t.id] || 0,
             }));
 
             return {
@@ -114,7 +122,7 @@ export async function fetchEventDashboardData(
                 title: e.title,
                 category: e.category,
                 status: e.status as EventStatus,
-                startDate: (e.startDate as Timestamp).toDate().toISOString(),
+                startDate: parsedDate.toISOString(),
                 venue: e.venue,
                 description: e.description,
                 accentColor: e.accentColor,
@@ -126,6 +134,15 @@ export async function fetchEventDashboardData(
             };
         })
     );
+
+    const events: EventSummary[] = eventResults
+        .filter((r): r is PromiseFulfilledResult<EventSummary> => r.status === 'fulfilled')
+        .map((r) => r.value);
+
+    const skipped = eventResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (skipped.length > 0) {
+        console.warn(`${skipped.length} event(s) skipped due to bad data:`, skipped.map((r) => r.reason?.message));
+    }
 
     const salesTrend: SalesTrendPoint[] = Object.entries(salesByDate).map(([date, revenue]) => ({ date, revenue }));
 

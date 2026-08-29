@@ -18,6 +18,10 @@ import {
 } from '../data/events';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { useCompanySettings } from '../hooks/useSettings';
+import { ShareOptionsModal } from '../components/ShareOptionsModal';
+import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
+import { usePermissions } from '../hooks/usePermissions';
+import { Permission } from '../types/permissions.types';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -64,14 +68,15 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 const OrganizerEventCard: React.FC<{
   event: PublicEvent;
   onOpen: () => void;
-  onToggleLive: (id: string) => void;
-  onToggleFeatured: (id: string) => void;
-  onDeleteRequest: (event: PublicEvent) => void;
-  onEdit: (event: PublicEvent) => void;
-  onDuplicate: (id: string) => void;
+  onToggleLive?: (id: string) => void;     // undefined => TOGGLE_EVENT_LIVE not permitted
+  onToggleFeatured?: (id: string) => void; // undefined => TOGGLE_EVENT_FEATURED not permitted
+  onDeleteRequest?: (event: PublicEvent) => void; // undefined => DELETE_EVENT not permitted
+  onEdit?: (event: PublicEvent) => void;          // undefined => EDIT_EVENT not permitted
+  onDuplicate?: (id: string) => void;             // undefined => DUPLICATE_EVENT not permitted
   onLiveView: (event: PublicEvent) => void;
+  onShare: (event: PublicEvent) => void;
   showFeaturedToggle: boolean;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView, showFeaturedToggle }) => {
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -102,57 +107,54 @@ const OrganizerEventCard: React.FC<{
         )}
         <button
           type="button"
-          onClick={async (e) => {
+          onClick={(e) => {
             e.stopPropagation();
-            const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
-            if (navigator.share) {
-              try {
-                await navigator.share({ title: event.title, url: shareUrl });
-              } catch {
-                // user cancelled share sheet, no-op
-              }
-            } else {
-              await navigator.clipboard.writeText(shareUrl);
-            }
+            onShare(event);
           }}
           title="Share event"
           className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
         >
           <Share2 size={14} />
         </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(event);
-          }}
-          title="Edit event"
-          className="absolute bottom-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDuplicate(event.id);
-          }}
-          title="Duplicate event"
-          className="absolute bottom-2 right-11 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
-        >
-          <Copy size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteRequest(event);
-          }}
-          title="Delete event"
-          className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-        >
-          <Trash2 size={14} />
-        </button>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(event);
+            }}
+            title="Edit event"
+            className="absolute bottom-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          >
+            <Pencil size={14} />
+          </button>
+        )}
+        {onDuplicate && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate(event.id);
+            }}
+            title="Duplicate event"
+            className="absolute bottom-2 right-11 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          >
+            <Copy size={14} />
+          </button>
+        )}
+        {onDeleteRequest && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteRequest(event);
+            }}
+            title="Delete event"
+            className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
         {soldOut && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
@@ -212,14 +214,18 @@ const OrganizerEventCard: React.FC<{
         </div>
 
         {/* ── Organizer controls ─────────────────────────────────── */}
-                <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
+        <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
           <div className="flex items-center gap-1.5">
             <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{isLive ? 'Live' : 'Draft'}</span>
-            <ToggleSwitch checked={isLive} disabled={isCompleted} onChange={() => onToggleLive(event.id)} />
+            <ToggleSwitch
+              checked={isLive}
+              disabled={isCompleted || !onToggleLive}
+              onChange={() => onToggleLive?.(event.id)}
+            />
           </div>
 
-          {showFeaturedToggle ? (
+          {showFeaturedToggle && onToggleFeatured ? (
             <div className="flex items-center gap-1.5">
               <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
@@ -258,8 +264,17 @@ const OrganizerEventCard: React.FC<{
 const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { can } = usePermissions();
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
   const { settings } = useCompanySettings();
+  // NEW — share popup state
+  const [shareEvent, setShareEvent] = useState<PublicEvent | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+
+  const handleShareRequest = (event: PublicEvent) => {
+    setShareEvent(event);
+    setShareUrl(`${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`);
+  };
   // OFF => auto-feature nearest (toggle hidden); ON => organizer feature manually karega
   const showFeaturedToggle = settings.autoFeatureNearest;
   const [search, setSearch] = useState('');
@@ -321,7 +336,7 @@ const OrganizerEventDiscover: React.FC = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!deletingEvent) return;
+    if (!deletingEvent || !can(Permission.DELETE_EVENT)) return;
     await deleteEvent(deletingEvent.id);
     setDeletingEvent(null);
   };
@@ -473,16 +488,17 @@ const OrganizerEventDiscover: React.FC = () => {
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((event) => (
-                                    <OrganizerEventCard
+                  <OrganizerEventCard
                     key={event.id}
                     event={event}
                     onOpen={() => openEvent(event)}
-                    onToggleLive={(evId) => toggleLive(evId, event.status)}
-                    onToggleFeatured={(evId) => toggleFeatured(evId, !!event.featured)}
-                    onDeleteRequest={setDeletingEvent}
-                    onEdit={setEditingEvent}
-                    onDuplicate={duplicateEvent}
+                    onToggleLive={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => toggleLive(evId, event.status) : undefined}
+                    onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
+                    onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
+                    onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}
+                    onDuplicate={can(Permission.DUPLICATE_EVENT) ? duplicateEvent : undefined}
                     onLiveView={openLiveView}
+                    onShare={handleShareRequest}
                     showFeaturedToggle={showFeaturedToggle}
                   />
                 ))}
@@ -544,6 +560,18 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* NEW — WhatsApp / Copy link share popup */}
+      <ShareOptionsModal
+        isOpen={!!shareEvent}
+        onClose={() => setShareEvent(null)}
+        shareUrl={shareUrl}
+        onWhatsAppShare={() => {
+          if (!shareEvent) return;
+          const text = buildWhatsAppShareText(settings.whatsappShareTemplate, shareEvent.title, shareUrl);
+          openWhatsAppShare(text);
+        }}
+      />
     </div>
   );
 };

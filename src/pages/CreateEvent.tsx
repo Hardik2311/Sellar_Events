@@ -23,6 +23,8 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
 import TextStyleControls from '../components/ui/TextStyleControls';
+import { usePermissions } from '../hooks/usePermissions';
+import { Permission } from '../types/permissions.types';
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
@@ -61,6 +63,7 @@ const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { settings: companySettings } = useCompanySettings();
   const { user, profile } = useAuth();
+  const { can } = usePermissions();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -214,9 +217,12 @@ const CreateEvent: React.FC = () => {
     }
   };
 
-  const handleSaveDraft = () => saveEvent('draft');
+  const handleSaveDraft = () => {
+    if (!can(Permission.SAVE_DRAFT_EVENT)) return;
+    saveEvent('draft');
+  };
   const handlePublish = () => {
-    if (!isPublishable) return;
+    if (!isPublishable || !can(Permission.PUBLISH_EVENT)) return;
     saveEvent('published');
   };
 
@@ -270,19 +276,6 @@ const CreateEvent: React.FC = () => {
                     onChange={(e) => update('title', e.target.value)}
                     required
                   />
-                  {form.title.trim().length > 0 && (
-                    <p
-                      className="mt-1 text-xs text-slate-500 dark:text-slate-400"
-                      style={{
-                        fontSize: form.titleStyle.fontSize,
-                        fontWeight: form.titleStyle.fontWeight,
-                        fontStyle: form.titleStyle.fontStyle,
-                        color: form.titleStyle.color,
-                      }}
-                    >
-                      {form.title}
-                    </p>
-                  )}
                 </div>
 
                 <div className={`grid grid-cols-1 ${isOtherCategory ? 'sm:grid-cols-2' : ''} gap-4 items-start`}>
@@ -349,19 +342,6 @@ const CreateEvent: React.FC = () => {
                     onChange={(e) => update('description', e.target.value)}
                     required={req.description}
                   />
-                  {form.description.trim().length > 0 && (
-                    <p
-                      className="mt-1 whitespace-pre-wrap"
-                      style={{
-                        fontSize: form.descriptionStyle.fontSize,
-                        fontWeight: form.descriptionStyle.fontWeight,
-                        fontStyle: form.descriptionStyle.fontStyle,
-                        color: form.descriptionStyle.color,
-                      }}
-                    >
-                      {form.description}
-                    </p>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -596,20 +576,24 @@ const CreateEvent: React.FC = () => {
       )}
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
         <div className="w-full max-w-3xl flex gap-3">
-          <button
-            onClick={handleSaveDraft}
-            disabled={isSaving}
-            className="flex-1 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
-          >
-            {isSaving ? 'Saving…' : 'Save as Draft'}
-          </button>
-          <button
-            onClick={handlePublish}
-            disabled={!isPublishable || isSaving}
-            className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
-          >
-            {isSaving ? 'Publishing…' : 'Publish Event'}
-          </button>
+          {can(Permission.SAVE_DRAFT_EVENT) && (
+            <button
+              onClick={handleSaveDraft}
+              disabled={isSaving}
+              className="flex-1 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
+            >
+              {isSaving ? 'Saving…' : 'Save as Draft'}
+            </button>
+          )}
+          {can(Permission.PUBLISH_EVENT) && (
+            <button
+              onClick={handlePublish}
+              disabled={!isPublishable || isSaving}
+              className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
+            >
+              {isSaving ? 'Publishing…' : 'Publish Event'}
+            </button>
+          )}
         </div>
       </div>
     </div>
