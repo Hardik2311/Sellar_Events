@@ -29,6 +29,7 @@ export interface EventSummary {
   description?: string;   // customer-facing summary, shown on EventDetails
   accentColor?: string;
   tiers: TicketTier[];
+   customFields?: CustomField[];
 }
 
 export interface SalesTrendPoint {

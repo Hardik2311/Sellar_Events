@@ -15,7 +15,30 @@ service cloud.firestore {
     function isSelf(companyId, userId) {
       return isCompanyMember(companyId) && request.auth.uid == userId;
     }
+// NEW — reads this user's role from companies/{companyId}/users/{uid}.role
+    // Falls back to 'admin' if the user doc is missing role (matches AuthContext's
+    // client-side fallback: userData.role || mergedCompany.role || 'admin').
+    function userRole(companyId) {
+      let userDoc = get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
+      return userDoc.data.role != null ? userDoc.data.role : 'admin';
+    }
 
+    // NEW — owner (admin) always has full access, no permission doc lookup needed
+    function isOwner(companyId) {
+      return isCompanyMember(companyId) && userRole(companyId) == 'admin';
+    }
+
+    // NEW — checks a named flag (e.g. 'deleteEvent') for the caller's role inside
+    // companies/{companyId}/settings/permissions. Owner bypasses this entirely.
+    function hasPermission(companyId, permKey) {
+      let role = userRole(companyId);
+      return isOwner(companyId) ||
+        (
+          isCompanyMember(companyId) &&
+          exists(/databases/$(database)/documents/companies/$(companyId)/settings/permissions) &&
+          get(/databases/$(database)/documents/companies/$(companyId)/settings/permissions).data[role][permKey] == true
+        );
+    }
     // --- Tenant Data (Sellar Events) ---
     match /companies/{companyId} {
 
@@ -39,22 +62,35 @@ service cloud.firestore {
         allow create, update: if isCompanyMember(companyId) || isSelf(companyId, userId);
         allow delete: if false;
       }
-
-      // Events Collection
+ // NEW — Permissions doc: everyone in the company can read it (needed to
+      // evaluate their own access client-side), only the owner can write it.
+      match /settings/permissions {
+        allow read: if isCompanyMember(companyId);
+        allow write: if isOwner(companyId);
+      }
+      // Events Collection — CHANGED: split write into create/update/delete,
+      // each gated by its matching permission flag
       match /events/{eventId} {
         // Public can discover & view events
         allow read: if true;
-        // Only company members can create, edit, or delete events
-        allow write: if isCompanyMember(companyId);
+        allow create: if hasPermission(companyId, 'publishEvent') || hasPermission(companyId, 'saveDraftEvent');
+        allow update: if hasPermission(companyId, 'editEvent')
+          || hasPermission(companyId, 'toggleEventLive')
+          || hasPermission(companyId, 'toggleEventFeatured')
+          || hasPermission(companyId, 'duplicateEvent');
+        allow delete: if hasPermission(companyId, 'deleteEvent');
 
-        // Attendees (Guest List & Real-time Check-ins)
+        // Attendees (Guest List & Real-time Check-ins) — CHANGED
         match /attendees/{attendeeId} {
-          allow read, write: if isCompanyMember(companyId);
+          allow read: if isCompanyMember(companyId);
+          allow update: if hasPermission(companyId, 'checkInAttendee') || hasPermission(companyId, 'cancelAttendee');
+          allow create, delete: if isOwner(companyId);
         }
 
-        // Expenses (Event budgeting/expenses)
+        // Expenses (Event budgeting/expenses) — CHANGED
         match /expenses/{expenseId} {
-          allow read, write: if isCompanyMember(companyId);
+          allow read: if isCompanyMember(companyId);
+          allow write: if hasPermission(companyId, 'addExpense');
         }
       }
 

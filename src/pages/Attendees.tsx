@@ -25,6 +25,9 @@ import ConfirmCheckInModal from '../components/ConfirmCheckInModal';
 import SearchBar from '../components/SearchBar';
 import ExportMenu from '../components/ExportMenu';
 import type { ExportColumn } from '../components/ExportMenu';
+import { Permission } from '../types/permissions.types';
+import { usePermissions } from '../hooks/usePermissions';
+import ShowWrapper from '../components/ShowWrapper';
 
 type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
 
@@ -66,6 +69,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     revenue: 0,
     description: data.description,
     tiers,
+    customFields: data.customFields ?? [],
   };
 };
 
@@ -79,10 +83,12 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   ticketId: data.ticketId,
   status: data.status,
   checkedInAt: data.checkedInAt instanceof Timestamp ? data.checkedInAt.toDate().toISOString() : null,
+  customFieldAnswers: data.customFieldAnswers ?? {},
 });
 const Attendees: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { can } = usePermissions(); // MOVED — hooks must run inside the component, not at module scope
   const [events, setEvents] = useState<EventSummary[]>([]);
 
   const [selectedEventId, setSelectedEventId] = useState('');
@@ -265,7 +271,7 @@ const Attendees: React.FC = () => {
       </header>
 
       <main className="grow overflow-y-auto p-2">
-        <div className="mx-auto max-w-3xl flex flex-col gap-3">
+        <div className="mx-auto max-w-5xl flex flex-col gap-3">
           {/* 1. Event dropdown */}
           <EventListCard
             events={events}
@@ -281,7 +287,7 @@ const Attendees: React.FC = () => {
               <SearchBar
                 value={searchValue}
                 onChange={setSearchValue}
-                onScanClick={() => setIsScannerOpen(true)}
+                onScanClick={can(Permission.SCAN_QR) ? () => setIsScannerOpen(true) : undefined}
                 placeholder="Search by name , email or phone..."
               />
 
@@ -341,13 +347,15 @@ const Attendees: React.FC = () => {
                   </button>
                 )}
                 <div className="shrink-0">
-                  <ExportMenu
-                    data={attendees}
-                    columns={EXPORT_COLUMNS}
-                    fileNameBase={selectedEvent.title}
-                    documentTitle={`${selectedEvent.title} — Attendees`}
-                    disabled={attendees.length === 0}
-                  />
+                  <ShowWrapper permission={Permission.EXPORT_ATTENDEES}>
+                    <ExportMenu
+                      data={attendees}
+                      columns={EXPORT_COLUMNS}
+                      fileNameBase={selectedEvent.title}
+                      documentTitle={`${selectedEvent.title} — Attendees`}
+                      disabled={attendees.length === 0}
+                    />
+                  </ShowWrapper>
                 </div>
               </div>
 
@@ -366,10 +374,11 @@ const Attendees: React.FC = () => {
                       attendee={attendee}
                       isExpanded={expandedId === attendee.id}
                       onToggle={() => setExpandedId(expandedId === attendee.id ? null : attendee.id)}
-                      onCheckIn={handleCheckIn}
-                      onCancel={handleCancel}
+                      onCheckIn={can(Permission.CHECK_IN_ATTENDEE) ? handleCheckIn : undefined}
+                      onCancel={can(Permission.CANCEL_ATTENDEE) ? handleCancel : undefined}
                       eventTitle={selectedEvent.title}
                       eventDate={selectedEvent.startDate}
+                      customFields={selectedEvent.customFields}
                     />
                   ))}
                 </div>

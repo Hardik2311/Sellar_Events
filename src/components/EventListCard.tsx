@@ -30,22 +30,27 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   );
 
   const filteredEvents = useMemo(() => {
-    // Hide events whose date has already passed (only today + future events show)
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-    const upcomingEvents = events.filter((e) => {
-      const eventDate = new Date(e.startDate);
-      eventDate.setHours(0, 0, 0, 0);
-      return eventDate >= startOfToday;
-    });
+  // Show all events (past + upcoming). Sort so upcoming events come first
+  // (soonest first), then past events (most recent first) below them.
+  const sorted = [...events].sort((a, b) => {
+    const aDate = new Date(a.startDate).setHours(0, 0, 0, 0);
+    const bDate = new Date(b.startDate).setHours(0, 0, 0, 0);
+    const aUpcoming = aDate >= startOfToday.getTime();
+    const bUpcoming = bDate >= startOfToday.getTime();
 
-    if (!searchValue.trim()) return upcomingEvents;
-    const q = searchValue.toLowerCase();
-    return upcomingEvents.filter(
-      (e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
-    );
-  }, [events, searchValue]);
+    if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+    return aUpcoming ? aDate - bDate : bDate - aDate;
+  });
+
+  if (!searchValue.trim()) return sorted;
+  const q = searchValue.toLowerCase();
+  return sorted.filter(
+    (e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
+  );
+}, [events, searchValue]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

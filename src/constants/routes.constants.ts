@@ -11,6 +11,8 @@ export const ROUTES = {
   EVENTS_ATTENDEES: 'attendees',
   EVENTS_ACCOUNT: 'account',
   EVENTS_ACCOUNT_EDIT: 'account/edit',
+  EVENTS_ACCOUNT_ADDONS: 'account/addons',              // NEW – Add-ons list page
+  EVENTS_WHATSAPP_INTEGRATION: 'account/addons/whatsapp', // NEW – WhatsApp integration status page
   EVENTS_DISCOVER: 'discover',
   EVENTS_DETAIL: 'e/:id',
   EVENTS_SETTINGS: 'settings',
@@ -25,6 +27,7 @@ export const ROUTES = {
   EVENTS_REPORTS_SALES: 'reports/sales/:eventId',
   EVENTS_REPORTS_CUSTOMER: 'reports/customer/:eventId',
   EVENTS_REPORTS_PNL: 'reports/pnl/:eventId',
+  EVENTS_SETTINGS_PERMISSIONS: 'settings/permissions',
 
   // Public, customer-facing routes
   // :slug is "event-title--<firestoreId>" — id is parsed out after the last "--"

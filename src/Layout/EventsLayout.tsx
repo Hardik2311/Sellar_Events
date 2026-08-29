@@ -1,33 +1,37 @@
 import { Suspense, useRef, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, Receipt, UserPlus } from 'lucide-react'; // + UserPlus
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, Receipt, UserPlus, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
+import { usePermissions } from '../hooks/usePermissions';
+import { Permission } from '../types/permissions.types';
 import { ExpenseModal } from '../components/ExpenseModal';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import type { EventSummary } from '../types/event.types';
-import { UserAddModal } from '../pages/UserAdd'; 
-import { canManageUsers } from '../enum/enum'; // NEW
+import { UserAddModal } from '../pages/UserAdd';
+import { ShareLinkPickerModal } from '../components/ShareLinkPickerModal';
+import { canManageUsers } from '../enum/enum';
+import { ROUTES } from '../constants/routes.constants';
+import ShowWrapper from '../components/ShowWrapper';
 
 const NAV_ITEMS = [
-  { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-  { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={18} /> },
-  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} /> },
-  { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} /> },
-  { to: '/events/account', label: 'Account', icon: <UserCircle size={18} /> },
+  { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} />, permission: Permission.VIEW_DASHBOARD },
+  { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} />, permission: Permission.VIEW_ATTENDEES },
+  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} />, permission: Permission.VIEW_MY_EVENTS },
+  { to: '/events/account', label: 'Account', icon: <UserCircle size={18} />, permission: null },
 ];
 
 // NEW — only shown when canManageUsers(profile.role) is true — opens Add User as a popup (not a route)
 const USER_MANAGEMENT_ITEM = { label: 'Add User', icon: <UserPlus size={18} /> };
 
 const MOBILE_LEFT_ITEMS = [
-  { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} /> },
+  { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} />, permission: Permission.VIEW_DASHBOARD },
+  { to: '/events/discover', label: 'Discover', icon: <Compass size={18} />, permission: Permission.VIEW_MY_EVENTS },
 ];
 
 const MOBILE_RIGHT_ITEMS = [
-  { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} /> },
-  { to: '/events/account', label: 'Account', icon: <UserCircle size={18} /> },
+  { to: '/events/attendees', label: 'Attendees', icon: <Users size={18} />, permission: Permission.VIEW_ATTENDEES },
+  { to: '/events/account', label: 'Account', icon: <UserCircle size={18} />, permission: null },
 ];
 
 const MOBILE_QUICK_LINKS = [
@@ -38,10 +42,17 @@ const EventsLayout = () => {
   const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { profile } = useAuth();
-  const showManageUsers = canManageUsers(profile?.role); // NEW
+  const { can } = usePermissions();
+  const showManageUsers = canManageUsers(profile?.role);
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
+  const visibleMobileLeft = MOBILE_LEFT_ITEMS.filter((item) => !item.permission || can(item.permission));
+  const visibleMobileRight = MOBILE_RIGHT_ITEMS.filter((item) => !item.permission || can(item.permission));
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false); // NEW
-const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+  const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false);
+  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+  const [isShareLinkModalOpen, setIsShareLinkModalOpen] = useState(false); // NEW — Share Link popup
+  const [isShareSectionOpen, setIsShareSectionOpen] = useState(false); // NEW
+  const [isMobileShareMenuOpen, setIsMobileShareMenuOpen] = useState(false);
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const { addExpense } = useExpenses(profile?.companyId, 'general');
@@ -49,6 +60,7 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
     setIsQuickActionsOpen(false);
+    setIsMobileShareMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -60,7 +72,7 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
       companyId: profile.companyId,
       startDate: '2000-01-01',
       endDate: '2100-01-01',
-      cacheKey: `event_list_cache_${profile.companyId}`,
+      cacheKey: `event_list_cache_v2_${profile.companyId}`,
     })
       .then((result) => setEvents(result.events))
       .catch((e) => console.error('Failed to load events for expense modal:', e))
@@ -94,28 +106,68 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3.5 space-y-1.5">
-          {NAV_ITEMS.map(({ to, icon, label }) => (
+          {visibleNavItems.map(({ to, icon, label }) => (
             <NavLink key={to} to={to} end className={({ isActive }) => sidebarLinkClass(isActive)}>
               <span>{icon}</span>
               <span>{label}</span>
             </NavLink>
           ))}
+
+          {/* NEW — divider separating main nav from Quick Actions */}
+          <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
+
+          {/* NEW — Quick Actions section: Create Event, Add User, Add Expense, Share (Share last) */}
+          <p className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            Quick Actions
+          </p>
+
+          {can(Permission.VIEW_CREATE_EVENT) && (
+            <NavLink to="/events/create" end className={({ isActive }) => sidebarLinkClass(isActive)}>
+              <span><PlusCircle size={18} /></span>
+              <span>Create Event</span>
+            </NavLink>
+          )}
+
           {showManageUsers && (
-  <button
-    onClick={() => setIsUserAddModalOpen(true)}
-    className={sidebarLinkClass(false)}
-  >
-    <span>{USER_MANAGEMENT_ITEM.icon}</span>
-    <span>{USER_MANAGEMENT_ITEM.label}</span>
-  </button>
-)}
+            <button
+              onClick={() => setIsUserAddModalOpen(true)}
+              className={sidebarLinkClass(false)}
+            >
+              <span>{USER_MANAGEMENT_ITEM.icon}</span>
+              <span>{USER_MANAGEMENT_ITEM.label}</span>
+            </button>
+          )}
+          <ShowWrapper permission={Permission.ADD_EXPENSE}>
+            <button onClick={() => setIsExpenseModalOpen(true)} className={sidebarLinkClass(false)}>
+              <span><Receipt size={18} /></span>
+              <span>Add Expense</span>
+            </button>
+          </ShowWrapper>
+
+          {/* Share — moved to last position in Quick Actions */}
           <button
-            onClick={() => setIsExpenseModalOpen(true)}
+            onClick={() => setIsShareSectionOpen((v) => !v)}
             className={sidebarLinkClass(false)}
           >
-            <span><Receipt size={18} /></span>
-            <span>Add Expense</span>
+            <span><Share2 size={18} /></span>
+            <span>Share</span>
           </button>
+          {isShareSectionOpen && (
+            <div className="ml-6 flex flex-col gap-1 border-l border-slate-200 dark:border-slate-800 pl-3">
+              <button
+                onClick={() => window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer')}
+                className={sidebarLinkClass(false)}
+              >
+                <span>View Events</span>
+              </button>
+              <button
+                onClick={() => setIsShareLinkModalOpen(true)}
+                className={sidebarLinkClass(false)}
+              >
+                <span>Share Link</span>
+              </button>
+            </div>
+          )}
         </nav>
       </aside>
 
@@ -165,18 +217,18 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
               </NavLink>
             ))}
             {showManageUsers && (
-  <button
-    onClick={() => {
-      setIsQuickActionsOpen(false);
-      setIsUserAddModalOpen(true);
-    }}
-    className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-  >
-    {USER_MANAGEMENT_ITEM.icon}
-    <span className="truncate">{USER_MANAGEMENT_ITEM.label}</span>
-  </button>
-)}
-            <button
+              <button
+                onClick={() => {
+                  setIsQuickActionsOpen(false);
+                  setIsUserAddModalOpen(true);
+                }}
+                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+              >
+                {USER_MANAGEMENT_ITEM.icon}
+                <span className="truncate">{USER_MANAGEMENT_ITEM.label}</span>
+              </button>
+            )}
+                        <button
               onClick={() => {
                 setIsQuickActionsOpen(false);
                 setIsExpenseModalOpen(true);
@@ -186,6 +238,39 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
               <Receipt size={20} />
               <span className="truncate">Add Expense</span>
             </button>
+                        <button
+              onClick={() => setIsMobileShareMenuOpen((v) => !v)}
+              className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+            >
+              <Share2 size={20} />
+              <span className="truncate">Share</span>
+            </button>
+
+            {/* NEW — mobile Share sub-menu: View Events / Share Link */}
+            {isMobileShareMenuOpen && (
+              <div className="col-span-2 flex flex-col gap-1 border-t border-slate-200 dark:border-slate-800 pt-1.5 mt-1">
+                <button
+                  onClick={() => {
+                    setIsMobileShareMenuOpen(false);
+                    setIsQuickActionsOpen(false);
+                    window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                >
+                  View Events
+                </button>
+                <button
+                  onClick={() => {
+                    setIsMobileShareMenuOpen(false);
+                    setIsQuickActionsOpen(false);
+                    setIsShareLinkModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                >
+                  Share Link
+                </button>
+              </div>
+            )}
           </div>
         )
         }
@@ -193,7 +278,7 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
         <div className="relative flex justify-around items-center gap-1 px-2 py-2 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] shadow-lg">
           {/* Left group */}
           <div className="flex-1 flex items-center gap-1">
-            {MOBILE_LEFT_ITEMS.map(({ to, icon, label }) => (
+            {visibleMobileLeft.map(({ to, icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -227,7 +312,7 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
 
           {/* Right group */}
           <div className="flex-1 flex items-center gap-1">
-            {MOBILE_RIGHT_ITEMS.map(({ to, icon, label }) => (
+            {visibleMobileRight.map(({ to, icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -258,9 +343,15 @@ const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
         }}
       />
       <UserAddModal
-  isOpen={isUserAddModalOpen}
-  onClose={() => setIsUserAddModalOpen(false)}
-/>
+        isOpen={isUserAddModalOpen}
+        onClose={() => setIsUserAddModalOpen(false)}
+      />
+      <ShareLinkPickerModal
+        isOpen={isShareLinkModalOpen}
+        onClose={() => setIsShareLinkModalOpen(false)}
+        events={events}
+        eventsLoading={eventsLoading}
+      />
     </div >
   );
 };

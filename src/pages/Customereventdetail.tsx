@@ -14,6 +14,8 @@ import {
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
+import { ShareOptionsModal } from '../components/ShareOptionsModal';
+import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
 
 const CustomerEventDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -26,6 +28,7 @@ const CustomerEventDetail: React.FC = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [pastEventIndex, setPastEventIndex] = useState(0);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false); // NEW
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -92,41 +95,29 @@ const CustomerEventDetail: React.FC = () => {
   const handleGetTickets = () => {
     navigate(`/checkout/${event.id}`, { state: { quantities } });
   };
-  const handleShare = async () => {
-    const shareData = {
-      title: event.title,
-      text: `Check out ${event.title}`,
-      url: window.location.href,
-    };
+  // AFTER — opens the WhatsApp/Copy-link popup instead of the native share sheet
+  const handleShare = () => {
+    setIsShareModalOpen(true);
+  };
 
+  const handleWhatsAppShare = () => {
+    if (!event) return;
+    const text = buildWhatsAppShareText(
+      settings.whatsappShareTemplate || 'Check out {{eventTitle}}! {{link}}',
+      event.title,
+      window.location.href
+    );
+    openWhatsAppShare(text);
+  };
+
+  const handleCopyLink = async () => {
     try {
-      if (navigator.share) {
-        // Native share sheet — mobile par best UX
-        await navigator.share(shareData);
-      } else if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(window.location.href);
-        setShareToast('Link copied to clipboard!');
-        setTimeout(() => setShareToast(null), 2000);
-      } else {
-        // Fallback for insecure context / old browsers
-        const textarea = document.createElement('textarea');
-        textarea.value = window.location.href;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        setShareToast('Link copied to clipboard!');
-        setTimeout(() => setShareToast(null), 2000);
-      }
-    } catch (err) {
-      // User cancelled share sheet — usually not a real error
-      if ((err as Error)?.name !== 'AbortError') {
-        setShareToast('Could not share. Please copy the link manually.');
-        setTimeout(() => setShareToast(null), 2500);
-      }
+      await navigator.clipboard.writeText(window.location.href);
+      setShareToast('Link copied to clipboard!');
+    } catch {
+      setShareToast('Could not copy link. Please copy it manually.');
     }
+    setTimeout(() => setShareToast(null), 2000);
   };
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
@@ -195,7 +186,15 @@ const CustomerEventDetail: React.FC = () => {
           <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
         </div>
 
-                <div className="absolute inset-x-0 bottom-0 p-4">
+        {/* NEW — WhatsApp / Copy link share popup */}
+        <ShareOptionsModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          onWhatsAppShare={handleWhatsAppShare}
+          onCopyLink={handleCopyLink}
+        />
+
+        <div className="absolute inset-x-0 bottom-0 p-4">
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
@@ -204,11 +203,11 @@ const CustomerEventDetail: React.FC = () => {
             style={
               event.titleStyle
                 ? {
-                    fontSize: event.titleStyle.fontSize + 8, // hero heading is naturally larger — offset keeps proportion
-                    fontWeight: event.titleStyle.fontWeight,
-                    fontStyle: event.titleStyle.fontStyle,
-                    color: event.titleStyle.color,
-                  }
+                  fontSize: event.titleStyle.fontSize + 8, // hero heading is naturally larger — offset keeps proportion
+                  fontWeight: event.titleStyle.fontWeight,
+                  fontStyle: event.titleStyle.fontStyle,
+                  color: event.titleStyle.color,
+                }
                 : undefined
             }
           >
@@ -255,7 +254,7 @@ const CustomerEventDetail: React.FC = () => {
             </CardContent>
           </Card>
           {/* About */}
-                    <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
               <p
@@ -263,11 +262,11 @@ const CustomerEventDetail: React.FC = () => {
                 style={
                   event.descriptionStyle
                     ? {
-                        fontSize: event.descriptionStyle.fontSize,
-                        fontWeight: event.descriptionStyle.fontWeight,
-                        fontStyle: event.descriptionStyle.fontStyle,
-                        color: event.descriptionStyle.color,
-                      }
+                      fontSize: event.descriptionStyle.fontSize,
+                      fontWeight: event.descriptionStyle.fontWeight,
+                      fontStyle: event.descriptionStyle.fontStyle,
+                      color: event.descriptionStyle.color,
+                    }
                     : undefined
                 }
               >

@@ -11,5 +11,5 @@ export const CREATABLE_ROLES: Record<string, Role[]> = {
   [ROLES.TEAM_LEADER]: [ROLES.TEAM],
 };
 
-export const canManageUsers = (role?: string): boolean =>
-  role === ROLES.ORGANIZER || role === ROLES.TEAM_LEADER;
+// Only the owner (admin) manages users and permissions — Team Leaders don't get this.
+export const canManageUsers = (role?: string): boolean => role === ROLES.ORGANIZER;

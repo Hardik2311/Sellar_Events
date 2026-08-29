@@ -9,14 +9,17 @@ import EventOverviewCard from '../components/EventOverviewCard';
 import TicketTierBreakdown from '../components/TicketTierBreakDown';
 import SalesTrendCard from '../components/SalesTrendCard';
 import { EventFilterProvider, EventDateFilter, useEventFilter } from '../components/ui/EventdateFilter';
+import { usePermissions } from '../hooks/usePermissions';
+import { Permission } from '../types/permissions.types';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 
 const EventDashboardContent: React.FC = () => {
   const { profile } = useAuth();
+  const { can } = usePermissions();
   const { filters } = useEventFilter();
   const [searchValue, setSearchValue] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [isDataVisible, setIsDataVisible] = useState<boolean>(true);
+  const [isDataVisible, setIsDataVisible] = useState<boolean>(can(Permission.TOGGLE_SENSITIVE_DATA));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WithCacheMeta<EventDashboardData> | null>(null);
@@ -44,7 +47,7 @@ const EventDashboardContent: React.FC = () => {
         companyId: profile.companyId,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        cacheKey: `event_dashboard_cache_${profile.companyId}`,
+        cacheKey: `event_dashboard_cache_v2_${profile.companyId}`,
         forceRefresh,
       });
       setData(result);
@@ -82,15 +85,17 @@ const EventDashboardContent: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+               <div className="flex items-center gap-2">
           {/* <ThemeToggle /> */}
-          <button
-            onClick={() => setIsDataVisible(!isDataVisible)}
-            className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
-            title={isDataVisible ? 'Hide Sensitive Data' : 'Show Sensitive Data'}
-          >
-            {isDataVisible ? <Eye size={18} /> : <EyeOff size={18} />}
-          </button>
+          {can(Permission.TOGGLE_SENSITIVE_DATA) && (
+            <button
+              onClick={() => setIsDataVisible(!isDataVisible)}
+              className="p-2.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+              title={isDataVisible ? 'Hide Sensitive Data' : 'Show Sensitive Data'}
+            >
+              {isDataVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+            </button>
+          )}
         </div>
       </header>
 

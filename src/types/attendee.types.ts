@@ -14,6 +14,7 @@ export interface Attendee {
   purchasedAt?: number;    // NEW — ms epoch; source of truth for sale date
   createdAt?: number;      // NEW — ms epoch; fallback when purchasedAt missing
   checkedInAt: string | null; // ISO timestamp
+  customFieldAnswers?: Record<string, string>;
 }
 
 export const CONFIRMED_TICKET_STATUSES = new Set<TicketStatus>(['valid', 'checked_in']);

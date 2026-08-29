@@ -3,8 +3,8 @@ import { Search, Camera } from 'lucide-react';
 
 interface SearchBarProps {
   value: string;
-  onChange: (value: string) => void;
-  onScanClick: () => void;
+  onChange: (v: string) => void;
+  onScanClick?: () => void; // optional — hidden/disabled when the user lacks SCAN_QR permission
   placeholder?: string;
 }
 
