@@ -7,8 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES, canManageUsers } from '../../enum/enum'
 import BackButton from '../../components/ui/BackButton';
 import { UserAddModal } from '../UserAdd';
-import ShowWrapper from '../../components/ShowWrapper';
-import { Permission } from '../../types/permissions.types';
 
 interface CompanyUser {
   uid: string;
@@ -161,19 +159,15 @@ const ManageUsersPage: React.FC = () => {
                 <p className="text-[10px] text-slate-500 mt-1 truncate">{u.email}</p>
                 <p className="text-[10px] text-slate-400">{u.phone}</p>
                 <div className="flex gap-1.5 mt-2">
-                  <ShowWrapper permission={Permission.EDIT_USER}>
-                    <button onClick={() => handleEdit(u)} className="flex-1 text-xs py-1 border rounded">Edit</button>
-                  </ShowWrapper>
+                  <button onClick={() => handleEdit(u)} className="flex-1 text-xs py-1 border rounded">Edit</button>
                   {u.role !== ROLES.ORGANIZER && (
-                    <ShowWrapper permission={Permission.DELETE_USER}>
-                      <button
-                        onClick={() => handleDelete(u)}
-                        disabled={deletingUid === u.uid}
-                        className="flex-1 text-xs py-1 border rounded text-red-500 disabled:opacity-50"
-                      >
-                        {deletingUid === u.uid ? 'Deleting…' : 'Delete'}
-                      </button>
-                    </ShowWrapper>
+                    <button
+                      onClick={() => handleDelete(u)}
+                      disabled={deletingUid === u.uid}
+                      className="flex-1 text-xs py-1 border rounded text-red-500 disabled:opacity-50"
+                    >
+                      {deletingUid === u.uid ? 'Deleting…' : 'Delete'}
+                    </button>
                   )}
                 </div>
               </>

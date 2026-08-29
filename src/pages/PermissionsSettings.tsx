@@ -99,12 +99,12 @@ const PermissionsSettings: React.FC = () => {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <div className="w-[38px]" />
-        <div className="flex-1 text-center">
+      <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
+        <BackButton title="Back" />
+        <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[70%]">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Manage Permissions</h1>
         </div>
-        <BackButton title="Back" />
+        <div className="w-[38px]"></div>
       </header>
 
       <main className="grow overflow-y-auto p-4 sm:p-6">
@@ -171,7 +171,7 @@ const PermissionsSettings: React.FC = () => {
                             type="checkbox"
                             checked={currentPerms[item.key]}
                             onChange={() => toggle(item.key)}
-                            className="h-4 w-4 accent-[#007A78] dark:accent-[#2DD4BF] cursor-pointer"
+                            className="h-4 w-4 appearance-none rounded-sm border border-slate-400 bg-white checked:bg-[#007A78] checked:border-[#007A78] dark:checked:bg-[#2DD4BF] dark:checked:border-[#2DD4BF] relative cursor-pointer checked:after:content-['✓'] checked:after:absolute checked:after:inset-0 checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-white checked:after:text-[10px] checked:after:font-bold"
                           />
                           <span className="text-sm text-slate-600 dark:text-slate-300">{item.label}</span>
                         </label>

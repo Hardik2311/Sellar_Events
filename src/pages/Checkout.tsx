@@ -384,12 +384,13 @@ const CheckoutPage: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-slate-900">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <div className="min-w-0">
-          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Checkout</h1>
+      <header className="relative sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+        <BackButton />
+        <div className="absolute left-1/2 -translate-x-1/2 text-center min-w-0 max-w-[65%]">
+          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">Checkout</h1>
           <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{event.title}</p>
         </div>
-        <BackButton />
+        <div className="w-9" />
       </header>
 
       {/* ── Main content ─────────────────────────────────────────────── */}

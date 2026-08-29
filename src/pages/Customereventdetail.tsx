@@ -176,22 +176,22 @@ const CustomerEventDetail: React.FC = () => {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-2 p-3">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+          <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
           <button
             onClick={handleShare}
             className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
           >
             <Share2 size={18} />
           </button>
-          <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
         </div>
 
         {/* NEW — WhatsApp / Copy link share popup */}
         <ShareOptionsModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
+          shareUrl={window.location.href}
           onWhatsAppShare={handleWhatsAppShare}
-          onCopyLink={handleCopyLink}
         />
 
         <div className="absolute inset-x-0 bottom-0 p-4">

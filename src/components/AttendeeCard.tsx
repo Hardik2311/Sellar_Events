@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Phone, Mail, ChevronDown, Share2, Ban, CheckCircle2 } from 'lucide-react';
+import { Phone, Mail, ChevronDown } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
 import type { CustomField } from '../types/event.types';
@@ -179,37 +179,37 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             </div>
           )}
 
-          <div className="flex rounded-sm overflow-hidden mt-3 gap-2">
+          <div className="flex rounded-sm overflow-hidden mt-3 gap-1.5">
             {attendee.status !== 'cancelled' && onCheckIn && (
               <button
                 onClick={() => onCheckIn(attendee.id)}
                 title={attendee.status === 'checked_in' ? 'Tap to undo check-in' : 'Check in this attendee'}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-sm text-xs font-extrabold shadow-xs transition-colors ${attendee.status === 'checked_in'
+                className={`flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm text-[11px] font-extrabold shadow-xs transition-colors truncate ${attendee.status === 'checked_in'
                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
                   : 'bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950'
                   }`}
               >
-                <CheckCircle2 size={14} /> {attendee.status === 'checked_in' ? 'Checked In' : 'Check In'}
+                {attendee.status === 'checked_in' ? 'Checked In' : 'Check In'}
               </button>
             )}
             <a
               href={`tel:${attendee.phone}`}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 text-emerald-600 text-xs font-bold"
+              className="flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm bg-emerald-50 text-emerald-600 text-[11px] font-bold truncate"
             >
-              <Phone size={14} /> Call
+              Call
             </a>
             <button
               onClick={handleShare}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 text-xs font-bold"
+              className="flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm bg-blue-50 text-blue-600 text-[11px] font-bold truncate"
             >
-              <Share2 size={14} /> Share
+              Share
             </button>
             {attendee.status !== 'cancelled' && onCancel && (
               <button
                 onClick={() => onCancel(attendee.id)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#FF3B30] text-white text-xs font-bold"
+                className="flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm bg-[#FF3B30] text-white text-[11px] font-bold truncate"
               >
-                <Ban size={14} /> Cancel
+                Cancel
               </button>
             )}
           </div>

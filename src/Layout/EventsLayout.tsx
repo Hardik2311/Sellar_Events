@@ -1,6 +1,6 @@
 import { Suspense, useRef, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, Receipt, UserPlus, Share2 } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, IndianRupee, UserPlus, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { usePermissions } from '../hooks/usePermissions';
@@ -11,7 +11,7 @@ import type { EventSummary } from '../types/event.types';
 import { UserAddModal } from '../pages/UserAdd';
 import { ShareLinkPickerModal } from '../components/ShareLinkPickerModal';
 import { canManageUsers } from '../enum/enum';
-import { ROUTES } from '../constants/routes.constants';
+import type { JSX } from 'react';
 import ShowWrapper from '../components/ShowWrapper';
 
 const NAV_ITEMS = [
@@ -40,6 +40,7 @@ const MOBILE_QUICK_LINKS = [
 
 const EventsLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { profile } = useAuth();
   const { can } = usePermissions();
@@ -47,20 +48,44 @@ const EventsLayout = () => {
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
   const visibleMobileLeft = MOBILE_LEFT_ITEMS.filter((item) => !item.permission || can(item.permission));
   const visibleMobileRight = MOBILE_RIGHT_ITEMS.filter((item) => !item.permission || can(item.permission));
+
+  const fanActions = [
+    {
+      key: 'add-event',
+      label: 'Add Event',
+      icon: <PlusCircle size={20} />,
+      onClick: () => navigate('/events/create'),
+    },
+    showManageUsers && {
+      key: 'add-user',
+      label: USER_MANAGEMENT_ITEM.label,
+      icon: USER_MANAGEMENT_ITEM.icon,
+      onClick: () => setIsUserAddModalOpen(true),
+    },
+    {
+      key: 'add-expense',
+      label: 'Add Expense',
+      icon: <IndianRupee size={18} />,
+      onClick: () => setIsExpenseModalOpen(true),
+    },
+    {
+      key: 'share',
+      label: 'Share',
+      icon: <Share2 size={18} />,
+      onClick: () => setIsShareLinkModalOpen(true),
+    },
+  ].filter(Boolean) as { key: string; label: string; icon: JSX.Element; onClick: () => void }[];
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false);
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
-  const [isShareLinkModalOpen, setIsShareLinkModalOpen] = useState(false); // NEW — Share Link popup
-  const [isShareSectionOpen, setIsShareSectionOpen] = useState(false); // NEW
-  const [isMobileShareMenuOpen, setIsMobileShareMenuOpen] = useState(false);
+  const [isShareLinkModalOpen, setIsShareLinkModalOpen] = useState(false); // Combined Share popup (View Store / WhatsApp / Copy Link)
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
-  const { addExpense } = useExpenses(profile?.companyId, 'general');
+  const { addExpense } = useExpenses(profile?.companyId, undefined);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
     setIsQuickActionsOpen(false);
-    setIsMobileShareMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -139,35 +164,16 @@ const EventsLayout = () => {
           )}
           <ShowWrapper permission={Permission.ADD_EXPENSE}>
             <button onClick={() => setIsExpenseModalOpen(true)} className={sidebarLinkClass(false)}>
-              <span><Receipt size={18} /></span>
+              <span><IndianRupee size={18} /></span>
               <span>Add Expense</span>
             </button>
           </ShowWrapper>
 
-          {/* Share — moved to last position in Quick Actions */}
-          <button
-            onClick={() => setIsShareSectionOpen((v) => !v)}
-            className={sidebarLinkClass(false)}
-          >
+          {/* Share — opens combined popup directly (View Store / WhatsApp / Share Link) */}
+          <button onClick={() => setIsShareLinkModalOpen(true)} className={sidebarLinkClass(false)}>
             <span><Share2 size={18} /></span>
             <span>Share</span>
           </button>
-          {isShareSectionOpen && (
-            <div className="ml-6 flex flex-col gap-1 border-l border-slate-200 dark:border-slate-800 pl-3">
-              <button
-                onClick={() => window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer')}
-                className={sidebarLinkClass(false)}
-              >
-                <span>View Events</span>
-              </button>
-              <button
-                onClick={() => setIsShareLinkModalOpen(true)}
-                className={sidebarLinkClass(false)}
-              >
-                <span>Share Link</span>
-              </button>
-            </div>
-          )}
         </nav>
       </aside>
 
@@ -198,82 +204,22 @@ const EventsLayout = () => {
         )}
 
         {isQuickActionsOpen && (
-          <div className="absolute bottom-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-40 w-60 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] shadow-xl p-2 grid grid-cols-2 gap-1.5">
-            {MOBILE_QUICK_LINKS.map(({ to, icon, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end
-                onClick={() => setIsQuickActionsOpen(false)}
-                className={({ isActive }) =>
-                  `flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors ${isActive
-                    ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                  }`
-                }
-              >
-                {icon}
-                <span className="truncate">{label}</span>
-              </NavLink>
-            ))}
-            {showManageUsers && (
+          <div className="absolute bottom-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-40 flex flex-col-reverse items-center gap-2 w-52">
+            {fanActions.map((item) => (
               <button
+                key={item.key}
                 onClick={() => {
                   setIsQuickActionsOpen(false);
-                  setIsUserAddModalOpen(true);
+                  item.onClick();
                 }}
-                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                className="w-full flex items-center justify-center gap-2 rounded-sm bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-lg px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 active:scale-95 transition-transform"
               >
-                {USER_MANAGEMENT_ITEM.icon}
-                <span className="truncate">{USER_MANAGEMENT_ITEM.label}</span>
+                <span className="text-[#007A78] dark:text-[#2DD4BF]">{item.icon}</span>
+                <span>{item.label}</span>
               </button>
-            )}
-                        <button
-              onClick={() => {
-                setIsQuickActionsOpen(false);
-                setIsExpenseModalOpen(true);
-              }}
-              className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-            >
-              <Receipt size={20} />
-              <span className="truncate">Add Expense</span>
-            </button>
-                        <button
-              onClick={() => setIsMobileShareMenuOpen((v) => !v)}
-              className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-bold transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-            >
-              <Share2 size={20} />
-              <span className="truncate">Share</span>
-            </button>
-
-            {/* NEW — mobile Share sub-menu: View Events / Share Link */}
-            {isMobileShareMenuOpen && (
-              <div className="col-span-2 flex flex-col gap-1 border-t border-slate-200 dark:border-slate-800 pt-1.5 mt-1">
-                <button
-                  onClick={() => {
-                    setIsMobileShareMenuOpen(false);
-                    setIsQuickActionsOpen(false);
-                    window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer');
-                  }}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-                >
-                  View Events
-                </button>
-                <button
-                  onClick={() => {
-                    setIsMobileShareMenuOpen(false);
-                    setIsQuickActionsOpen(false);
-                    setIsShareLinkModalOpen(true);
-                  }}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-                >
-                  Share Link
-                </button>
-              </div>
-            )}
+            ))}
           </div>
-        )
-        }
+        )}
 
         <div className="relative flex justify-around items-center gap-1 px-2 py-2 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] shadow-lg">
           {/* Left group */}
@@ -339,7 +285,9 @@ const EventsLayout = () => {
         eventsLoading={eventsLoading}
         onSave={async data => {
           if (!profile?.companyId) return;
-          await addExpense(profile.companyId, 'general', data);
+          // Save under whichever real event the user picked inside the
+          // modal's own EventListCard — not a hardcoded placeholder.
+          await addExpense(profile.companyId, data.eventId, data);
         }}
       />
       <UserAddModal
