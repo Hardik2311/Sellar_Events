@@ -23,12 +23,12 @@ const Account: React.FC = () => {
     return (
         <div className="flex min-h-screen flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
             {/* ── Header ── */}
-            <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-                <div className="w-10" />
-                <div className="flex-1 text-center">
-                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Account</h1>
-                </div>
+            <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
                 <BackButton />
+                <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[65%]">
+                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Organizer Account</h1>
+                </div>
+                <div className="w-10" />
             </header>
 
             {/* ── Profile section ── */}
@@ -118,7 +118,7 @@ const Account: React.FC = () => {
                         </Link>
                     </div>
 
-                                        {/* NEW — Add-ons block, just above Logout */}
+                    {/* NEW — Add-ons block, just above Logout */}
                     <Link
                         to="/events/account/addons"
                         className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"

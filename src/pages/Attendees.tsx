@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, UserPlus } from 'lucide-react';
+import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
+import TicketConfirmation from '../components/TicketConfirmation';
 import BackButton from '../components/ui/BackButton';
 import {
   collection,
@@ -101,6 +103,8 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
+  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [walkInTicket, setWalkInTicket] = useState<{ ticketId: string; tierName: string; attendeeName: string } | null>(null);
 
   // Organizer ke saare events real-time load karo
   useEffect(() => {
@@ -219,6 +223,11 @@ const Attendees: React.FC = () => {
     setPendingAttendee(null);
   }, []);
 
+  const handleWalkInAdded = useCallback((name: string, ticketId: string, tierName: string) => {
+    setScanFeedback({ type: 'success', message: `${name} added as walk-in (${ticketId}).` });
+    setWalkInTicket({ ticketId, tierName, attendeeName: name });
+  }, []);
+
   // Auto-clear the scan feedback banner after a few seconds
   useEffect(() => {
     if (!scanFeedback) return;
@@ -261,13 +270,13 @@ const Attendees: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <div className="w-9" /> {/* left spacer for symmetry */}
-        <div className="flex-1 text-center flex flex-col items-center justify-center">
-          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Attendees</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Guest list & real-time check-in manager</p>
-        </div>
+      <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
         <BackButton />
+        <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[65%]">
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Attendees</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Guest list & real-time check-in manager</p>
+        </div>
+        <div className="w-9" />
       </header>
 
       <main className="grow overflow-y-auto p-2">
@@ -324,7 +333,18 @@ const Attendees: React.FC = () => {
                 </CardContent>
               </Card>
 
-              {/* 4. Sorter + Export */}
+              {/* 4a. Add Walk-in — its own full-width row */}
+              {can(Permission.ADD_WALK_IN_ATTENDEE) && (
+                <button
+                  onClick={() => setIsWalkInModalOpen(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-sm bg-[#007A78] hover:bg-[#006361] px-3 py-2.5 text-xs font-bold text-white transition-colors whitespace-nowrap dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950"
+                  title="Add a walk-in / on-the-spot attendee"
+                >
+                  <UserPlus size={14} /> Add Walk-in
+                </button>
+              )}
+
+              {/* 4b. Sorter + Live page + Export — back on one row, like before */}
               <div className="flex items-center gap-2">
                 <select
                   value={sortOption}
@@ -400,6 +420,25 @@ const Attendees: React.FC = () => {
         onConfirm={handleConfirmCheckIn}
         onCancel={handleCancelConfirm}
       />
+
+      <AddWalkInAttendeeModal
+        isOpen={isWalkInModalOpen}
+        onClose={() => setIsWalkInModalOpen(false)}
+        event={selectedEvent}
+        companyId={profile?.companyId}
+        onSuccess={handleWalkInAdded}
+      />
+
+      {walkInTicket && selectedEvent && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-slate-900">
+          <TicketConfirmation
+            eventTitle={selectedEvent.title}
+            eventDate={selectedEvent.startDate}
+            tickets={[walkInTicket]}
+            onDone={() => setWalkInTicket(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };

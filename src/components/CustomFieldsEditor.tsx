@@ -106,6 +106,7 @@ const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({ fields, onChang
               type="checkbox"
               checked={field.required}
               onChange={(e) => updateField(field.id, { required: e.target.checked })}
+              className="h-4 w-4 appearance-none rounded-sm border border-slate-400 bg-white checked:bg-[#007A78] checked:border-[#007A78] relative cursor-pointer checked:after:content-['✓'] checked:after:absolute checked:after:inset-0 checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-white checked:after:text-[10px] checked:after:font-bold"
             />
             Required
           </label>

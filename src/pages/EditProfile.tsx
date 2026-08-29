@@ -376,12 +376,13 @@ const EditProfile: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
             {/* ── Page Header ── */}
-            <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-                <div>
-                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Edit Profile</h1>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update account, organizer & address details</p>
-                </div>
+            <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
                 <BackButton />
+                <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[65%]">
+                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Edit Profile</h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Update account, organizer & address details</p>
+                </div>
+                <div className="w-9" />
             </header>
 
             <div className="max-w-6xl mx-auto px-4 py-5 pb-36 md:pb-8">

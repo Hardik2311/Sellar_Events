@@ -34,6 +34,9 @@ export const ShareLinkPickerModal: React.FC<ShareLinkPickerModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       shareUrl={getDiscoverUrl(shareEvent)}
+      onViewStore={() => {
+        window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer');
+      }}
       onWhatsAppShare={() => {
         const text = buildWhatsAppShareText(settings.whatsappShareTemplate, shareEvent.title, getDiscoverUrl(shareEvent));
         openWhatsAppShare(text);

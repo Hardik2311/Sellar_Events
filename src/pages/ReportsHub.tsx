@@ -7,13 +7,13 @@ import BackButton from '../components/ui/BackButton';
 const ReportsHub: React.FC = () => {
     return (
         <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
-            <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-                <div className="w-[38px]"></div>
-                <div className="flex-1 text-center flex flex-col items-center justify-center">
-                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Reports</h1>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Choose a report to view</p>
-                </div>
+            <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
                 <BackButton title="Back" />
+                <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[70%]">
+                    <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Reports</h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Choose a report to view</p>
+                </div>
+                <div className="w-[38px]"></div>
             </header>
 
             <main className="grow overflow-y-auto p-4 sm:p-6">

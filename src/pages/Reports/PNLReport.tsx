@@ -191,9 +191,11 @@ const PnlReportPageInner: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 pb-16">
       <header className="sticky top-0 z-20 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="w-10" />
-          <div className="flex-1 text-center min-w-0">
+        <div className="relative flex items-center justify-between">
+    <div className="flex items-center gap-1">
+        <BackButton />
+    </div>
+    <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[60%] min-w-0">
             <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Profit &amp; Loss</h1>
             {selectedEvent && (
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">{selectedEvent.title}</p>
@@ -210,7 +212,6 @@ const PnlReportPageInner: React.FC = () => {
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
             </button>
-            <BackButton />
           </div>
         </div>
         {showSearch && (

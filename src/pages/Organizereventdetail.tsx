@@ -295,25 +295,41 @@ const OrganizerEventDetail: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          {can(Permission.EDIT_EVENT) ? (
-            <button
-              onClick={() => setIsEditOpen(true)}
-              className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
-            >
-              <Pencil size={14} /> Edit
-            </button>
-          ) : (
-            <span />
-          )}
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenShare}
-              className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
-            >
-              <Share2 size={18} />
-            </button>
             <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
+            {can(Permission.EDIT_EVENT) && (
+              <button
+                onClick={() => setIsEditOpen(true)}
+                className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
+              >
+                <Pencil size={14} /> Edit
+              </button>
+            )}
           </div>
+          <button
+            onClick={handleOpenShare}
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+          >
+            <Share2 size={18} />
+          </button>
+        </div><div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+          <div className="flex items-center gap-2">
+            <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
+            {can(Permission.EDIT_EVENT) && (
+              <button
+                onClick={() => setIsEditOpen(true)}
+                className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
+              >
+                <Pencil size={14} /> Edit
+              </button>
+            )}
+          </div>
+          <button
+            onClick={handleOpenShare}
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+          >
+            <Share2 size={18} />
+          </button>
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-4">

@@ -18,12 +18,13 @@ export const Permission = {
   TOGGLE_EVENT_LIVE: 'toggleEventLive',
   TOGGLE_EVENT_FEATURED: 'toggleEventFeatured',
 
-  // Attendees
+    // Attendees
   VIEW_ATTENDEES: 'viewAttendees',
   CHECK_IN_ATTENDEE: 'checkInAttendee',
   CANCEL_ATTENDEE: 'cancelAttendee',
   EXPORT_ATTENDEES: 'exportAttendees',
   SCAN_QR: 'scanQr',
+  ADD_WALK_IN_ATTENDEE: 'addWalkInAttendee', // NEW — manually add an attendee (on-the-spot / after sale closes)
 
   // Reports
   VIEW_REPORTS: 'viewReports',
@@ -89,12 +90,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   },
   {
     title: 'Reports',
-    items: [
-      { key: Permission.VIEW_REPORTS, label: 'Access Reports' },
-      { key: Permission.VIEW_EXPENSE_REPORT, label: 'View Expense Report' },
-      { key: Permission.VIEW_SALES_REPORT, label: 'View Sales Report' },
-      { key: Permission.VIEW_CUSTOMER_REPORT, label: 'View Customer Report' },
-      { key: Permission.VIEW_PNL_REPORT, label: 'View P&L Report' },
+        items: [
+      { key: Permission.VIEW_ATTENDEES, label: 'View Attendees' },
+      { key: Permission.CHECK_IN_ATTENDEE, label: 'Check-in Attendee' },
+      { key: Permission.CANCEL_ATTENDEE, label: 'Cancel Ticket' },
+      { key: Permission.EXPORT_ATTENDEES, label: 'Export Attendee List' },
+      { key: Permission.SCAN_QR, label: 'Scan QR Code' },
+      { key: Permission.ADD_WALK_IN_ATTENDEE, label: 'Add Walk-in Attendee' },
     ],
   },
   {
@@ -147,6 +149,7 @@ export const DEFAULT_PERMISSIONS: PermissionsByRole = {
     Permission.CANCEL_ATTENDEE,
     Permission.EXPORT_ATTENDEES,
     Permission.SCAN_QR,
+     Permission.ADD_WALK_IN_ATTENDEE,
     Permission.VIEW_REPORTS,
     Permission.VIEW_EXPENSE_REPORT,
     Permission.VIEW_SALES_REPORT,
