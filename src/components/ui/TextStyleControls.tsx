@@ -1,24 +1,98 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Bold, Italic } from 'lucide-react';
-import type { TextStyleConfig } from '../../types/event.types';
 
 interface TextStyleControlsProps {
-  value: TextStyleConfig;
-  onChange: (style: TextStyleConfig) => void;
+  fontSize: number;
+  onFontSizeChange: (size: number) => void;
+  editorRef: React.RefObject<HTMLDivElement | null>;
+  onChange: (html: string) => void; // NEW — manual DOM edits ke baad React state sync karne ke liye
 }
 
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32];
 
-const TextStyleControls: React.FC<TextStyleControlsProps> = ({ value, onChange }) => {
-  const update = <K extends keyof TextStyleConfig>(key: K, val: TextStyleConfig[K]) =>
-    onChange({ ...value, [key]: val });
+const TextStyleControls: React.FC<TextStyleControlsProps> = ({
+  fontSize,
+  onFontSizeChange,
+  editorRef,
+  onChange,
+}) => {
+  const savedRange = useRef<Range | null>(null);
+
+  // Dialog khulne / button click hone se PEHLE (mousedown pe) selection save kar lete hain
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const restoreSelection = (): Range | null => {
+    const sel = window.getSelection();
+    if (!sel || !savedRange.current) return null;
+    sel.removeAllRanges();
+    sel.addRange(savedRange.current);
+    return sel.getRangeAt(0);
+  };
+
+  const syncChange = () => {
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+  };
+
+  // Bold/Italic ke liye — selected text ko <b>/<i> mein wrap karta hai,
+  // agar pehle se wrapped hai to unwrap (toggle off) kar deta hai
+  const toggleTag = (tag: 'b' | 'i') => {
+    editorRef.current?.focus();
+    const range = restoreSelection();
+    if (!range || range.collapsed) return;
+
+    const container =
+      range.commonAncestorContainer.nodeType === 3
+        ? range.commonAncestorContainer.parentElement
+        : (range.commonAncestorContainer as Element);
+    const existing = container?.closest(tag);
+
+    if (existing && editorRef.current?.contains(existing)) {
+      // already bold/italic — unwrap
+      const parent = existing.parentNode;
+      while (existing.firstChild) parent?.insertBefore(existing.firstChild, existing);
+      parent?.removeChild(existing);
+    } else {
+      const wrapper = document.createElement(tag);
+      try {
+        range.surroundContents(wrapper);
+      } catch {
+        const contents = range.extractContents();
+        wrapper.appendChild(contents);
+        range.insertNode(wrapper);
+      }
+    }
+    syncChange();
+  };
+
+  // Color ke liye — selected text ko <span style="color:...">  mein wrap karta hai
+  const applyColor = (color: string) => {
+    editorRef.current?.focus();
+    const range = restoreSelection();
+    if (!range || range.collapsed) return;
+
+    const wrapper = document.createElement('span');
+    wrapper.style.color = color;
+    try {
+      range.surroundContents(wrapper);
+    } catch {
+      const contents = range.extractContents();
+      wrapper.appendChild(contents);
+      range.insertNode(wrapper);
+    }
+    syncChange();
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 mb-2 p-1.5 rounded-sm border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 w-fit">
       <select
-        value={value.fontSize}
-        onChange={(e) => update('fontSize', Number(e.target.value))}
-        className="h-8 rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs px-2 text-slate-700 dark:text-slate-200 cursor-pointer"
+        value={fontSize}
+        onChange={(e) => onFontSizeChange(Number(e.target.value))}
+        className="h-8 rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs px-2"
       >
         {FONT_SIZES.map((size) => (
           <option key={size} value={size}>{size}px</option>
@@ -30,24 +104,17 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({ value, onChange }
       <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 overflow-hidden">
         <button
           type="button"
-          onClick={() => update('fontWeight', value.fontWeight === 'bold' ? 'normal' : 'bold')}
-          className={`h-8 w-8 flex items-center justify-center transition-colors ${
-            value.fontWeight === 'bold'
-              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
-          }`}
+          onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+          onClick={() => toggleTag('b')}
+          className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
         >
           <Bold size={14} />
         </button>
-
         <button
           type="button"
-          onClick={() => update('fontStyle', value.fontStyle === 'italic' ? 'normal' : 'italic')}
-          className={`h-8 w-8 flex items-center justify-center border-l border-gray-300 dark:border-slate-700 transition-colors ${
-            value.fontStyle === 'italic'
-              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
-          }`}
+          onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+          onClick={() => toggleTag('i')}
+          className="h-8 w-8 flex items-center justify-center border-l border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
         >
           <Italic size={14} />
         </button>
@@ -57,10 +124,10 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({ value, onChange }
 
       <input
         type="color"
-        value={value.color}
-        onChange={(e) => update('color', e.target.value)}
+        onMouseDown={saveSelection}
+        onChange={(e) => applyColor(e.target.value)}
         className="h-8 w-8 rounded-sm border border-gray-300 dark:border-slate-700 cursor-pointer bg-white dark:bg-slate-800 p-0.5"
-        title="Text color"
+        title="Selected text color"
       />
     </div>
   );

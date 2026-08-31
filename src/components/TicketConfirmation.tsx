@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
@@ -28,66 +28,112 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const qrCanvas = canvasRefs.current[ticketId];
         if (!qrCanvas) return null;
 
+        const SCALE = 3;
         const width = 380;
-        const qrSize = 190;
         const cardMargin = 14;
         const cardW = width - cardMargin * 2;
-        const headerH = 60;
-        const notchR = 9;
-        const bodyPadTop = 26;
+        const headerH = 96;
+        const stubPadTop = 22;
+        const qrSize = 168;
         const qrBoxPad = 14;
         const boxSize = qrSize + qrBoxPad * 2;
-        const height = cardMargin + headerH + bodyPadTop + boxSize + 28 + 20 + cardMargin;
+        const notchR = 10;
+        const height = cardMargin + headerH + stubPadTop + boxSize + 26 + 18 + 24 + cardMargin;
 
         const out = document.createElement('canvas');
-        out.width = width;
-        out.height = height;
+        out.width = width * SCALE;
+        out.height = height * SCALE;
         const ctx = out.getContext('2d');
         if (!ctx) return null;
+        ctx.scale(SCALE, SCALE);
 
-        const PAGE_BG = '#F7F7F5';
-        const CARD_BG = '#FBF8F3';
+        const PAGE_BG = '#F1F1EF';
+        const CARD_BG = '#FFFFFF';
         const INK = '#0B3B3A';
+        const TEAL = '#007A78';
 
-        // Page backdrop
         ctx.fillStyle = PAGE_BG;
         ctx.fillRect(0, 0, width, height);
 
         const cardX = cardMargin;
         const cardY = cardMargin;
         const cardH = height - cardMargin * 2;
-        const radius = 18;
+        const radius = 20;
 
-        // Card base, clipped so the header respects rounded corners
+        // soft drop shadow behind card
+        ctx.save();
+        ctx.shadowColor = 'rgba(11,59,58,0.18)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 10;
+        ctx.fillStyle = CARD_BG;
+        ctx.beginPath();
+        ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+        ctx.fill();
+        ctx.restore();
+
+        // clip to card
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, radius);
         ctx.clip();
+
         ctx.fillStyle = CARD_BG;
         ctx.fillRect(cardX, cardY, cardW, cardH);
 
-        ctx.fillStyle = INK;
+        // gradient header band
+        const grad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + headerH);
+        grad.addColorStop(0, INK);
+        grad.addColorStop(1, TEAL);
+        ctx.fillStyle = grad;
         ctx.fillRect(cardX, cardY, cardW, headerH);
+
+        // subtle texture circles
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(cardX + cardW - 20, cardY + 18, 46, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cardX + 18, cardY + headerH - 6, 30, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
-        // Header text
+        // header text
         ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = 'bold 10px sans-serif';
-        ctx.fillText('E - T I C K E T', cardX + 20, cardY + 24);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(tierName, cardX + 20, cardY + 44);
+        ctx.fillText('E · T I C K E T', cardX + 20, cardY + 24);
 
-        // Perforation notches + dashed seam
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(attendeeName, cardX + 20, cardY + 50);
+
+        // tier pill
+        ctx.font = 'bold 11px sans-serif';
+        const pillText = tierName.toUpperCase();
+        const pillW = ctx.measureText(pillText).width + 20;
+        const pillH = 22;
+        const pillX = cardX + 20;
+        const pillY = cardY + 62;
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(pillText, pillX + 10, pillY + 15);
+
+        ctx.restore();
+
+        // perforation seam
         const seamY = cardY + headerH;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+        ctx.clip();
         ctx.fillStyle = PAGE_BG;
-        ctx.beginPath();
-        ctx.arc(cardX, seamY, notchR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cardX + cardW, seamY, notchR, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(cardX, seamY, notchR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cardX + cardW, seamY, notchR, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
 
         ctx.strokeStyle = 'rgba(11,59,58,0.18)';
         ctx.lineWidth = 1.5;
@@ -98,30 +144,45 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Attendee name
-        let y = seamY + bodyPadTop;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = INK;
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText(attendeeName, width / 2, y);
-
-        // QR box with plain border
-        y += 18;
+        // QR box with viewfinder-style corner brackets
+        let y = seamY + stubPadTop;
         const boxX = (width - boxSize) / 2;
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = CARD_BG;
         ctx.strokeStyle = 'rgba(11,59,58,0.12)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(boxX, y, boxSize, boxSize, 12);
+        ctx.roundRect(boxX, y, boxSize, boxSize, 14);
         ctx.fill();
         ctx.stroke();
         ctx.drawImage(qrCanvas, boxX + qrBoxPad, y + qrBoxPad, qrSize, qrSize);
 
-        // Ticket ID
-        y += boxSize + 28;
-        ctx.fillStyle = 'rgba(11,59,58,0.5)';
-        ctx.font = '12px monospace';
+        const bracket = 14;
+        ctx.strokeStyle = TEAL;
+        ctx.lineWidth = 2.5;
+        const bx = boxX + 6, by = y + 6, bw = boxSize - 12, bh = boxSize - 12;
+        const drawCorner = (cx: number, cy: number, dx: number, dy: number) => {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + bracket * dy);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx + bracket * dx, cy);
+            ctx.stroke();
+        };
+        drawCorner(bx, by, 1, 1);
+        drawCorner(bx + bw, by, -1, 1);
+        drawCorner(bx, by + bh, 1, -1);
+        drawCorner(bx + bw, by + bh, -1, -1);
+
+        // ticket id
+        y += boxSize + 26;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = INK;
+        ctx.font = '600 13px monospace';
         ctx.fillText(ticketId.split('').join('\u200a'), width / 2, y);
+
+        y += 18;
+        ctx.fillStyle = 'rgba(11,59,58,0.4)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('SCAN AT ENTRY · NON-TRANSFERABLE', width / 2, y);
 
         return out;
     };
@@ -135,37 +196,55 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         link.click();
     };
 
-    const handleShare = (ticketId: string, tierName: string, attendeeName: string) => {
-        const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
-        const text = `${eventTitle}\nTicket: ${ticketId}\nAttendee: ${attendeeName}`;
+    const [sharingId, setSharingId] = useState<string | null>(null); // add near top of component
 
-        if (canvas && navigator.share) {
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
-                const file = new File([blob], `${ticketId}.png`, { type: 'image/png' });
-                try {
-                    if (navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ files: [file], title: eventTitle, text });
-                    } else {
-                        await navigator.share({ title: eventTitle, text });
+    const handleShare = async (ticketId: string, tierName: string, attendeeName: string) => {
+        if (sharingId === ticketId) return; // prevent double-tap re-entry
+        setSharingId(ticketId);
+
+        try {
+            const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
+            // title ab text me repeat nahi hota — sirf ek jagah info jaayegi
+            const text = `Ticket: ${ticketId}\nAttendee: ${attendeeName}`;
+
+            if (canvas && navigator.share) {
+                canvas.toBlob(async (blob) => {
+                    if (!blob) return;
+                    const file = new File([blob], `${ticketId}.png`, { type: 'image/png' });
+                    try {
+                        if (navigator.canShare?.({ files: [file] })) {
+                            // sirf image jaayegi, koi title/text/caption nahi
+                            await navigator.share({ files: [file] });
+                        } else {
+                            // file-share support nahi hai, tabhi fallback text use hoga
+                            await navigator.share({ title: eventTitle, text });
+                        }
+                    } catch {
+                        /* user cancelled share — ignore */
                     }
-                } catch {
-                    /* user cancelled share — ignore */
-                }
-            });
-        } else {
-            navigator.clipboard?.writeText(text);
+                });
+            } else {
+                navigator.clipboard?.writeText(text);
+            }
+        } finally {
+            setSharingId(null);
         }
     };
     const handleDownloadAllPdf = () => {
+        const SCALE = 3; // must match buildTicketCanvas
         const pdf = new jsPDF({ unit: 'px', format: [360, 380] });
 
         tickets.forEach((t, index) => {
             const canvas = buildTicketCanvas(t.ticketId, t.tierName, t.attendeeName);
             if (!canvas) return;
-            if (index > 0) pdf.addPage([canvas.width, canvas.height]);
-            else pdf.internal.pageSize.width = canvas.width; // pehla page bhi canvas size ka
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+
+            const logicalW = canvas.width / SCALE;   // page/image size stays same as before
+            const logicalH = canvas.height / SCALE;  // only pixel density increased
+
+            if (index > 0) pdf.addPage([logicalW, logicalH]);
+            else pdf.internal.pageSize.width = logicalW;
+
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, logicalW, logicalH);
         });
 
         pdf.save(`${eventTitle.replace(/\s+/g, '_')}_tickets.pdf`);
@@ -225,8 +304,9 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                                 <div className="rounded-xl border border-[#0B3B3A]/10 bg-white p-4 shadow-sm">
                                     <QRCodeCanvas
                                         value={t.ticketId}
-                                        size={170}
+                                        size={340}                       // 2x actual pixels for crisp downscale
                                         includeMargin
+                                        style={{ width: 170, height: 170 }}  // display size unchanged
                                         ref={(el) => {
                                             canvasRefs.current[t.ticketId] = el as unknown as HTMLCanvasElement;
                                         }}
@@ -244,9 +324,10 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                                     </button>
                                     <button
                                         onClick={() => handleShare(t.ticketId, t.tierName, t.attendeeName)}
+                                        disabled={sharingId === t.ticketId}
                                         className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#0B3B3A]/15 py-2.5 text-xs font-semibold text-[#0B3B3A] transition-colors hover:bg-[#0B3B3A]/5"
                                     >
-                                        <Share2 size={14} /> Share
+                                        <Share2 size={14} /> {sharingId === t.ticketId ? 'Sharing…' : 'Share'}
                                     </button>
                                 </div>
                             </div>

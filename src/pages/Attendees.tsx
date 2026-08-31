@@ -30,6 +30,9 @@ import type { ExportColumn } from '../components/ExportMenu';
 import { Permission } from '../types/permissions.types';
 import { usePermissions } from '../hooks/usePermissions';
 import ShowWrapper from '../components/ShowWrapper';
+import ConfirmCancelModal from '../components/ConfirmCancelModal';
+import ConfirmReviveModal from '../components/ConfirmReviveModal';
+import EditAttendeeModal from '../components/EditAttendeeModal';
 
 type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
 
@@ -105,6 +108,9 @@ const Attendees: React.FC = () => {
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [walkInTicket, setWalkInTicket] = useState<{ ticketId: string; tierName: string; attendeeName: string } | null>(null);
+  const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
+  const [pendingReviveAttendee, setPendingReviveAttendee] = useState<Attendee | null>(null);
+  const [pendingEditAttendee, setPendingEditAttendee] = useState<Attendee | null>(null);
 
   // Organizer ke saare events real-time load karo
   useEffect(() => {
@@ -169,7 +175,13 @@ const Attendees: React.FC = () => {
     },
     [profile?.companyId, selectedEventId, attendees]
   );
-
+  const requestCancel = useCallback(
+    (id: string) => {
+      const target = attendees.find((a) => a.id === id);
+      if (target) setPendingCancelAttendee(target);
+    },
+    [attendees]
+  );
   const handleCancel = useCallback(
     (id: string) => {
       if (!profile?.companyId || !selectedEventId) return;
@@ -185,6 +197,70 @@ const Attendees: React.FC = () => {
     },
     [profile?.companyId, selectedEventId]
   );
+
+  const handleRevive = useCallback(
+    (id: string) => {
+      if (!profile?.companyId || !selectedEventId) return;
+      // Optimistic update — turant UI me valid dikhao, listener confirm kar dega
+      setAttendees((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status: 'valid' } : a))
+      );
+      const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
+      updateDoc(attendeeRef, { status: 'valid' }).catch((err) => {
+        console.error('Revive failed:', err);
+        setScanFeedback({ type: 'error', message: 'Revive failed, please retry.' });
+      });
+    },
+    [profile?.companyId, selectedEventId]
+  );
+
+  const requestEdit = useCallback(
+    (attendee: Attendee) => {
+      setPendingEditAttendee(attendee);
+    },
+    []
+  );
+
+  const handleSaveEdit = useCallback(
+    (id: string, updates: Pick<Attendee, 'name' | 'email' | 'phone' | 'tierName'>) => {
+      if (!profile?.companyId || !selectedEventId) return;
+
+      // Optimistic update — UI turant reflect kare, listener confirm kar dega
+      setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+
+      const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
+      updateDoc(attendeeRef, updates)
+        .then(() => {
+          setScanFeedback({ type: 'success', message: `${updates.name}'s details updated.` });
+        })
+        .catch((err) => {
+          console.error('Edit failed:', err);
+          setScanFeedback({ type: 'error', message: 'Update failed, please retry.' });
+        });
+
+      setPendingEditAttendee(null);
+    },
+    [profile?.companyId, selectedEventId]
+  );
+
+  const handleCancelEdit = useCallback(() => setPendingEditAttendee(null), []);
+  // Opens the confirm-revive popup instead of reviving directly
+  const requestRevive = useCallback(
+    (id: string) => {
+      const target = attendees.find((a) => a.id === id);
+      if (target) setPendingReviveAttendee(target);
+    },
+    [attendees]
+  );
+
+  const handleConfirmRevive = useCallback(() => {
+    if (!pendingReviveAttendee) return;
+    handleRevive(pendingReviveAttendee.id);
+    setScanFeedback({ type: 'success', message: `${pendingReviveAttendee.name}'s ticket revived.` });
+    setPendingReviveAttendee(null);
+  }, [pendingReviveAttendee, handleRevive]);
+
+  const handleCancelRevive = useCallback(() => setPendingReviveAttendee(null), []);
 
   const handleQrScan = useCallback(
     (decodedText: string) => {
@@ -206,6 +282,14 @@ const Attendees: React.FC = () => {
     },
     [attendees]
   );
+  const handleConfirmCancel = useCallback(() => {
+    if (!pendingCancelAttendee) return;
+    handleCancel(pendingCancelAttendee.id);
+    setScanFeedback({ type: 'success', message: `${pendingCancelAttendee.name}'s ticket cancelled.` });
+    setPendingCancelAttendee(null);
+  }, [pendingCancelAttendee, handleCancel]);
+
+  const handleCancelCancel = useCallback(() => setPendingCancelAttendee(null), []);
 
   const handleConfirmCheckIn = useCallback(() => {
     if (!pendingAttendee) return;
@@ -237,9 +321,13 @@ const Attendees: React.FC = () => {
 
   const searchedAttendees = useMemo(() => {
     if (!searchValue.trim()) return attendees;
-    const q = searchValue.toLowerCase();
+    const q = searchValue.toLowerCase().trim();
     return attendees.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || a.phone.includes(q)
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.email.toLowerCase().includes(q) ||
+        a.phone.includes(q) ||
+        a.ticketId.toLowerCase().includes(q)
     );
   }, [attendees, searchValue]);
 
@@ -260,13 +348,21 @@ const Attendees: React.FC = () => {
 
   const stats = useMemo(() => {
     const checkedIn = attendees.filter((a) => a.status === 'checked_in').length;
+    const cancelled = attendees.filter((a) => a.status === 'cancelled').length;
+    const pending = attendees.filter((a) => a.status === 'valid').length;
     const tierCounts: Record<string, number> = {};
     attendees.forEach((a) => {
       if (a.status !== 'cancelled') tierCounts[a.tierName] = (tierCounts[a.tierName] || 0) + 1;
     });
-    return { total: attendees.length, checkedIn, tierCounts };
+    return { total: attendees.length, checkedIn, pending, cancelled, tierCounts };
   }, [attendees]);
-
+  const requestCheckIn = useCallback(
+    (id: string) => {
+      const target = attendees.find((a) => a.id === id);
+      if (target) setPendingAttendee(target);
+    },
+    [attendees]
+  );
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
@@ -315,23 +411,37 @@ const Attendees: React.FC = () => {
 
               {/* 3. Summary strip */}
               <Card className="shadow-sm border-gray-200">
-                <CardContent className="pt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Total tickets</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <CardContent className="pt-6 grid grid-cols-4 gap-2 sm:gap-3">
+                  <div className="text-center min-w-0">
+                    <p className="text-[10px] sm:text-xs text-gray-500 mb-1 truncate">Total</p>
+                    <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.total}</p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Checked In</p>
-                    <p className="text-2xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">{stats.checkedIn}</p>
+                  <div className="text-center min-w-0">
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 truncate">Checked In</p>
+                    <p className="text-lg sm:text-2xl font-extrabold text-[#007A78] dark:text-[#2DD4BF]">{stats.checkedIn}</p>
                   </div>
-                  <div className="text-center col-span-2 sm:col-span-1">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">By Tier</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {Object.entries(stats.tierCounts).map(([tier, count]) => `${tier}: ${count}`).join(' · ') || '—'}
-                    </p>
+                  <div className="text-center min-w-0">
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 truncate">Pending</p>
+                    <p className="text-lg sm:text-2xl font-extrabold text-amber-600">{stats.pending}</p>
+                  </div>
+                  <div className="text-center min-w-0">
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 truncate">Cancelled</p>
+                    <p className="text-lg sm:text-2xl font-extrabold text-[#FF3B30]">{stats.cancelled}</p>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* By Tier — still shown, just on its own row below so it can wrap freely */}
+              {Object.keys(stats.tierCounts).length > 0 && (
+                <Card className="shadow-sm border-gray-200">
+                  <CardContent className="py-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">By Tier:</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 break-words">
+                      {Object.entries(stats.tierCounts).map(([tier, count]) => `${tier}: ${count}`).join(' · ')}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* 4a. Add Walk-in — its own full-width row */}
               {can(Permission.ADD_WALK_IN_ATTENDEE) && (
@@ -394,8 +504,10 @@ const Attendees: React.FC = () => {
                       attendee={attendee}
                       isExpanded={expandedId === attendee.id}
                       onToggle={() => setExpandedId(expandedId === attendee.id ? null : attendee.id)}
-                      onCheckIn={can(Permission.CHECK_IN_ATTENDEE) ? handleCheckIn : undefined}
-                      onCancel={can(Permission.CANCEL_ATTENDEE) ? handleCancel : undefined}
+                      onCheckIn={can(Permission.CHECK_IN_ATTENDEE) ? requestCheckIn : undefined}
+                      onCancel={can(Permission.CANCEL_ATTENDEE) ? requestCancel : undefined}
+                      onRevive={can(Permission.CANCEL_ATTENDEE) ? requestRevive : undefined}
+                      onEdit={can(Permission.EDIT_ATTENDEE) ? requestEdit : undefined}
                       eventTitle={selectedEvent.title}
                       eventDate={selectedEvent.startDate}
                       customFields={selectedEvent.customFields}
@@ -414,11 +526,25 @@ const Attendees: React.FC = () => {
         onScan={handleQrScan}
         title="Scan ticket to check in"
       />
-
+      <ConfirmCancelModal
+        attendee={pendingCancelAttendee}
+        onConfirm={handleConfirmCancel}
+        onCancel={handleCancelCancel}
+      />
+      <ConfirmReviveModal
+        attendee={pendingReviveAttendee}
+        onConfirm={handleConfirmRevive}
+        onCancel={handleCancelRevive}
+      />
       <ConfirmCheckInModal
         attendee={pendingAttendee}
         onConfirm={handleConfirmCheckIn}
         onCancel={handleCancelConfirm}
+      />
+      <EditAttendeeModal
+        attendee={pendingEditAttendee}
+        onSave={handleSaveEdit}
+        onCancel={handleCancelEdit}
       />
 
       <AddWalkInAttendeeModal

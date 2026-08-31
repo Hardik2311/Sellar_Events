@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Phone, Mail, ChevronDown } from 'lucide-react';
+import { Phone, Mail, ChevronDown, Pencil } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
 import type { CustomField } from '../types/event.types';
@@ -13,6 +13,8 @@ interface AttendeeCardProps {
   eventTitle?: string;
   eventDate?: string;
   customFields?: CustomField[];
+  onRevive?: (id: string) => void;
+  onEdit?: (attendee: Attendee) => void;
 }
 
 const STATUS_STYLES: Record<Attendee['status'], string> = {
@@ -33,6 +35,8 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   onToggle,
   onCheckIn,
   onCancel,
+  onRevive,
+  onEdit,
   eventTitle,
   eventDate,
   customFields = [],
@@ -43,51 +47,172 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     const qrCanvas = qrCanvasRef.current;
     if (!qrCanvas) return null;
 
+    const SCALE = 3;
     const width = 360;
-    const qrSize = 200;
-    const padding = 24;
-    const lineHeight = 22;
-    const height = padding + lineHeight * 3 + 12 + qrSize + 12 + lineHeight + padding;
+    const cardMargin = 14;
+    const cardW = width - cardMargin * 2;
+    const headerH = 112;
+    const stubPadTop = 22;
+    const qrSize = 160;
+    const qrBoxPad = 14;
+    const boxSize = qrSize + qrBoxPad * 2;
+    const notchR = 10;
+    const height = cardMargin + headerH + stubPadTop + boxSize + 26 + 18 + 24 + cardMargin;
 
     const out = document.createElement('canvas');
-    out.width = width;
-    out.height = height;
+    out.width = width * SCALE;
+    out.height = height * SCALE;
     const ctx = out.getContext('2d');
     if (!ctx) return null;
+    ctx.scale(SCALE, SCALE);
+
+    const PAGE_BG = '#F1F1EF';
+    const CARD_BG = '#FFFFFF';
+    const INK = '#0B3B3A';
+    const TEAL = '#007A78';
+
+    ctx.fillStyle = PAGE_BG;
+    ctx.fillRect(0, 0, width, height);
+
+    const cardX = cardMargin;
+    const cardY = cardMargin;
+    const cardH = height - cardMargin * 2;
+    const radius = 20;
+
+    // soft drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(11,59,58,0.18)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = CARD_BG;
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+    ctx.fill();
+    ctx.restore();
+
+    // clip to card
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+    ctx.clip();
+
+    ctx.fillStyle = CARD_BG;
+    ctx.fillRect(cardX, cardY, cardW, cardH);
+
+    // gradient header
+    const grad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + headerH);
+    grad.addColorStop(0, INK);
+    grad.addColorStop(1, TEAL);
+    ctx.fillStyle = grad;
+    ctx.fillRect(cardX, cardY, cardW, headerH);
+
+    // texture circles
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cardX + cardW - 20, cardY + 18, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cardX + 18, cardY + headerH - 6, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // header text
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('E · T I C K E T', cardX + 20, cardY + 22);
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, width - 2, height - 2);
-
-    let y = padding + lineHeight;
-
-    ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(eventTitle || 'Event Ticket', width / 2, y);
-    y += lineHeight;
+    ctx.font = 'bold 16px sans-serif';
+    const titleText = eventTitle || 'Event Ticket';
+    ctx.fillText(titleText.length > 26 ? titleText.slice(0, 24) + '…' : titleText, cardX + 20, cardY + 44);
 
     if (eventDate) {
-      ctx.fillStyle = '#64748b';
-      ctx.font = '13px sans-serif';
-      ctx.fillText(eventDate, width / 2, y);
-      y += lineHeight;
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(eventDate, cardX + 20, cardY + 60);
     }
 
-    ctx.fillStyle = '#334155';
-    ctx.font = '13px sans-serif';
-    ctx.fillText(`${attendee.name} · ${attendee.tierName}`, width / 2, y);
-    y += 12;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = '600 12px sans-serif';
+    ctx.fillText(attendee.name, cardX + 20, cardY + 80);
 
-    const qrX = (width - qrSize) / 2;
-    ctx.drawImage(qrCanvas, qrX, y, qrSize, qrSize);
-    y += qrSize + lineHeight;
+    // tier pill
+    ctx.font = 'bold 10px sans-serif';
+    const pillText = attendee.tierName.toUpperCase();
+    const pillW = ctx.measureText(pillText).width + 18;
+    const pillH = 20;
+    const pillX = cardX + 20;
+    const pillY = cardY + 88;
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(pillText, pillX + 9, pillY + 14);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '12px monospace';
-    ctx.fillText(attendee.ticketId, width / 2, y);
+    ctx.restore();
+
+    // perforation seam
+    const seamY = cardY + headerH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+    ctx.clip();
+    ctx.fillStyle = PAGE_BG;
+    ctx.beginPath(); ctx.arc(cardX, seamY, notchR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cardX + cardW, seamY, notchR, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(11,59,58,0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(cardX + notchR + 6, seamY);
+    ctx.lineTo(cardX + cardW - notchR - 6, seamY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // QR box with viewfinder corners
+    let y = seamY + stubPadTop;
+    const boxX = (width - boxSize) / 2;
+    ctx.fillStyle = CARD_BG;
+    ctx.strokeStyle = 'rgba(11,59,58,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(boxX, y, boxSize, boxSize, 14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.drawImage(qrCanvas, boxX + qrBoxPad, y + qrBoxPad, qrSize, qrSize);
+
+    const bracket = 14;
+    ctx.strokeStyle = TEAL;
+    ctx.lineWidth = 2.5;
+    const bx = boxX + 6, by = y + 6, bw = boxSize - 12, bh = boxSize - 12;
+    const drawCorner = (cx: number, cy: number, dx: number, dy: number) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + bracket * dy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + bracket * dx, cy);
+      ctx.stroke();
+    };
+    drawCorner(bx, by, 1, 1);
+    drawCorner(bx + bw, by, -1, 1);
+    drawCorner(bx, by + bh, 1, -1);
+    drawCorner(bx + bw, by + bh, -1, -1);
+
+    // ticket id
+    y += boxSize + 26;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK;
+    ctx.font = '600 13px monospace';
+    ctx.fillText(attendee.ticketId.split('').join('\u200a'), width / 2, y);
+
+    y += 18;
+    ctx.fillStyle = 'rgba(11,59,58,0.4)';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('SCAN AT ENTRY · NON-TRANSFERABLE', width / 2, y);
 
     return out;
   };
@@ -102,8 +227,10 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
         const file = new File([blob], `${attendee.ticketId}.png`, { type: 'image/png' });
         try {
           if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({ files: [file], title: attendee.name, text });
+            // sirf image jaayegi, koi caption text nahi — WhatsApp me duplicate text nahi aayega
+            await navigator.share({ files: [file] });
           } else {
+            // file-share support na ho tabhi ye fallback text chalega
             await navigator.share({ title: attendee.name, text });
           }
         } catch {
@@ -138,6 +265,14 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0">
+          {attendee.paymentMethod === 'manual_qr' && (
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"
+              title="Paid via UPI QR — verify screenshot at check-in"
+            >
+              QR
+            </span>
+          )}
           <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-sm ${STATUS_STYLES[attendee.status]}`}>
             {STATUS_LABEL[attendee.status]}
           </span>
@@ -151,6 +286,15 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             <span className="flex items-center gap-2">
               <Mail size={14} className="text-slate-400" /> {attendee.email}
             </span>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(attendee)}
+                title="Edit attendee details"
+                className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 px-2 py-1 -my-1 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+              >
+                <Pencil size={13} /> Edit
+              </button>
+            )}
           </div>
           <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300 font-medium">
             <span className="flex items-center gap-2">
@@ -162,6 +306,18 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
               </span>
             )}
           </div>
+
+          {/* NEW — payment-proof link, only for tickets paid via manual UPI QR */}
+          {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
+            <a
+              href={attendee.screenshotUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-2.5 py-1.5 hover:bg-amber-100"
+            >
+              View payment screenshot
+            </a>
+          )}
 
           {attendee.customFieldAnswers && Object.keys(attendee.customFieldAnswers).length > 0 && (
             <div className="rounded-sm bg-slate-50 dark:bg-slate-800/60 p-2.5 space-y-1">
@@ -210,6 +366,15 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                 className="flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm bg-[#FF3B30] text-white text-[11px] font-bold truncate"
               >
                 Cancel
+              </button>
+            )}
+            {attendee.status === 'cancelled' && onRevive && (
+              <button
+                onClick={() => onRevive(attendee.id)}
+                title="Restore this ticket to valid status"
+                className="flex-1 min-w-0 flex items-center justify-center py-2.5 px-1 rounded-sm bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold truncate hover:bg-amber-100"
+              >
+                Revive
               </button>
             )}
           </div>

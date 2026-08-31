@@ -12,7 +12,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem('sellar_theme');
-    return (saved as Theme) || 'system';
+    return (saved as Theme) || 'light';
   });
 
   const setTheme = (newTheme: Theme) => {

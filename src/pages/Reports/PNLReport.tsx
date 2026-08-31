@@ -54,7 +54,7 @@ const PnlReportPageInner: React.FC = () => {
 
       autoTable(doc, {
         startY: 38,
-        head: [['DATE', 'TYPE', 'DESCRIPTION', 'AMOUNT (₹)']],
+        head: [['DATE', 'TYPE', 'DESCRIPTION', 'AMOUNT (Rs)']],
         body: filtered.map(r => [
           formatDate(r.date),
           r.type,

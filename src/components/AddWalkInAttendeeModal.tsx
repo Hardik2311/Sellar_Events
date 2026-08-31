@@ -92,7 +92,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
         allowOverbook,
         customFieldAnswers: customAnswers,
       });
-            onSuccess(name.trim(), ticketId, selectedTier.name);
+      onSuccess(name.trim(), ticketId, selectedTier.name);
       reset();
       onClose();
     } catch (err: any) {
@@ -174,6 +174,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
                   type="checkbox"
                   checked={allowOverbook}
                   onChange={(e) => setAllowOverbook(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
                 />
                 This tier shows no capacity left — add anyway
               </label>
@@ -219,6 +220,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
                       type="checkbox"
                       checked={value === 'true'}
                       onChange={(e) => setCustomAnswers((p) => ({ ...p, [field.id]: e.target.checked ? 'true' : 'false' }))}
+                      className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
                     />
                     {field.label}
                   </label>
@@ -248,6 +250,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
               type="checkbox"
               checked={markCheckedIn}
               onChange={(e) => setMarkCheckedIn(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
             />
             Mark as checked-in immediately
           </label>

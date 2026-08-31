@@ -12,7 +12,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChange,
   onScanClick,
-  placeholder = 'Search by name, email or phone...',
+  placeholder = 'Search by name, email, phone or ticket ...',
 }) => (
   <div className="flex items-center gap-2">
     <div className="flex flex-1 items-center gap-2.5 rounded-sm border border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] px-4 py-2.5 shadow-xs focus-within:ring-2 focus-within:ring-[#007A78]/30 focus-within:border-[#007A78] dark:focus-within:ring-[#2DD4BF]/30 dark:focus-within:border-[#2DD4BF] transition-all">

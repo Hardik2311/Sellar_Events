@@ -16,6 +16,7 @@ import {
 } from '../data/events';
 import { usePublicEvents } from '../hooks/usePublicEvents';
 import { useCompanySettings } from '../hooks/useSettings';
+import { stripHtmlTags } from '../lib/utils';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -83,7 +84,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
             </div>
 
             <div className="flex flex-1 flex-col gap-2 p-3">
-                <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{event.title}</h3>
+                <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{stripHtmlTags(event.title)}</h3>
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                     <Calendar size={13} />
@@ -176,7 +177,7 @@ const CustomerEventDiscover: React.FC = () => {
     // The featured pick is independent of filters — it's always the
     // organizer/admin-flagged event (or soonest upcoming as fallback), and
     // only shown on the unfiltered view so it doesn't fight the search results.
-        const featured = useMemo(
+    const featured = useMemo(
         // helper ka "autoFeatureNearest" arg ka purana matlab hai "fallback allowed" —
         // naye setting mapping mein ON = manual-only, isliye yahan invert karke bhej rahe hain
         () => getFeaturedEvent(upcomingEvents, !settings.autoFeatureNearest),
@@ -199,7 +200,7 @@ const CustomerEventDiscover: React.FC = () => {
                 <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                            Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
+                            {settings.organizationName || 'Sellar'} <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
                         </h1>
                     </div>
 
@@ -333,7 +334,7 @@ const CustomerEventDiscover: React.FC = () => {
                                         <span className="relative mb-1 w-fit rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-semibold text-white">
                                             Featured
                                         </span>
-                                        <h2 className="relative text-xl font-bold text-white">{featured.title}</h2>
+                                        <h2 className="relative text-xl font-bold text-white">{stripHtmlTags(featured.title)}</h2>
                                         <p className="relative mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
                                             <span className="flex items-center gap-1">
                                                 <Calendar size={14} /> {formatDateRange(featured.date, featured.endDate)}, {formatTime(featured.time)}

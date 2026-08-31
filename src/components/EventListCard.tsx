@@ -3,6 +3,7 @@ import { ChevronDown, CalendarDays } from 'lucide-react';
 import type { EventSummary } from '../types/event.types';
 import SearchBar from './ui/SearchBar';
 import StatusBadge from './ui/StatusBadge';
+import { stripHtmlTags } from '../lib/utils';
 
 interface EventListCardProps {
   events: EventSummary[];
@@ -76,8 +77,8 @@ export const EventListCard: React.FC<EventListCardProps> = ({
         <div className="min-w-0 text-left">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Your events</p>
           <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-            {loading ? 'Loading...' : selectedEvent ? selectedEvent.title : 'Select an event'}
-          </p>
+  {loading ? 'Loading...' : selectedEvent ? stripHtmlTags(selectedEvent.title) : 'Select an event'}
+</p>
         </div>
         <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -129,7 +130,7 @@ export const EventListCard: React.FC<EventListCardProps> = ({
 
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm truncate ${isActive ? 'font-bold text-gray-900 dark:text-white' : 'font-medium text-gray-900 dark:text-white'}`}>
-                        {event.title}
+                        {stripHtmlTags(event.title)}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
                         {new Date(event.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {event.venue} ·{' '}

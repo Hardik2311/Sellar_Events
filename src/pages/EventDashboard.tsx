@@ -19,7 +19,7 @@ const EventDashboardContent: React.FC = () => {
   const { filters } = useEventFilter();
   const [searchValue, setSearchValue] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [isDataVisible, setIsDataVisible] = useState<boolean>(can(Permission.TOGGLE_SENSITIVE_DATA));
+  const [isDataVisible, setIsDataVisible] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WithCacheMeta<EventDashboardData> | null>(null);
@@ -81,11 +81,11 @@ const EventDashboardContent: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Dashboard</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Real-time ticketing & sales analytics</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{profile?.organizationName ?? ''}</p>
           </div>
         </div>
 
-               <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {/* <ThemeToggle /> */}
           {can(Permission.TOGGLE_SENSITIVE_DATA) && (
             <button
@@ -101,23 +101,28 @@ const EventDashboardContent: React.FC = () => {
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
       <main className="grow overflow-y-auto p-3 sm:p-5">
-        <div className="flex items-center justify-between gap-2 mb-4 max-w-7xl mx-auto">
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <span>
-              Last updated:{' '}
-              {data?.lastUpdated
-                ? new Date(data.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : 'Never'}
-            </span>
+        <div className="max-w-7xl mx-auto mb-4">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+            Real-time ticketing & sales analytics
           </p>
-          <button
-            onClick={handleRefresh}
-            className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
-              }`}
-            title="Refresh data"
-          >
-            {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <span>
+                Last updated:{' '}
+                {data?.lastUpdated
+                  ? new Date(data.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Never'}
+              </span>
+            </p>
+            <button
+              onClick={handleRefresh}
+              className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
+                }`}
+              title="Refresh data"
+            >
+              {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
+            </button>
+          </div>
         </div>
 
         <div className="mx-auto max-w-7xl relative">

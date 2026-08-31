@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import FormField from './ui/FormField';
@@ -8,6 +8,7 @@ import {
   FloatingLabelTextArea,
 } from './ui/AuthUIComponents';
 import CoverPhotoUpload from './ui/CoverPhotoUpload';
+import QRCodeImageUpload from './ui/QRCodeImageUpload'; // NEW
 import PastEventsGallery from './ui/PastEventsGallery';
 import TicketTierEditor from './TicketTierEditor';
 import CustomFieldsEditor from './CustomFieldsEditor';
@@ -18,6 +19,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from './ui/Timeselect';
 import TextStyleControls from './ui/TextStyleControls';
+import RichTextEditor from '../components/RickTextEditor';
 
 type EventItem = PublicEvent;
 
@@ -62,13 +64,25 @@ const toFormState = (event: EventItem): EventFormState => ({
   rsvpLink: event.rsvpLink ?? '',
   rsvpButtonLabel: event.rsvpButtonLabel ?? 'RSVP Now',
   customFields: event.customFields ?? [],
-  titleStyle: event.titleStyle ?? { ...DEFAULT_TEXT_STYLE },
-  descriptionStyle: event.descriptionStyle ?? { ...DEFAULT_TEXT_STYLE, fontSize: 14 },
+  // Purane events mein agar titleStyle/descriptionStyle object saved tha (legacy data),
+  // usme se fontSize nikal lo; naye events ke liye default fallback use hoga
+  titleFontSize: event.titleStyle?.fontSize ?? DEFAULT_TEXT_STYLE.fontSize,
+  descriptionFontSize: event.descriptionStyle?.fontSize ?? 14,
+  consentText: event.consentText ?? '',
+  consentFontSize: event.consentStyle?.fontSize ?? 14,
+  // NEW
+  paymentCollectionMode: event.paymentCollectionMode ?? 'gateway',
+  qrImage: event.qrImageUrl ?? null,
+  upiId: event.upiId ?? '',
+  payeeName: event.payeeName ?? '',
 });
-
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
   const { settings: companySettings } = useCompanySettings();
   const [form, setForm] = useState<EventFormState>(() => toFormState(event));
+  const titleEditorRef = useRef<HTMLDivElement>(null);
+  const descriptionEditorRef = useRef<HTMLDivElement>(null);
+  const consentEditorRef = useRef<HTMLDivElement>(null);
 
   const update = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -101,17 +115,25 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
 
   const req = companySettings.eventFieldRequirements;
 
-  const isSavable =
-    form.title.trim().length > 0 &&
+  const isValidUpi = (value: string) => /^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(value.trim());
+
+  const isManualQRReady =
+    form.registrationMode !== 'tickets' ||
+    form.paymentCollectionMode !== 'manual_qr' ||
+    (Boolean(form.qrImage) && isValidUpi(form.upiId));
+
+ const isSavable =
+    stripHtml(form.title).length > 0 &&
     Boolean(form.date) &&
     Boolean(form.time) &&
     (form.isOnline || form.venue.trim().length > 0) &&
     (!req.endDate || form.endDate) &&
     (!form.date || !form.endDate || form.endDate >= form.date) &&
-    (!req.description || form.description.trim().length > 0) &&
-    (!req.images || form.images.length > 0) &&
+    (!req.description || stripHtml(form.description).length > 0) &&
+    (!req.images || form.images.length > 0 || Boolean(form.coverImageDesktop) || Boolean(form.coverImageMobile)) &&
     (!isOtherCategory || form.customCategory.trim().length > 0) &&
-    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
+    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink)) &&
+    isManualQRReady;
 
   const handleSave = () => {
     if (!isSavable) return;
@@ -159,15 +181,18 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
 
                 <div>
                   <TextStyleControls
-                    value={form.titleStyle}
-                    onChange={(s) => update('titleStyle', s)}
+                    fontSize={form.titleFontSize}
+                    onFontSizeChange={(size) => update('titleFontSize', size)}
+                    editorRef={titleEditorRef}
+                    onChange={(html) => update('title', html)}
                   />
-                                    <FloatingLabelInput
+                  <RichTextEditor
                     id="edit-title"
-                    label="Event title *"
+                    editorRef={titleEditorRef}
                     value={form.title}
-                    onChange={(e) => update('title', e.target.value)}
-                    required
+                    onChange={(html) => update('title', html)}
+                    fontSize={form.titleFontSize}
+                    placeholder="Event title *"
                   />
                 </div>
 
@@ -322,16 +347,19 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
 
                 <div>
                   <TextStyleControls
-                    value={form.descriptionStyle}
-                    onChange={(s) => update('descriptionStyle', s)}
+                    fontSize={form.descriptionFontSize}
+                    onFontSizeChange={(size) => update('descriptionFontSize', size)}
+                    editorRef={descriptionEditorRef}
+                    onChange={(html) => update('description', html)}
                   />
-                                    <FloatingLabelTextArea
+                  <RichTextEditor
                     id="edit-description"
-                    label={req.description ? 'Description *' : 'Description'}
-                    rows={4}
+                    editorRef={descriptionEditorRef}
                     value={form.description}
-                    onChange={(e) => update('description', e.target.value)}
-                    required={req.description}
+                    onChange={(html) => update('description', html)}
+                    fontSize={form.descriptionFontSize}
+                    placeholder={req.description ? 'Description *' : 'Description'}
+                    multiline
                   />
                 </div>
               </CardContent>
@@ -372,16 +400,79 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </FormField>
                 )}
 
-                {form.registrationMode === 'tickets' ? (
-                  <TicketTierEditor
-                    tiers={form.tiers}
-                    onChange={(tiers) => update('tiers', tiers)}
-                    showDummyQuantity={
-                      companySettings.ticketDisplay.showTicketsRemaining &&
-                      companySettings.ticketDisplay.useDummyThreshold
-                    }
-                    showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
-                  />
+                                {form.registrationMode === 'tickets' ? (
+                  <>
+                    {/* NEW — payment collection method (missing in the previous edit) */}
+                    {companySettings.payments.allowManualQR && (
+                      <FormField label="Payment collection" htmlFor="edit-payment-mode">
+                        <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => update('paymentCollectionMode', 'gateway')}
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
+                              form.paymentCollectionMode === 'gateway'
+                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                                : 'text-gray-500 dark:text-slate-400'
+                            }`}
+                          >
+                            Payment gateway
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => update('paymentCollectionMode', 'manual_qr')}
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
+                              form.paymentCollectionMode === 'manual_qr'
+                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                                : 'text-gray-500 dark:text-slate-400'
+                            }`}
+                          >
+                            UPI QR (manual)
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          {form.paymentCollectionMode === 'manual_qr'
+                            ? "Attendees scan your QR, pay directly, and upload a screenshot. They're added as attendees immediately — verify payment manually at check-in."
+                            : 'Attendees pay via the integrated payment gateway at checkout.'}
+                        </p>
+                      </FormField>
+                    )}
+
+                    {/* NEW — QR image + UPI details (missing in the previous edit) */}
+                    {form.paymentCollectionMode === 'manual_qr' && (
+                      <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">QR code image *</p>
+                          <QRCodeImageUpload
+                            value={form.qrImage}
+                            onChange={(src) => update('qrImage', src)}
+                          />
+                        </div>
+                        <FloatingLabelInput
+                          id="edit-upi-id"
+                          label="UPI ID *"
+                          value={form.upiId}
+                          onChange={(e) => update('upiId', e.target.value)}
+                          required
+                        />
+                        <FloatingLabelInput
+                          id="edit-payee-name"
+                          label="Label shown above QR (optional)"
+                          value={form.payeeName}
+                          onChange={(e) => update('payeeName', e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <TicketTierEditor
+                      tiers={form.tiers}
+                      onChange={(tiers) => update('tiers', tiers)}
+                      showDummyQuantity={
+                        companySettings.ticketDisplay.showTicketsRemaining &&
+                        companySettings.ticketDisplay.useDummyThreshold
+                      }
+                      showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
+                    />
+                  </>
                 ) : (
                   <div className="space-y-3">
                     <FloatingLabelInput
@@ -418,6 +509,32 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   onChange={(media) => update('pastEventsGallery', media)}
                   maxItems={6}
                 />
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <TextStyleControls
+                  fontSize={form.consentFontSize}
+                  onFontSizeChange={(size) => update('consentFontSize', size)}
+                  editorRef={consentEditorRef}
+                  onChange={(html) => update('consentText', html)}
+                />
+                <RichTextEditor
+                  id="edit-consent-text"
+                  editorRef={consentEditorRef}
+                  value={form.consentText}
+                  onChange={(html) => update('consentText', html)}
+                  fontSize={form.consentFontSize}
+                  placeholder="Important information & consent text (optional)"
+                  multiline
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-500">
+                  Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
+                </p>
               </CardContent>
             </Card>
 

@@ -16,6 +16,10 @@ export interface TicketDisplaySettings {
   // customer-facing page auto-hides a tier once that window has passed.
   enableTierAvailabilityWindow: boolean;
 }
+// NEW
+export interface PaymentSettings {
+  allowManualQR: boolean; // org-level toggle — shows/hides the option on Create/Edit Event
+}
 
 export interface CompanySettings {
   rsvpEnabled: boolean;
@@ -33,20 +37,26 @@ export interface CompanySettings {
   // upcoming event to lead with on Discover. OFF = show nothing instead.
   autoFeatureNearest: boolean;
   attendeeQuestionsEnabled: boolean;
-   whatsappShareTemplate: string;
-  // more settings go here later
+  whatsappShareTemplate: string;
+  organizationName: string;
+ payments: PaymentSettings; // NEW
 }
 
 const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
   description: false,
   endDate: true,
-  images: false,
+  images: true,
 };
 
 const DEFAULT_TICKET_DISPLAY: TicketDisplaySettings = {
   showTicketsRemaining: true,
   useDummyThreshold: false,
   enableTierAvailabilityWindow: false,
+};
+
+// NEW
+const DEFAULT_PAYMENTS: PaymentSettings = {
+  allowManualQR: false,
 };
 
 const DEFAULT_SETTINGS: CompanySettings = {
@@ -61,7 +71,9 @@ const DEFAULT_SETTINGS: CompanySettings = {
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,
   attendeeQuestionsEnabled: true,
   whatsappShareTemplate: 'Check out {{eventTitle}} on Sellar Events! {{link}}',
-  autoFeatureNearest: true, // preserves current behaviour by default
+  autoFeatureNearest: true,
+  organizationName: '',
+  payments: DEFAULT_PAYMENTS, // NEW
 };
 
 export function useCompanySettings() {
@@ -69,33 +81,53 @@ export function useCompanySettings() {
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!profile?.companyId) {
       setLoading(false);
       return;
     }
     const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
-    const unsubscribe = onSnapshot(settingsRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as Partial<CompanySettings>;
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...data,
-          ticketDisplay: {
-            ...DEFAULT_TICKET_DISPLAY,
-            ...(data.ticketDisplay ?? {}),
-          },
-          eventFieldRequirements: {
-            ...DEFAULT_FIELD_REQUIREMENTS,
-            ...(data.eventFieldRequirements ?? {}),
-          },
-        });
-      } else {
-        setSettings(DEFAULT_SETTINGS);
-      }
-      setLoading(false);
+    const companyRef = doc(db, 'companies', profile.companyId);
+
+    let latestSettingsData: Partial<CompanySettings> = {};
+    let latestOrgName = '';
+
+    const applyMerged = () => {
+  setSettings({
+    ...DEFAULT_SETTINGS,
+    ...latestSettingsData,
+    organizationName: latestOrgName || DEFAULT_SETTINGS.organizationName,
+    ticketDisplay: {
+      ...DEFAULT_TICKET_DISPLAY,
+      ...(latestSettingsData.ticketDisplay ?? {}),
+    },
+    eventFieldRequirements: {
+      ...DEFAULT_FIELD_REQUIREMENTS,
+      ...(latestSettingsData.eventFieldRequirements ?? {}),
+    },
+    // NEW
+    payments: {
+      ...DEFAULT_PAYMENTS,
+      ...(latestSettingsData.payments ?? {}),
+    },
+  });
+  setLoading(false);
+};
+
+    const unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
+      latestSettingsData = snap.exists() ? (snap.data() as Partial<CompanySettings>) : {};
+      applyMerged();
     });
-    return () => unsubscribe();
+
+    const unsubscribeCompany = onSnapshot(companyRef, (snap) => {
+      latestOrgName = snap.exists() ? (snap.data().name ?? '') : '';
+      applyMerged();
+    });
+
+    return () => {
+      unsubscribeSettings();
+      unsubscribeCompany();
+    };
   }, [profile?.companyId]);
 
   const updateSetting = useCallback(

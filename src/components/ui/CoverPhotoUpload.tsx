@@ -78,8 +78,8 @@ const Slot: React.FC<{
 export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({ desktopSrc, mobileSrc, onChangeDesktop, onChangeMobile }) => (
   <div>
     <div className="flex gap-3">
-      <Slot label="Desktop cover" hint="1600×600 landscape" src={desktopSrc} onChange={onChangeDesktop} />
-      <Slot label="Mobile cover" hint="1080×1350 portrait" src={mobileSrc} onChange={onChangeMobile} />
+      <Slot label="Desktop cover" hint="1600×600px landscape" src={desktopSrc} onChange={onChangeDesktop} />
+      <Slot label="Mobile cover" hint="1080×1350px portrait" src={mobileSrc} onChange={onChangeMobile} />
     </div>
     <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
       Upload both for a pixel-perfect fit on every screen. Add only one and we'll place it neatly (blurred backdrop, no stretching) for the size you skipped.

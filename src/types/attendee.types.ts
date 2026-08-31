@@ -15,6 +15,10 @@ export interface Attendee {
   createdAt?: number;      // NEW — ms epoch; fallback when purchasedAt missing
   checkedInAt: string | null; // ISO timestamp
   customFieldAnswers?: Record<string, string>;
+  // NEW — how this ticket was paid for. Undefined/'gateway' = normal flow.
+  paymentMethod?: 'gateway' | 'manual_qr';
+  // NEW — only set when paymentMethod === 'manual_qr'; organizer verifies this at check-in
+  screenshotUrl?: string;
 }
 
 export const CONFIRMED_TICKET_STATUSES = new Set<TicketStatus>(['valid', 'checked_in']);

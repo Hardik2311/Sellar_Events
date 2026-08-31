@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Loader2, CheckCircle, AlertCircle, X, Copy, Check } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, X, Copy, Check, ExternalLink } from 'lucide-react';
+import { ROUTES } from '../constants/routes.constants';
 
 interface EventSubdomainModalProps {
   companyId: string;
@@ -160,16 +161,32 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
               <span className="text-xs font-bold text-gray-600 truncate">
                 https://{existingSubdomain}.sellar.in
               </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`https://${existingSubdomain}.sellar.in`);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="ml-2 p-1 text-gray-500 hover:text-gray-800"
-              >
-                {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
-              </button>
+              <div className="flex items-center gap-1 ml-2 shrink-0">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`https://${existingSubdomain}.sellar.in`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="p-1 text-gray-500 hover:text-gray-800"
+                  title="Copy link"
+                >
+                  {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                </button>
+                <button
+                  onClick={() => {
+                    window.open(
+                      `https://${existingSubdomain}.sellar.in${ROUTES.DISCOVER}`,
+                      '_blank',
+                      'noopener,noreferrer'
+                    );
+                  }}
+                  className="p-1 text-gray-500 hover:text-[#007A78]"
+                  title="View Live Store"
+                >
+                  <ExternalLink size={16} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -216,11 +233,10 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
         <button
           onClick={handleClaimSubdomain}
           disabled={availability !== 'available' || isSaving || subdomain === existingSubdomain}
-          className={`w-full py-3.5 rounded-md font-black text-[12px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-            availability === 'available' && !isSaving && subdomain !== existingSubdomain
+          className={`w-full py-3.5 rounded-md font-black text-[12px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${availability === 'available' && !isSaving && subdomain !== existingSubdomain
               ? 'bg-[#007A78] text-white shadow-lg active:scale-95'
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-          }`}
+            }`}
         >
           {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
           {isSaving ? 'Updating...' : existingSubdomain ? 'Update Link' : 'Save Link'}

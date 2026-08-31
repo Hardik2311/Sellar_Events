@@ -1,7 +1,10 @@
 import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock } from 'lucide-react';
 import type { TicketTierDraft } from '../types/event.types';
 import { TextInput } from './ui/FormField';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import TimeSelect from './ui/Timeselect';
 
 interface TicketTierEditorProps {
   tiers: TicketTierDraft[];
@@ -32,6 +35,15 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({
   showDummyQuantity = false,
   showEndDateTime = false,
 }) => {
+  const toDate = (s?: string) => (s ? new Date(`${s}T00:00:00`) : null);
+  const toDateStr = (d: Date | null) => {
+    if (!d) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const updateTier = (id: string, patch: Partial<TicketTierDraft>) => {
     onChange(tiers.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
@@ -110,21 +122,41 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                     Tier end date
                   </label>
-                  <TextInput
-                    type="date"
-                    value={tier.tierEndDate ?? ''}
-                    onChange={(e) => updateTier(tier.id, { tierEndDate: e.target.value || undefined })}
-                  />
+                  <div className="relative">
+                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      selected={toDate(tier.tierEndDate)}
+                      onChange={(d: Date | null) => updateTier(tier.id, { tierEndDate: toDateStr(d) || undefined })}
+                      minDate={new Date()}
+                      dateFormat="dd/MM/yyyy"
+                      placeholderText="Select date"
+                      wrapperClassName="w-full block"
+                      popperClassName="react-datepicker-popper-custom"
+                      popperPlacement="bottom-start"
+                      showPopperArrow={false}
+                      isClearable
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-sm py-2 pl-9 pr-3 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                     Tier end time
                   </label>
-                  <TextInput
-                    type="time"
-                    value={tier.tierEndTime ?? ''}
-                    onChange={(e) => updateTier(tier.id, { tierEndTime: e.target.value || undefined })}
-                  />
+                  <div className="flex items-center gap-2 rounded-sm border border-slate-300 dark:border-slate-600 px-2.5 py-2 bg-white dark:bg-slate-800">
+                    <Clock size={14} className="text-gray-400 shrink-0" />
+                    <TimeSelect
+                      value={tier.tierEndTime ? tier.tierEndTime.split(':')[0] : '00'}
+                      options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                      onChange={(h) => updateTier(tier.id, { tierEndTime: `${h}:${tier.tierEndTime?.split(':')[1] || '00'}` })}
+                    />
+                    <span className="text-slate-400">:</span>
+                    <TimeSelect
+                      value={tier.tierEndTime ? tier.tierEndTime.split(':')[1] : '00'}
+                      options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                      onChange={(m) => updateTier(tier.id, { tierEndTime: `${tier.tierEndTime?.split(':')[0] || '00'}:${m}` })}
+                    />
+                  </div>
                 </div>
                 <p className="sm:col-span-2 text-[11px] text-slate-500 dark:text-slate-400">
                   Optional — leave blank to keep this tier available for the whole event. Once this date/time passes, the tier is hidden from customers.

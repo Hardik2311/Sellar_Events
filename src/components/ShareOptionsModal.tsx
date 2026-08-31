@@ -1,11 +1,10 @@
 import React from 'react';
-import { X, MessageCircle, Store, Link2 } from 'lucide-react';
+import { X, Store, Link2 } from 'lucide-react';
 
 interface ShareOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   shareUrl: string;
-  onWhatsAppShare: () => void;
   onViewStore?: () => void;
 }
 
@@ -13,7 +12,6 @@ export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
   isOpen,
   onClose,
   shareUrl,
-  onWhatsAppShare,
   onViewStore,
 }) => {
   if (!isOpen) return null;
@@ -62,16 +60,9 @@ export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
               onClick={() => { onViewStore(); onClose(); }}
               className="flex items-center gap-2 rounded-sm border border-gray-200 dark:border-slate-700 px-3 py-2.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700"
             >
-              <Store size={18} className="text-[#007A78]" /> View Store
+              <Store size={18} className="text-[#007A78]" /> View Events
             </button>
           )}
-
-          <button
-            onClick={() => { onWhatsAppShare(); onClose(); }}
-            className="flex items-center gap-2 rounded-sm border border-gray-200 dark:border-slate-700 px-3 py-2.5 text-sm font-medium hover:bg-green-50 dark:hover:bg-slate-700"
-          >
-            <MessageCircle size={18} className="text-green-600" /> Share on WhatsApp
-          </button>
 
           <button
             onClick={() => { handleShareLink(); onClose(); }}

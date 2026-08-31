@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
@@ -25,6 +25,8 @@ import TimeSelect from '../components/ui/Timeselect';
 import TextStyleControls from '../components/ui/TextStyleControls';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
+import RichTextEditor from '../components/RickTextEditor';
+import QRCodeImageUpload from '../components/ui/QRCodeImageUpload'; // NEW
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
@@ -54,11 +56,17 @@ const INITIAL_STATE: EventFormState = {
   registrationMode: 'tickets',
   rsvpLink: '',
   rsvpButtonLabel: 'RSVP Now',
+  consentText: '',
   customFields: [],
-  titleStyle: { ...DEFAULT_TEXT_STYLE },
-  descriptionStyle: { ...DEFAULT_TEXT_STYLE, fontSize: 14 },
+  titleFontSize: DEFAULT_TEXT_STYLE.fontSize,
+  descriptionFontSize: 14,
+  consentFontSize: 14,
+  paymentCollectionMode: 'gateway',
+  qrImage: null,
+  upiId: '',
+  payeeName: '',
 };
-
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { settings: companySettings } = useCompanySettings();
@@ -67,6 +75,9 @@ const CreateEvent: React.FC = () => {
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const titleEditorRef = useRef<HTMLDivElement>(null);
+  const descriptionEditorRef = useRef<HTMLDivElement>(null);
+  const consentEditorRef = useRef<HTMLDivElement>(null);
   const toDate = (s: string) => (s ? new Date(`${s}T00:00:00`) : null);
   const toDateStr = (d: Date | null) => {
     if (!d) return '';
@@ -95,17 +106,25 @@ const CreateEvent: React.FC = () => {
 
   const req = companySettings.eventFieldRequirements;
 
+  const isValidUpi = (value: string) => /^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(value.trim());
+
+  const isManualQRReady =
+    form.registrationMode !== 'tickets' ||
+    form.paymentCollectionMode !== 'manual_qr' ||
+    (Boolean(form.qrImage) && isValidUpi(form.upiId));
+
   const isPublishable =
-    form.title.trim().length > 0 &&
+    stripHtml(form.title).length > 0 &&
     Boolean(form.date) &&
     Boolean(form.time) &&
     (form.isOnline || form.venue.trim().length > 0) &&
     (!req.endDate || form.endDate) &&
     (!form.date || !form.endDate || form.endDate >= form.date) &&
-    (!req.description || form.description.trim().length > 0) &&
-    (!req.images || form.images.length > 0) &&
+    (!req.description || stripHtml(form.description).length > 0) &&
+    (!req.images || form.images.length > 0 || Boolean(form.coverImageDesktop) || Boolean(form.coverImageMobile)) &&
     (!isOtherCategory || form.customCategory.trim().length > 0) &&
-    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink));
+    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink)) &&
+    isManualQRReady;
 
   const saveEvent = async (status: 'draft' | 'published') => {
     if (!user || !profile?.companyId) {
@@ -154,8 +173,6 @@ const CreateEvent: React.FC = () => {
         })()
         : null;
 
-      // NEW — past events gallery (mixed media, uploaded as-is; only plain
-      // images were already compressed client-side, GIFs/videos are already <1MB)
       const pastEventsGalleryUploaded = await Promise.all(
         form.pastEventsGallery.map(async (item, i) => {
           const ext = item.type === 'video' ? 'mp4' : item.type === 'gif' ? 'gif' : 'jpg';
@@ -165,12 +182,19 @@ const CreateEvent: React.FC = () => {
         })
       );
 
+      // NEW — QR image upload, only when manual QR mode is chosen
+      const isManualQR = form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr';
+      const qrImageUrl = isManualQR && form.qrImage
+        ? await (async () => {
+          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/payment-qr.jpg`);
+          await uploadString(r, form.qrImage as string, 'data_url');
+          return getDownloadURL(r);
+        })()
+        : null;
+
       const eventsRef = collection(db, 'companies', profile.companyId, 'events');
       const isRsvp = form.registrationMode === 'rsvp';
 
-      // Firestore rejects `undefined` inside array elements — dummyRemaining
-      // and the tier end date/time are all optional and undefined by default
-      // until an organizer fills them in.
       const sanitizedTiers = form.tiers.map((tier) => ({
         ...tier,
         dummyRemaining: tier.dummyRemaining ?? null,
@@ -180,10 +204,10 @@ const CreateEvent: React.FC = () => {
 
       const docRef = await addDoc(eventsRef, {
         title: form.title,
-        titleStyle: form.titleStyle,
+        titleFontSize: form.titleFontSize,
         category: form.category === 'Other' ? form.customCategory : form.category,
         description: form.description,
-        descriptionStyle: form.descriptionStyle,
+        descriptionFontSize: form.descriptionFontSize,
         startDate,
         date: form.date,
         endDate: form.endDate,
@@ -196,13 +220,19 @@ const CreateEvent: React.FC = () => {
         coverImageMobile: coverImageMobileUrl,
         pastEventsGallery: pastEventsGalleryUploaded,
         registrationMode: form.registrationMode,
-        // Keep tiers empty for RSVP events — no pricing/inventory to track
         tiers: isRsvp ? [] : sanitizedTiers,
         rsvpLink: isRsvp ? form.rsvpLink.trim() : null,
         rsvpButtonLabel: isRsvp ? (form.rsvpButtonLabel.trim() || 'RSVP Now') : null,
         promoCode: form.promoCode || null,
         customFields: form.customFields,
         promoDiscountPercent: form.promoDiscountPercent || 0,
+        consentText: form.consentText.trim() || null,
+        consentStyle: form.consentText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.consentFontSize } : null,
+        // NEW
+        paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
+        qrImageUrl: isManualQR ? qrImageUrl : null,
+        upiId: isManualQR ? form.upiId.trim() : null,
+        payeeName: isManualQR ? form.payeeName.trim() : null,
         status,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
@@ -229,13 +259,13 @@ const CreateEvent: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-24 md:mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-6 py-4">
-        <div>
+      <header className="sticky top-0 z-20 relative flex shrink-0 items-center justify-center border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-6 py-4">
+        <div className="absolute left-6 top-1/2 -translate-y-1/2">
+          <BackButton />
+        </div>
+        <div className="text-center">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <BackButton />
         </div>
       </header>
 
@@ -266,15 +296,18 @@ const CreateEvent: React.FC = () => {
               <CardContent className="space-y-4">
                 <div>
                   <TextStyleControls
-                    value={form.titleStyle}
-                    onChange={(s) => update('titleStyle', s)}
+                    fontSize={form.titleFontSize}
+                    onFontSizeChange={(size) => update('titleFontSize', size)}
+                    editorRef={titleEditorRef}
+                    onChange={(html) => update('title', html)}
                   />
-                  <FloatingLabelInput
+                  <RichTextEditor
                     id="title"
-                    label="Event title *"
+                    editorRef={titleEditorRef}
                     value={form.title}
-                    onChange={(e) => update('title', e.target.value)}
-                    required
+                    onChange={(html) => update('title', html)}
+                    fontSize={form.titleFontSize}
+                    placeholder="Event title *"
                   />
                 </div>
 
@@ -331,16 +364,19 @@ const CreateEvent: React.FC = () => {
 
                 <div>
                   <TextStyleControls
-                    value={form.descriptionStyle}
-                    onChange={(s) => update('descriptionStyle', s)}
+                    fontSize={form.descriptionFontSize}
+                    onFontSizeChange={(size) => update('descriptionFontSize', size)}
+                    editorRef={descriptionEditorRef}
+                    onChange={(html) => update('description', html)}
                   />
-                  <FloatingLabelTextArea
+                  <RichTextEditor
                     id="description"
-                    label={req.description ? 'Description *' : 'Description'}
-                    rows={4}
+                    editorRef={descriptionEditorRef}
                     value={form.description}
-                    onChange={(e) => update('description', e.target.value)}
-                    required={req.description}
+                    onChange={(html) => update('description', html)}
+                    fontSize={form.descriptionFontSize}
+                    placeholder={req.description ? 'Description *' : 'Description'}
+                    multiline
                   />
                 </div>
               </CardContent>
@@ -383,33 +419,81 @@ const CreateEvent: React.FC = () => {
                 )}
 
                 {form.registrationMode === 'tickets' ? (
-                  <TicketTierEditor
-                    tiers={form.tiers}
-                    onChange={(tiers) => update('tiers', tiers)}
-                    showDummyQuantity={
-                      companySettings.ticketDisplay.showTicketsRemaining &&
-                      companySettings.ticketDisplay.useDummyThreshold
-                    }
-                    showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
-                  />
+                  <>
+                    {companySettings.payments.allowManualQR && (
+                      <FormField label="Payment collection" htmlFor="payment-mode">
+                        <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => update('paymentCollectionMode', 'gateway')}
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
+                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                              : 'text-gray-500 dark:text-slate-400'
+                              }`}
+                          >
+                            Payment gateway
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => update('paymentCollectionMode', 'manual_qr')}
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
+                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                              : 'text-gray-500 dark:text-slate-400'
+                              }`}
+                          >
+                            UPI QR (manual)
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          {form.paymentCollectionMode === 'manual_qr'
+                            ? 'Attendees scan your QR, pay directly, and upload a screenshot. They\u2019re added as attendees immediately — verify payment manually at check-in.'
+                            : 'Attendees pay via the integrated payment gateway at checkout.'}
+                        </p>
+                      </FormField>
+                    )}
+
+                    {form.paymentCollectionMode === 'manual_qr' && (
+                      <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">QR code image *</p>
+                          <QRCodeImageUpload
+                            value={form.qrImage}
+                            onChange={(src) => update('qrImage', src)}
+                          />
+                        </div>
+                        <FloatingLabelInput
+                          id="upi-id"
+                          label="UPI ID *"
+                          value={form.upiId}
+                          onChange={(e) => update('upiId', e.target.value)}
+                          required
+                        />
+                        <FloatingLabelInput
+                          id="payee-name"
+                          label="Label shown above QR (optional)"
+                          value={form.payeeName}
+                          onChange={(e) => update('payeeName', e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <TicketTierEditor
+                      tiers={form.tiers}
+                      onChange={(tiers) => update('tiers', tiers)}
+                      showDummyQuantity={
+                        companySettings.ticketDisplay.showTicketsRemaining &&
+                        companySettings.ticketDisplay.useDummyThreshold
+                      }
+                      showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
+                    />
+                  </>
                 ) : (
                   <div className="space-y-3">
-                    <FloatingLabelInput
-                      id="rsvp-link"
-                      label="Registration link (Google Form, Typeform, etc.) *"
-                      value={form.rsvpLink}
-                      onChange={(e) => update('rsvpLink', e.target.value)}
-                      required
-                    />
+                    <FloatingLabelInput id="rsvp-link" label="Registration link (Google Form, Typeform, etc.) *" value={form.rsvpLink} onChange={(e) => update('rsvpLink', e.target.value)} required />
                     {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
                       <p className="text-xs text-red-500 dark:text-red-400">Enter a valid link starting with http:// or https://</p>
                     )}
-                    <FloatingLabelInput
-                      id="rsvp-button-label"
-                      label="Button text (optional)"
-                      value={form.rsvpButtonLabel}
-                      onChange={(e) => update('rsvpButtonLabel', e.target.value)}
-                    />
+                    <FloatingLabelInput id="rsvp-button-label" label="Button text (optional)" value={form.rsvpButtonLabel} onChange={(e) => update('rsvpButtonLabel', e.target.value)} />
                     <p className="text-xs text-gray-500 dark:text-slate-500">
                       Attendees will see this button on the event page and be sent to your form to register.
                     </p>
@@ -429,6 +513,33 @@ const CreateEvent: React.FC = () => {
                   onChange={(media) => update('pastEventsGallery', media)}
                   maxItems={6}
                 />
+              </CardContent>
+            </Card>
+
+            {/* Consent & Important Information */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <TextStyleControls
+                  fontSize={form.consentFontSize}
+                  onFontSizeChange={(size) => update('consentFontSize', size)}
+                  editorRef={consentEditorRef}
+                  onChange={(html) => update('consentText', html)}
+                />
+                <RichTextEditor
+                  id="consent-text"
+                  editorRef={consentEditorRef}
+                  value={form.consentText}
+                  onChange={(html) => update('consentText', html)}
+                  fontSize={form.consentFontSize}
+                  placeholder="Important information & consent text (optional)"
+                  multiline
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-500">
+                  Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
+                </p>
               </CardContent>
             </Card>
 

@@ -29,7 +29,7 @@ export interface EventSummary {
   description?: string;   // customer-facing summary, shown on EventDetails
   accentColor?: string;
   tiers: TicketTier[];
-   customFields?: CustomField[];
+  customFields?: CustomField[];
 }
 
 export interface SalesTrendPoint {
@@ -69,12 +69,17 @@ export interface TicketTierDraft {
   price: number;
   quantity: number;
   dummyRemaining?: number;
-  tierEndDate?: string; // YYYY-MM-DD — only used when the company setting is ON
+  tierEndDate?: string; // YYYY-MM-DDe only used when the company setting is ON
   tierEndTime?: string; // HH:mm — only used when the company setting is ON
 }
 
 export const REGISTRATION_MODES = ['tickets', 'rsvp'] as const;
 export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
+
+// NEW
+export const PAYMENT_COLLECTION_MODES = ['gateway', 'manual_qr'] as const;
+export type PaymentCollectionMode = (typeof PAYMENT_COLLECTION_MODES)[number];
+
 export interface GalleryMediaItem {
   url: string;
   type: 'image' | 'gif' | 'video';
@@ -85,24 +90,29 @@ export interface EventFormState {
   customCategory: string;
   endDate: string;
   description: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:mm
+  date: string;
+  time: string;
   venue: string;
   isOnline: boolean;
   images: string[];
-  titleStyle: TextStyleConfig;
-  descriptionStyle: TextStyleConfig;
-  // NEW — dedicated cover slots, separate from the gallery `images` above
+  titleFontSize: number;
+  descriptionFontSize: number;
+  consentFontSize: number;
   coverImageDesktop: string | null;
   coverImageMobile: string | null;
-  // NEW — past-events media strip (photos/gifs/compressed videos)
   pastEventsGallery: GalleryMediaItem[];
   tiers: TicketTierDraft[];
   promoCode: string;
   promoDiscountPercent: number;
-  // NEW — how attendees sign up for this event
   registrationMode: RegistrationMode;
   customFields: CustomField[];
-  rsvpLink: string;          // e.g. Google Form URL, only used when registrationMode === 'rsvp'
-  rsvpButtonLabel: string;   // e.g. "RSVP Now" / "Register" — organizer-editable CTA text
+  rsvpLink: string;
+  rsvpButtonLabel: string;
+  consentText: string;
+
+  // NEW — only relevant when registrationMode === 'tickets'
+  paymentCollectionMode: PaymentCollectionMode;
+  qrImage: string | null;   // base64 preview until uploaded, then https URL after save
+  upiId: string;            // e.g. "9870577689@pthdfc"
+  payeeName: string;        // optional label shown above QR, e.g. "Phase 1 Registrations"
 }
