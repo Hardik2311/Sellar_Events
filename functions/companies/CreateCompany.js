@@ -19,7 +19,20 @@ exports.createCompany = onCall(async (request) => {
     );
   }
 
-  const { fullName, organizationName, eventCategory, website, whatsappNumber, address } = data;
+    const {
+    fullName,
+    organizationName,
+    eventCategory,
+    website,
+    whatsappNumber,
+    address,
+    gstRegistrationType,
+    gstinNumber,
+    aadhaarNumber,
+    panNumber,
+    aadhaarDocUrls,
+    panDocUrls,
+  } = data;
 
   if (!fullName || !organizationName || !eventCategory) {
     throw new HttpsError(
@@ -50,6 +63,7 @@ exports.createCompany = onCall(async (request) => {
       referralDetails: null,
       validity: "active"
     });
+  
 
     // Write business_info
     await companyRef.collection("business_info").doc("profile").set({
@@ -58,6 +72,8 @@ exports.createCompany = onCall(async (request) => {
       website: website || "",
       whatsappNumber: whatsappNumber || "",
       address: address || {},
+      gstinNumber: gstinNumber || "",
+      gstType: gstRegistrationType || "none",
       updatedAt: now,
     });
 
@@ -70,13 +86,17 @@ exports.createCompany = onCall(async (request) => {
     // Write placeholder for settings
     await companyRef.collection("settings").doc("default").set({ initialized: true });
 
-    // Write users
+       // Write users
     await companyRef.collection("users").doc(uid).set({
       fullName,
       email: email || "",
       phoneNumber: whatsappNumber || "",
       role: "admin",
       createdAt: now,
+      aadhaarNumber: aadhaarNumber || "",
+      panNumber: panNumber || "",
+      aadhaarDocUrls: aadhaarDocUrls || [],
+      panDocUrls: panDocUrls || [],
     });
 
     // Set auth claims

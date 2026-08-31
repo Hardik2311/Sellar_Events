@@ -14,8 +14,8 @@ import {
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
-import { ShareOptionsModal } from '../components/ShareOptionsModal';
-import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
+import { stripHtmlTags } from '../lib/utils';
+import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 
 const CustomerEventDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -24,16 +24,36 @@ const CustomerEventDetail: React.FC = () => {
   const { event, loading } = usePublicEvent(id);
   const { settings } = useCompanySettings();
 
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [pastEventIndex, setPastEventIndex] = useState(0);
-  const [shareToast, setShareToast] = useState<string | null>(null);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false); // NEW
+const [quantities, setQuantities] = useState<Record<string, number>>({});
+const [activeImageIndex, setActiveImageIndex] = useState(0);
+const [pastEventIndex, setPastEventIndex] = useState(0);
+const [shareToast, setShareToast] = useState<string | null>(null);
+const [galleryAspect, setGalleryAspect] = useState<Record<number, number>>({});
+const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+const [showManualQR, setShowManualQR] = useState(false); // NEW
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
     setPastEventIndex(0);
+    setConsentAcknowledged(false);
+
+    if (!event?.id) return;
+    const saved = sessionStorage.getItem(`eventTicketQty:${event.id}`);
+    if (saved) {
+      try {
+        setQuantities(JSON.parse(saved));
+      } catch {
+        setQuantities({});
+      }
+    } else {
+      setQuantities({});
+    }
   }, [event?.id]);
+  useEffect(() => {
+    if (!event?.id) return;
+    sessionStorage.setItem(`eventTicketQty:${event.id}`, JSON.stringify(quantities));
+  }, [quantities, event?.id]);
+
   if (loading) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
@@ -91,26 +111,38 @@ const CustomerEventDetail: React.FC = () => {
   const totalTickets = Object.values(quantities).reduce((s, n) => s + n, 0);
   const allSoldOut =
     visibleTiers.length === 0 || visibleTiers.every((t) => t.sold >= t.quantity);
+  const hasConsent = Boolean(event.consentText && event.consentText.trim().length > 0);
+  const consentBlocking = hasConsent && !consentAcknowledged;
 
-  const handleGetTickets = () => {
-    navigate(`/checkout/${event.id}`, { state: { quantities } });
-  };
-  // AFTER — opens the WhatsApp/Copy-link popup instead of the native share sheet
-  const handleShare = () => {
-    setIsShareModalOpen(true);
-  };
+  const selectedTiersBreakdown = event.tiers
+  .filter((tier) => (quantities[tier.id] ?? 0) > 0)
+  .map((tier) => ({
+    id: tier.id,
+    name: tier.name,
+    qty: quantities[tier.id],
+    subtotal: tier.price * quantities[tier.id],
+    price: tier.price, // NEW — needed by ManualQRPaymentCard's batch write
+  }));
 
-  const handleWhatsAppShare = () => {
+const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
+
+const handleGetTickets = () => {
+  if (event.registrationMode === 'tickets' && event.paymentCollectionMode === 'manual_qr') {
+    setShowManualQR(true); // inline QR card, no navigation to /checkout
+    return;
+  }
+  navigate(`/checkout/${event.id}`, { state: { quantities } });
+};
+  const handleShare = async () => {
     if (!event) return;
-    const text = buildWhatsAppShareText(
-      settings.whatsappShareTemplate || 'Check out {{eventTitle}}! {{link}}',
-      event.title,
-      window.location.href
-    );
-    openWhatsAppShare(text);
-  };
-
-  const handleCopyLink = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: event.title, url: window.location.href });
+        return;
+      } catch {
+        return; // user cancelled share sheet, no-op
+      }
+    }
     try {
       await navigator.clipboard.writeText(window.location.href);
       setShareToast('Link copied to clipboard!');
@@ -186,14 +218,6 @@ const CustomerEventDetail: React.FC = () => {
           </button>
         </div>
 
-        {/* NEW — WhatsApp / Copy link share popup */}
-        <ShareOptionsModal
-          isOpen={isShareModalOpen}
-          onClose={() => setIsShareModalOpen(false)}
-          shareUrl={window.location.href}
-          onWhatsAppShare={handleWhatsAppShare}
-        />
-
         <div className="absolute inset-x-0 bottom-0 p-4">
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
@@ -211,7 +235,7 @@ const CustomerEventDetail: React.FC = () => {
                 : undefined
             }
           >
-            {event.title}
+            {stripHtmlTags(event.title)}
           </h1>
         </div>
       </div>
@@ -270,7 +294,7 @@ const CustomerEventDetail: React.FC = () => {
                     : undefined
                 }
               >
-                {event.description}
+                {stripHtmlTags(event.description)}
               </p>
             </CardContent>
           </Card>
@@ -280,16 +304,38 @@ const CustomerEventDetail: React.FC = () => {
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
               <CardContent className="pt-4">
                 <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
-                <div className="relative h-48 w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800">
+                <div
+                  className="relative w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800 transition-[aspect-ratio] duration-300"
+                  style={{ aspectRatio: galleryAspect[pastEventIndex] ?? 16 / 9 }}
+                >
                   {event.pastEventsGallery.map((item, i) => (
                     <div
                       key={item.url + i}
                       className={`absolute inset-0 transition-opacity duration-500 ${i === pastEventIndex ? 'opacity-100' : 'opacity-0'}`}
                     >
                       {item.type === 'video' ? (
-                        <video src={item.url} className="h-full w-full object-cover" muted loop playsInline autoPlay />
+                        <video
+                          src={item.url}
+                          className="h-full w-full object-contain"
+                          muted
+                          loop
+                          playsInline
+                          autoPlay
+                          onLoadedMetadata={(e) => {
+                            const v = e.currentTarget;
+                            setGalleryAspect((a) => ({ ...a, [i]: v.videoWidth / v.videoHeight }));
+                          }}
+                        />
                       ) : (
-                        <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover" />
+                        <img
+                          src={item.url}
+                          alt={`Past event ${i + 1}`}
+                          className="h-full w-full object-contain"
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            setGalleryAspect((a) => ({ ...a, [i]: img.naturalWidth / img.naturalHeight }));
+                          }}
+                        />
                       )}
                     </div>
                   ))}
@@ -328,6 +374,39 @@ const CustomerEventDetail: React.FC = () => {
             </Card>
           )}
 
+          {/* Consent / Important Information */}
+          {hasConsent && (
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+              <CardContent className="pt-4">
+                <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Important Information &amp; Consent</h2>
+                <p
+                  className="whitespace-pre-line leading-relaxed mb-3"
+                  style={
+                    event.consentStyle
+                      ? {
+                        fontSize: event.consentStyle.fontSize,
+                        fontWeight: event.consentStyle.fontWeight,
+                        fontStyle: event.consentStyle.fontStyle,
+                        color: event.consentStyle.color,
+                      }
+                      : undefined
+                  }
+                >
+                  {stripHtmlTags(event.consentText)}
+                </p>
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentAcknowledged}
+                    onChange={(e) => setConsentAcknowledged(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
+                  />
+                  Acknowledged
+                </label>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Tickets, or RSVP link if this is an RSVP event */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
@@ -339,15 +418,20 @@ const CustomerEventDetail: React.FC = () => {
                   </p>
                   {event.rsvpLink ? (
                     <a
-                      href={event.rsvpLink}
+                      href={consentBlocking ? undefined : event.rsvpLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
+                      aria-disabled={consentBlocking}
+                      onClick={(e) => { if (consentBlocking) e.preventDefault(); }}
+                      className={`inline-flex items-center gap-1.5 rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361] ${consentBlocking ? 'opacity-40 pointer-events-none' : ''}`}
                     >
                       {event.rsvpButtonLabel || 'RSVP Now'}
                     </a>
                   ) : (
                     <p className="text-xs text-red-500 dark:text-red-400">RSVP link isn&rsquo;t set up yet — check back soon.</p>
+                  )}
+                  {consentBlocking && (
+                    <p className="mt-2 text-xs text-red-500 dark:text-red-400">Please acknowledge the important information above to continue.</p>
                   )}
                 </>
               ) : (
@@ -414,7 +498,7 @@ const CustomerEventDetail: React.FC = () => {
         </div>
       </main>
 
-      {/* ── Sticky checkout bar — only for ticketed events ───────────── */}
+            {/* ── Sticky checkout bar — only for ticketed events ───────────── */}
       {!allSoldOut && event.registrationMode !== 'rsvp' && (
         <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 flex justify-center gap-3 z-30">
           <div className="flex w-full max-w-3xl items-center gap-3">
@@ -425,13 +509,29 @@ const CustomerEventDetail: React.FC = () => {
             </div>
             <button
               onClick={handleGetTickets}
-              disabled={totalTickets === 0}
+              disabled={totalTickets === 0 || consentBlocking}
               className="flex-1 rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
             >
-              Get tickets
+              {consentBlocking ? 'Acknowledge to continue' : 'Get tickets'}
             </button>
           </div>
         </div>
+      )}
+
+      {/* NEW — inline manual-QR payment card, rendered inside the same JSX tree */}
+      {showManualQR && (
+        <ManualQRPaymentCard
+          event={event}
+          totalAmount={totalAmount}
+          breakdown={selectedTiersBreakdown}
+          quantities={quantities}
+          onClose={() => setShowManualQR(false)}
+          onSuccess={() => {
+            // clear cart after a successful submission, same as a normal checkout would
+            setQuantities({});
+            sessionStorage.removeItem(`eventTicketQty:${event.id}`);
+          }}
+        />
       )}
     </div>
   );

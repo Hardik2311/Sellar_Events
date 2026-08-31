@@ -41,7 +41,7 @@ const EventFieldSettings: React.FC = () => {
   const { settings, loading } = useCompanySettings();
 
   type DraftEventSettings = Pick<typeof settings,
-    'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay' | 'attendeeQuestionsEnabled'
+    'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay' | 'attendeeQuestionsEnabled' | 'payments'
   >;
   const [draft, setDraft] = useState<DraftEventSettings>({
     rsvpEnabled: settings.rsvpEnabled,
@@ -49,7 +49,9 @@ const EventFieldSettings: React.FC = () => {
     autoFeatureNearest: settings.autoFeatureNearest,
     ticketDisplay: settings.ticketDisplay,
     attendeeQuestionsEnabled: settings.attendeeQuestionsEnabled,
+    payments: settings.payments, // NEW
   });
+  
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -63,6 +65,7 @@ const EventFieldSettings: React.FC = () => {
         autoFeatureNearest: settings.autoFeatureNearest,
         ticketDisplay: settings.ticketDisplay,
         attendeeQuestionsEnabled: settings.attendeeQuestionsEnabled,
+        payments: settings.payments,
       });
       setInitialized(true);
     }
@@ -193,6 +196,33 @@ const EventFieldSettings: React.FC = () => {
                         ...prev.ticketDisplay,
                         enableTierAvailabilityWindow: !prev.ticketDisplay.enableTierAvailabilityWindow,
                       },
+                    }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+          {/* NEW */}
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Payment collection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Allow manual UPI QR payments</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Lets organizers set up a UPI QR code as an alternative to the payment gateway for ticketed events.
+                    Attendees scan, pay, and upload a screenshot — they're added to the guest list immediately, and payment is verified manually at check-in.
+                  </p>
+                </div>
+                <SettingToggle
+                  checked={draft.payments.allowManualQR}
+                  disabled={loading}
+                  onChange={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      payments: { ...prev.payments, allowManualQR: !prev.payments.allowManualQR },
                     }))
                   }
                 />

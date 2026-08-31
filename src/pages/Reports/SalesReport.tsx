@@ -54,7 +54,7 @@ const SalesReportPageInner: React.FC = () => {
 
             autoTable(doc, {
                 startY: 38,
-                head: [['DATE', 'BUYER', 'TIER', 'AMOUNT (₹)']],
+                head: [['DATE', 'BUYER', 'TIER', 'AMOUNT (Rs)']],
                 body: filtered.map(a => [
                     formatDate(a.purchasedAt!),
                     a.name || 'N/A',
@@ -65,7 +65,7 @@ const SalesReportPageInner: React.FC = () => {
                 theme: 'plain',
                 styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
                 headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },
-                footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 2 }, lineColor: [17, 24, 39] },
+                footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 0.5 }, lineColor: [17, 24, 39] },
                 alternateRowStyles: { fillColor: [250, 250, 250] },
                 columnStyles: { 0: { cellWidth: 32 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 40 }, 3: { halign: 'right', cellWidth: 42 } },
                 didDrawPage: () => {

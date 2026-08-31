@@ -129,13 +129,13 @@ const ExpenseReportPageInner: React.FC = () => {
 
             autoTable(doc, {
                 startY: 38,
-                head: [['DATE', 'TITLE', 'DESCRIPTION', 'AMOUNT (₹)']],
+                head: [['DATE', 'TITLE', 'DESCRIPTION', 'AMOUNT (Rs)']],
                 body: filtered.map(e => [formatDate(e.date), e.title, e.description, e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })]),
                 foot: [['TOTAL', '', '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
                 theme: 'plain',
                 styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
                 headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },
-                footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 2 }, lineColor: [17, 24, 39] },
+                footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 0.5 }, lineColor: [17, 24, 39] },
                 alternateRowStyles: { fillColor: [250, 250, 250] },
                 columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { halign: 'right', cellWidth: 42 } },
                 didDrawPage: () => {

@@ -18,10 +18,9 @@ import {
 } from '../data/events';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { useCompanySettings } from '../hooks/useSettings';
-import { ShareOptionsModal } from '../components/ShareOptionsModal';
-import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
+import { stripHtmlTags } from '../lib/utils';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -72,7 +71,7 @@ const OrganizerEventCard: React.FC<{
   onToggleFeatured?: (id: string) => void; // undefined => TOGGLE_EVENT_FEATURED not permitted
   onDeleteRequest?: (event: PublicEvent) => void; // undefined => DELETE_EVENT not permitted
   onEdit?: (event: PublicEvent) => void;          // undefined => EDIT_EVENT not permitted
-  onDuplicate?: (id: string) => void;             // undefined => DUPLICATE_EVENT not permitted
+  onDuplicate?: (event: PublicEvent) => void;
   onLiveView: (event: PublicEvent) => void;
   onShare: (event: PublicEvent) => void;
   showFeaturedToggle: boolean;
@@ -134,7 +133,7 @@ const OrganizerEventCard: React.FC<{
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDuplicate(event.id);
+              onDuplicate(event);
             }}
             title="Duplicate event"
             className="absolute bottom-2 right-11 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
@@ -169,7 +168,7 @@ const OrganizerEventCard: React.FC<{
 
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100 cursor-pointer" onClick={onOpen}>
-          {event.title}
+           {stripHtmlTags(event.title)}
         </h3>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
@@ -217,7 +216,7 @@ const OrganizerEventCard: React.FC<{
         <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
           <div className="flex items-center gap-1.5">
             <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{isLive ? 'Live' : 'Draft'}</span>
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
             <ToggleSwitch
               checked={isLive}
               disabled={isCompleted || !onToggleLive}
@@ -267,13 +266,20 @@ const OrganizerEventDiscover: React.FC = () => {
   const { can } = usePermissions();
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
   const { settings } = useCompanySettings();
-  // NEW — share popup state
-  const [shareEvent, setShareEvent] = useState<PublicEvent | null>(null);
-  const [shareUrl, setShareUrl] = useState('');
 
-  const handleShareRequest = (event: PublicEvent) => {
-    setShareEvent(event);
-    setShareUrl(`${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`);
+  // Direct share — native share sheet when available, else copy the link.
+  // No WhatsApp/Copy-link picker popup here anymore.
+  const handleShareRequest = async (event: PublicEvent) => {
+    const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: event.title, url: shareUrl });
+      } catch {
+        // user cancelled share sheet, no-op
+      }
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+    }
   };
   // OFF => auto-feature nearest (toggle hidden); ON => organizer feature manually karega
   const showFeaturedToggle = settings.autoFeatureNearest;
@@ -286,6 +292,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState<PublicEvent | null>(null);
+  const [duplicatingEvent, setDuplicatingEvent] = useState<PublicEvent | null>(null);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -339,6 +346,12 @@ const OrganizerEventDiscover: React.FC = () => {
     if (!deletingEvent || !can(Permission.DELETE_EVENT)) return;
     await deleteEvent(deletingEvent.id);
     setDeletingEvent(null);
+  };
+
+  const handleConfirmDuplicate = async () => {
+    if (!duplicatingEvent || !can(Permission.DUPLICATE_EVENT)) return;
+    await duplicateEvent(duplicatingEvent.id);
+    setDuplicatingEvent(null);
   };
 
   return (
@@ -496,7 +509,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
                     onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}
-                    onDuplicate={can(Permission.DUPLICATE_EVENT) ? duplicateEvent : undefined}
+                    onDuplicate={can(Permission.DUPLICATE_EVENT) ? setDuplicatingEvent : undefined}
                     onLiveView={openLiveView}
                     onShare={handleShareRequest}
                     showFeaturedToggle={showFeaturedToggle}
@@ -531,7 +544,7 @@ const OrganizerEventDiscover: React.FC = () => {
               Delete event?
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Delete "{deletingEvent.title}"? This can't be undone.
+              Delete "{stripHtmlTags(deletingEvent.title)}"? This can't be undone.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -552,6 +565,43 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
         </div>
       )}
+      {duplicatingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Duplicate event?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+               A new draft copy of "{stripHtmlTags(duplicatingEvent.title)}" will be created with:
+            </p>
+            <ul className="mt-2 list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+              <li>Title, description &amp; category</li>
+              <li>Date, time &amp; venue details</li>
+              <li>Ticket tiers &amp; pricing</li>
+              <li>Cover images</li>
+            </ul>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Attendees, tickets sold &amp; live status will not be copied — the new event starts as a Draft.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDuplicatingEvent(null)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDuplicate}
+                className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
+              >
+                Duplicate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showSaveConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">
@@ -561,17 +611,6 @@ const OrganizerEventDiscover: React.FC = () => {
         </div>
       )}
 
-      {/* NEW — WhatsApp / Copy link share popup */}
-      <ShareOptionsModal
-        isOpen={!!shareEvent}
-        onClose={() => setShareEvent(null)}
-        shareUrl={shareUrl}
-        onWhatsAppShare={() => {
-          if (!shareEvent) return;
-          const text = buildWhatsAppShareText(settings.whatsappShareTemplate, shareEvent.title, shareUrl);
-          openWhatsAppShare(text);
-        }}
-      />
     </div>
   );
 };

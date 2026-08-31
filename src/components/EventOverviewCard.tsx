@@ -2,6 +2,7 @@ import React from 'react';
 import type { EventSummary } from '../types/event.types';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import StatusBadge from './ui/StatusBadge';
+import { stripHtmlTags } from '../lib/utils';
 
 interface EventOverviewCardProps {
   event: EventSummary | null;
@@ -34,7 +35,7 @@ export const EventOverviewCard: React.FC<EventOverviewCardProps> = ({ event, isD
     <Card className="shadow-sm border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base font-semibold text-gray-900">{event.title}</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-900">{stripHtmlTags(event.title)}</CardTitle>
           <p className="text-xs text-gray-500 mt-0.5">
             {formattedDate} · {event.venue}
           </p>

@@ -14,15 +14,13 @@ import {
 } from '../data/events';
 import EditEventModal from '../components/EditEventModal';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay';
-import type { EventFormState } from '../types/event.types';
+import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { buildEventSlugId } from '../data/events';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
-import { useCompanySettings } from '../hooks/useSettings';
-import { ShareOptionsModal } from '../components/ShareOptionsModal';
-import { buildWhatsAppShareText, openWhatsAppShare } from '../lib/whatsappShare';
+import { stripHtmlTags } from '../lib/utils';
 
 // Real-time single event listener
 const useEvent = (companyId?: string, id?: string) => {
@@ -73,6 +71,8 @@ const useEvent = (companyId?: string, id?: string) => {
           customFields: d.customFields || [],
           titleStyle: d.titleStyle ?? undefined,
           descriptionStyle: d.descriptionStyle ?? undefined,
+          consentText: d.consentText ?? undefined,
+          consentStyle: d.consentStyle ?? undefined,
         });
       } else {
         setEvent(undefined);
@@ -95,6 +95,7 @@ const OrganizerEventDetail: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [pastEventIndex, setPastEventIndex] = useState(0);
+  const [galleryAspect, setGalleryAspect] = useState<Record<number, number>>({});
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -126,11 +127,8 @@ const OrganizerEventDetail: React.FC = () => {
     return () => clearTimeout(t);
   }, [linkCopiedToast]);
 
-  // NEW — WhatsApp / Copy link share flow
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [resolvedShareUrl, setResolvedShareUrl] = useState('');
-  const { settings } = useCompanySettings();
-
+  // Direct share — resolves the (possibly subdomain-based) event URL, then
+  // uses the native share sheet when available, else copies the link.
   const resolveShareUrl = async () => {
     if (!event) return '';
     const slugId = buildEventSlugId(event.title, event.id);
@@ -149,23 +147,17 @@ const OrganizerEventDetail: React.FC = () => {
   };
 
   const handleOpenShare = async () => {
-    const url = await resolveShareUrl();
-    setResolvedShareUrl(url);
-    setIsShareModalOpen(true);
-  };
-
-  const handleWhatsAppShare = () => {
     if (!event) return;
-    const text = buildWhatsAppShareText(
-      settings.whatsappShareTemplate || 'Check out {{eventTitle}}! {{link}}',
-      event.title,
-      resolvedShareUrl
-    );
-    openWhatsAppShare(text);
-  };
-
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(resolvedShareUrl);
+    const shareUrl = await resolveShareUrl();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: event.title, url: shareUrl });
+        return;
+      } catch {
+        return; // user cancelled share sheet, no-op
+      }
+    }
+    await navigator.clipboard.writeText(shareUrl);
     setLinkCopiedToast(true);
   };
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
@@ -178,7 +170,7 @@ const OrganizerEventDetail: React.FC = () => {
   };
 
   const handleSaveEdit = async (updated: EventFormState) => {
-    if (!profile?.companyId || !id) return;
+    if (!profile?.companyId || !id || !event) return;
 
     const coverImageUrls: string[] = await Promise.all(
       updated.images.map((img, i) => uploadIfNeeded(img, `photo-${i}`) as Promise<string>)
@@ -192,27 +184,40 @@ const OrganizerEventDetail: React.FC = () => {
 
     const isRsvp = updated.registrationMode === 'rsvp';
 
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-      title: updated.title,
-      category: updated.category === 'Other' ? updated.customCategory : updated.category,
-      description: updated.description,
-      date: updated.date,
-      endDate: updated.endDate,
-      time: updated.time,
-      venue: updated.isOnline ? null : updated.venue,
-      isOnline: updated.isOnline,
-      coverImageUrl: coverImageUrls[0] ?? null,
-      coverImageUrls,
-      coverImageDesktop: coverImageDesktopUrl,   // NEW — actually persisted now
-      coverImageMobile: coverImageMobileUrl,     // NEW — actually persisted now
-      registrationMode: updated.registrationMode,
-      tiers: isRsvp ? [] : updated.tiers,
-      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
-      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
-      titleStyle: updated.titleStyle,
-      descriptionStyle: updated.descriptionStyle,
-      updatedAt: serverTimestamp(),
-    });
+    // NEW — upload the QR image the same way cover images are uploaded
+const isManualQR = updated.registrationMode === 'tickets' && updated.paymentCollectionMode === 'manual_qr';
+const qrImageUrl = isManualQR ? await uploadIfNeeded(updated.qrImage, 'payment-qr') : null;
+
+await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+  title: updated.title,
+  category: updated.category === 'Other' ? updated.customCategory : updated.category,
+  description: updated.description,
+  date: updated.date,
+  endDate: updated.endDate,
+  time: updated.time,
+  venue: updated.isOnline ? null : updated.venue,
+  isOnline: updated.isOnline,
+  coverImageUrl: coverImageUrls[0] ?? null,
+  coverImageUrls,
+  coverImageDesktop: coverImageDesktopUrl,
+  coverImageMobile: coverImageMobileUrl,
+  registrationMode: updated.registrationMode,
+  tiers: isRsvp ? [] : updated.tiers,
+  rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+  rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+  titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
+  descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
+  consentText: updated.consentText.trim() || null,
+  consentStyle: updated.consentText.trim()
+    ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
+    : null,
+  // NEW
+  paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
+  qrImageUrl: isManualQR ? qrImageUrl : null,
+  upiId: isManualQR ? updated.upiId.trim() : null,
+  payeeName: isManualQR ? updated.payeeName.trim() : null,
+  updatedAt: serverTimestamp(),
+});
 
     setIsEditOpen(false);          // close edit modal
     setShowSaveConfirmation(true); // show success confirmation
@@ -336,7 +341,7 @@ const OrganizerEventDetail: React.FC = () => {
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <h1 className="text-2xl font-bold text-white">{event.title}</h1>
+          <h1 className="text-2xl font-bold text-white">{stripHtmlTags(event.title)}</h1>
         </div>
       </div>
 
@@ -381,7 +386,7 @@ const OrganizerEventDetail: React.FC = () => {
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{event.description}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{stripHtmlTags(event.description)}</p>
             </CardContent>
           </Card>
 
@@ -390,16 +395,38 @@ const OrganizerEventDetail: React.FC = () => {
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
               <CardContent className="pt-4">
                 <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
-                <div className="relative h-48 w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800">
+                <div
+                  className="relative w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800 transition-[aspect-ratio] duration-300"
+                  style={{ aspectRatio: galleryAspect[pastEventIndex] ?? 16 / 9 }}
+                >
                   {event.pastEventsGallery.map((item, i) => (
                     <div
                       key={item.url + i}
                       className={`absolute inset-0 transition-opacity duration-500 ${i === pastEventIndex ? 'opacity-100' : 'opacity-0'}`}
                     >
                       {item.type === 'video' ? (
-                        <video src={item.url} className="h-full w-full object-cover" muted loop playsInline autoPlay />
+                        <video
+                          src={item.url}
+                          className="h-full w-full object-contain"
+                          muted
+                          loop
+                          playsInline
+                          autoPlay
+                          onLoadedMetadata={(e) => {
+                            const v = e.currentTarget;
+                            setGalleryAspect((a) => ({ ...a, [i]: v.videoWidth / v.videoHeight }));
+                          }}
+                        />
                       ) : (
-                        <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover" />
+                        <img
+                          src={item.url}
+                          alt={`Past event ${i + 1}`}
+                          className="h-full w-full object-contain"
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            setGalleryAspect((a) => ({ ...a, [i]: img.naturalWidth / img.naturalHeight }));
+                          }}
+                        />
                       )}
                     </div>
                   ))}
@@ -507,13 +534,6 @@ const OrganizerEventDetail: React.FC = () => {
         </div>
       )}
 
-      {/* NEW — WhatsApp / Copy link share popup */}
-      <ShareOptionsModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        shareUrl={resolvedShareUrl}
-        onWhatsAppShare={handleWhatsAppShare}
-      />
     </div >
   );
 };

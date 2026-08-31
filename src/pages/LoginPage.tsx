@@ -60,7 +60,7 @@ const Login: React.FC = () => {
       <div className="relative min-h-screen w-screen flex flex-col lg:hidden bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
         <AuthHeroPanel className="w-full h-64 shrink-0" />
 
-        <div className="w-full bg-[#F9FAFB] dark:bg-[#1E293B] p-6 py-8 rounded-t-3xl flex-1 z-20 -mt-6 border-t border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto">
+        <div className="w-full bg-[#F9FAFB] dark:bg-[#1E293B] p-6 py-8 rounded-sm flex-1 z-20 -mt-6 border-t border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto">
           <div className="w-full max-w-sm mx-auto">
             <h1 className="text-2xl font-bold mb-1 text-slate-900 dark:text-white">Welcome back</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
@@ -117,7 +117,7 @@ const Login: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
+                  className="flex-1 py-3.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
                 >
                   {loading ? <Spinner /> : 'Log In'}
                 </button>
@@ -125,7 +125,7 @@ const Login: React.FC = () => {
                 <Link to="/signup" className="flex-1">
                   <button
                     type="button"
-                    className="w-full py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-base"
+                    className="w-full py-3.5 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-base"
                   >
                     Sign Up
                   </button>
@@ -199,7 +199,7 @@ const Login: React.FC = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="flex-1 py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
+                      className="flex-1 py-3.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
                     >
                       {loading ? <Spinner /> : 'Log In'}
                     </button>
@@ -207,7 +207,7 @@ const Login: React.FC = () => {
                     <Link to="/signup" className="flex-1">
                       <button
                         type="button"
-                        className="w-full py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-base"
+                        className="w-full py-3.5 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all text-base"
                       >
                         Sign Up
                       </button>

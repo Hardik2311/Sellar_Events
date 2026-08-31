@@ -3,7 +3,7 @@ import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverT
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import type { PublicEvent } from '../data/events';
-import type { EventFormState } from '../types/event.types';
+import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
@@ -41,6 +41,10 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
+   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
+  qrImageUrl: d.qrImageUrl ?? null,
+  upiId: d.upiId || '',
+  payeeName: d.payeeName || '',
 });
 
 export const useOrganizerEvents = () => {
@@ -84,16 +88,16 @@ export const useOrganizerEvents = () => {
     // Ek time pe sirf ek hi event featured ho sakta hai —
     // isko ON kar rahe hain to baaki sab jo already featured hain unko OFF karo
     if (nextFeatured) {
-        events
-            .filter((e) => e.id !== id && e.featured)
-            .forEach((e) => {
-                const otherRef = doc(db, 'companies', profile.companyId, 'events', e.id);
-                batch.update(otherRef, { featured: false });
-            });
+      events
+        .filter((e) => e.id !== id && e.featured)
+        .forEach((e) => {
+          const otherRef = doc(db, 'companies', profile.companyId, 'events', e.id);
+          batch.update(otherRef, { featured: false });
+        });
     }
 
     await batch.commit();
-};
+  };
 
   const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
@@ -121,6 +125,8 @@ export const useOrganizerEvents = () => {
       coverImageDesktop: original.coverImageDesktop || null,
       coverImageMobile: original.coverImageMobile || null,
       pastEventsGallery: original.pastEventsGallery || [],
+      titleStyle: original.titleStyle ?? null,
+      descriptionStyle: original.descriptionStyle ?? null,
       status: 'draft',
       featured: false,
       registrationMode: original.registrationMode,
@@ -137,6 +143,10 @@ export const useOrganizerEvents = () => {
         tierEndDate: t.tierEndDate ?? null,
         tierEndTime: t.tierEndTime ?? null,
       })),
+       paymentCollectionMode: original.paymentCollectionMode ?? 'gateway',
+  qrImageUrl: original.qrImageUrl ?? null,
+  upiId: original.upiId ?? null,
+  payeeName: original.payeeName ?? null,
       createdAt: serverTimestamp(),
     };
 
@@ -164,32 +174,52 @@ export const useOrganizerEvents = () => {
     });
 
     const payload: Record<string, any> = {
-      title: form.title,
-      category: form.category === 'Other' ? form.customCategory.trim() : form.category,
-      description: form.description,
-      date: form.date,
-      endDate: form.endDate,
-      time: form.time,
-      venue: form.venue,
-      isOnline: form.isOnline,
-      coverImageUrls: form.images,
-      coverImageUrl: form.images[0] || null,
-      coverImageDesktop: form.coverImageDesktop || null,
-      coverImageMobile: form.coverImageMobile || null,
-      pastEventsGallery: form.pastEventsGallery || [],
-      registrationMode: form.registrationMode,
-      rsvpLink: form.rsvpLink,
-      rsvpButtonLabel: form.rsvpButtonLabel,
-      customFields: form.customFields || [],
-      titleStyle: form.titleStyle,
-      descriptionStyle: form.descriptionStyle,
-    };
+  title: form.title,
+  category: form.category === 'Other' ? form.customCategory.trim() : form.category,
+  description: form.description,
+  date: form.date,
+  endDate: form.endDate,
+  time: form.time,
+  venue: form.venue,
+  isOnline: form.isOnline,
+  coverImageUrls: form.images,
+  coverImageUrl: form.images[0] || null,
+  coverImageDesktop: form.coverImageDesktop || null,
+  coverImageMobile: form.coverImageMobile || null,
+  pastEventsGallery: form.pastEventsGallery || [],
+  registrationMode: form.registrationMode,
+  rsvpLink: form.rsvpLink,
+  rsvpButtonLabel: form.rsvpButtonLabel,
+  customFields: form.customFields || [],
+  titleStyle: {
+    ...DEFAULT_TEXT_STYLE,
+    ...existingEvent?.titleStyle,
+    fontSize: form.titleFontSize,
+  },
+  descriptionStyle: {
+    ...DEFAULT_TEXT_STYLE,
+    ...existingEvent?.descriptionStyle,
+    fontSize: form.descriptionFontSize,
+  },
+  // NEW — only meaningful for ticketed events; null-out otherwise so stale
+  // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
+  paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
+  qrImageUrl: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+    ? form.qrImage
+    : null,
+  upiId: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+    ? form.upiId.trim()
+    : null,
+  payeeName: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+    ? form.payeeName.trim()
+    : null,
+};
 
-    if (form.registrationMode === 'tickets') {
-      payload.tiers = tiers;
-    }
+if (form.registrationMode === 'tickets') {
+  payload.tiers = tiers;
+}
 
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
+await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
   return { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent };

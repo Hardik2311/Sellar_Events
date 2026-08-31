@@ -154,6 +154,11 @@ export async function fetchEventDashboardData(
         cacheEnd: endDate,
     };
 
-    localStorage.setItem(cacheKey, JSON.stringify(result));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(result));
+    } catch (err) {
+        console.warn('Skipping dashboard cache write:', (err as Error)?.name, (err as Error)?.message);
+        try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+    }
     return result;
 }

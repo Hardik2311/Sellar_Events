@@ -174,6 +174,13 @@ const EditProfile: React.FC = () => {
     const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
+    // Error kahin bhi ho, user ko turant dikhna chahiye — scroll position se independent
+    useEffect(() => {
+        if (submitError) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [submitError]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -385,6 +392,15 @@ const EditProfile: React.FC = () => {
                 <div className="w-9" />
             </header>
 
+            {submitError && (
+                <div className="sticky top-0 z-50 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-bold p-3 flex items-center justify-between gap-2 shadow-sm">
+                    <span>{submitError}</span>
+                    <button type="button" onClick={() => setSubmitError(null)} className="text-red-500 shrink-0">
+                        <FiX size={16} />
+                    </button>
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto px-4 py-5 pb-36 md:pb-8">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
@@ -479,34 +495,6 @@ const EditProfile: React.FC = () => {
                                         />
                                     </LabeledField>
                                 </div>
-
-                                <div className="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
-                                    <LabeledField label="Aadhar NUMBER">
-                                        <input
-                                            type="text"
-                                            name="aadhaarNumber"
-                                            value={formData.aadhaarNumber}
-                                            onChange={handleAadhaarChange}
-                                            maxLength={12}
-                                            inputMode="numeric"
-                                            className={inputClass}
-                                            placeholder="12-digit Aadhaar Number"
-                                        />
-                                        {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
-                                    </LabeledField>
-                                    <LabeledField label="PAN Number">
-                                        <input
-                                            type="text"
-                                            name="panNumber"
-                                            value={formData.panNumber}
-                                            onChange={handlePanChange}
-                                            maxLength={10}
-                                            className={`${inputClass} uppercase`}
-                                            placeholder="10-character PAN"
-                                        />
-                                        {panError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{panError}</p>}
-                                    </LabeledField>
-                                </div>
                             </div>
                         </SectionCard>
 
@@ -541,6 +529,20 @@ const EditProfile: React.FC = () => {
                                         ))}
                                     </select>
                                 </LabeledField>
+
+                                {formData.eventCategory === 'Other' && (
+                                    <LabeledField label="Specify Custom Category">
+                                        <input
+                                            type="text"
+                                            name="customEventCategory"
+                                            value={formData.customEventCategory}
+                                            onChange={handleInputChange}
+                                            className={inputClass}
+                                            placeholder="Specify Category"
+                                        />
+                                    </LabeledField>
+                                )}
+
                                 <LabeledField label="Website">
                                     <input
                                         type="text"
@@ -551,21 +553,6 @@ const EditProfile: React.FC = () => {
                                         placeholder="https://yourwebsite.com"
                                     />
                                 </LabeledField>
-
-                                {formData.eventCategory === 'Other' && (
-                                    <div className="sm:col-span-2">
-                                        <LabeledField label="Specify Custom Category">
-                                            <input
-                                                type="text"
-                                                name="customEventCategory"
-                                                value={formData.customEventCategory}
-                                                onChange={handleInputChange}
-                                                className={inputClass}
-                                                placeholder="Specify Category"
-                                            />
-                                        </LabeledField>
-                                    </div>
-                                )}
 
                                 <LabeledField label="GST Type">
                                     <select
@@ -744,34 +731,54 @@ const EditProfile: React.FC = () => {
                     {user && (
                         <SectionCard title="Identity Documents">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <IdentityDocumentUpload
-                                    label="Aadhaar (Front / Back)"
-                                    docType="aadhaar"
-                                    companyId={authProfile?.companyId || user.uid}
-                                    userId={user.uid}
-                                    existingUrls={formData.aadhaarDocUrls}
-                                    onUploaded={(urls) => setFormData((prev) => ({ ...prev, aadhaarDocUrls: urls }))}
-                                />
-                                <IdentityDocumentUpload
-                                    label="PAN Card"
-                                    docType="pan"
-                                    companyId={authProfile?.companyId || user.uid}
-                                    userId={user.uid}
-                                    existingUrls={formData.panDocUrls}
-                                    onUploaded={(urls) => setFormData((prev) => ({ ...prev, panDocUrls: urls }))}
-                                />
+                                <div className="flex flex-col gap-4">
+                                    <LabeledField label="Aadhar NUMBER">
+                                        <input
+                                            type="text"
+                                            name="aadhaarNumber"
+                                            value={formData.aadhaarNumber}
+                                            onChange={handleAadhaarChange}
+                                            maxLength={12}
+                                            inputMode="numeric"
+                                            className={inputClass}
+                                            placeholder="12-digit Aadhaar Number"
+                                        />
+                                        {aadhaarError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{aadhaarError}</p>}
+                                    </LabeledField>
+                                    <IdentityDocumentUpload
+                                        label="Aadhaar (Front / Back)"
+                                        docType="aadhaar"
+                                        companyId={authProfile?.companyId || user.uid}
+                                        userId={user.uid}
+                                        existingUrls={formData.aadhaarDocUrls}
+                                        onUploaded={(urls) => setFormData((prev) => ({ ...prev, aadhaarDocUrls: urls }))}
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-4">
+                                    <LabeledField label="PAN Number">
+                                        <input
+                                            type="text"
+                                            name="panNumber"
+                                            value={formData.panNumber}
+                                            onChange={handlePanChange}
+                                            maxLength={10}
+                                            className={`${inputClass} uppercase`}
+                                            placeholder="10-character PAN"
+                                        />
+                                        {panError && <p className="text-red-500 text-[11px] font-bold mt-1 mb-0">{panError}</p>}
+                                    </LabeledField>
+                                    <IdentityDocumentUpload
+                                        label="PAN Card"
+                                        docType="pan"
+                                        companyId={authProfile?.companyId || user.uid}
+                                        userId={user.uid}
+                                        existingUrls={formData.panDocUrls}
+                                        onUploaded={(urls) => setFormData((prev) => ({ ...prev, panDocUrls: urls }))}
+                                    />
+                                </div>
                             </div>
                         </SectionCard>
-                    )}
-
-                    {/* ── Error banner ── */}
-                    {submitError && (
-                        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-sm px-4 py-3 flex items-center justify-between gap-2 shadow-xs">
-                            <p className="text-red-600 dark:text-red-400 text-xs font-bold m-0">{submitError}</p>
-                            <button type="button" onClick={() => setSubmitError(null)} className="text-red-500 shrink-0">
-                                <FiX size={16} />
-                            </button>
-                        </div>
                     )}
 
                     {/* ── Submit button ── */}

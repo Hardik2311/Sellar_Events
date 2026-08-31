@@ -38,9 +38,16 @@ export interface PublicEvent {
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
-  customFields: CustomField[];
-  titleStyle?: TextStyleConfig;
+   customFields: CustomField[];
+   titleStyle?: TextStyleConfig;
   descriptionStyle?: TextStyleConfig;
+  consentText?: string;
+  consentStyle?: TextStyleConfig;
+  // NEW
+  paymentCollectionMode?: 'gateway' | 'manual_qr';
+  qrImageUrl?: string | null;
+  upiId?: string;
+  payeeName?: string;
 }
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {
