@@ -5,6 +5,8 @@ import SearchBar from './ui/SearchBar';
 import StatusBadge from './ui/StatusBadge';
 import { stripHtmlTags } from '../lib/utils';
 
+export const ALL_EVENTS_ID = 'all-events'; // export so other files can import same constant
+
 interface EventListCardProps {
   events: EventSummary[];
   selectedEventId: string | null;
@@ -12,6 +14,9 @@ interface EventListCardProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   loading?: boolean;
+  /** Optional. When true, shows an "All Events" option at the top of the list.
+   *  Default false so existing usages elsewhere are unaffected. */
+  allEventsOption?: boolean;
 }
 
 export const EventListCard: React.FC<EventListCardProps> = ({
@@ -21,6 +26,7 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   searchValue,
   onSearchChange,
   loading = false,
+  allEventsOption = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,27 +37,27 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   );
 
   const filteredEvents = useMemo(() => {
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
-  // Show all events (past + upcoming). Sort so upcoming events come first
-  // (soonest first), then past events (most recent first) below them.
-  const sorted = [...events].sort((a, b) => {
-    const aDate = new Date(a.startDate).setHours(0, 0, 0, 0);
-    const bDate = new Date(b.startDate).setHours(0, 0, 0, 0);
-    const aUpcoming = aDate >= startOfToday.getTime();
-    const bUpcoming = bDate >= startOfToday.getTime();
+    // Show all events (past + upcoming). Sort so upcoming events come first
+    // (soonest first), then past events (most recent first) below them.
+    const sorted = [...events].sort((a, b) => {
+      const aDate = new Date(a.startDate).setHours(0, 0, 0, 0);
+      const bDate = new Date(b.startDate).setHours(0, 0, 0, 0);
+      const aUpcoming = aDate >= startOfToday.getTime();
+      const bUpcoming = bDate >= startOfToday.getTime();
 
-    if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
-    return aUpcoming ? aDate - bDate : bDate - aDate;
-  });
+      if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+      return aUpcoming ? aDate - bDate : bDate - aDate;
+    });
 
-  if (!searchValue.trim()) return sorted;
-  const q = searchValue.toLowerCase();
-  return sorted.filter(
-    (e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
-  );
-}, [events, searchValue]);
+    if (!searchValue.trim()) return sorted;
+    const q = searchValue.toLowerCase();
+    return sorted.filter(
+      (e) => e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
+    );
+  }, [events, searchValue]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -77,8 +83,14 @@ export const EventListCard: React.FC<EventListCardProps> = ({
         <div className="min-w-0 text-left">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Your events</p>
           <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-  {loading ? 'Loading...' : selectedEvent ? stripHtmlTags(selectedEvent.title) : 'Select an event'}
-</p>
+            {loading
+              ? 'Loading...'
+              : selectedEventId === ALL_EVENTS_ID
+                ? 'All Events'
+                : selectedEvent
+                  ? stripHtmlTags(selectedEvent.title)
+                  : 'Select an event'}
+          </p>
         </div>
         <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -90,6 +102,23 @@ export const EventListCard: React.FC<EventListCardProps> = ({
           </div>
 
           <div className="max-h-[300px] overflow-y-auto space-y-2">
+            {allEventsOption && !loading && (
+              <button
+                onClick={() => handleSelect(ALL_EVENTS_ID)}
+                className={`w-full text-left rounded-sm border p-2 transition-all flex items-center gap-3 ${selectedEventId === ALL_EVENTS_ID
+                    ? 'border-[#007A78]/40 bg-[#007A78]/10 dark:border-[#2DD4BF]/40 dark:bg-[#2DD4BF]/15'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+              >
+                <div className="w-14 h-14 rounded-sm shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <CalendarDays size={20} className="text-slate-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">All Events</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">View customers across all your events</p>
+                </div>
+              </button>
+            )}
             {loading ? (
               [1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center gap-3 p-2 animate-pulse">

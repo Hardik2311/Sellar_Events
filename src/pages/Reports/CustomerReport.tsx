@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx-js-style';
 import BackButton from '../../components/ui/BackButton';
-import EventListCard from '../../components/EventListCard';
+import EventListCard, { ALL_EVENTS_ID } from '../../components/EventListCard';
 import { EventDateFilter, EventFilterProvider } from '../../components/ui/EventdateFilter';
 import { useAuth } from '../../context/AuthContext';
 import { useCustomerReport } from '../../hooks/useCustomerReport';
@@ -227,6 +227,7 @@ const CustomerReportPageInner: React.FC = () => {
             searchValue={eventSearch}
             onSearchChange={setEventSearch}
             loading={eventsLoading}
+            allEventsOption   // 👈 sirf Customer Report page me "All Events" dikhega
           />
 
           <EventDateFilter />
@@ -239,6 +240,17 @@ const CustomerReportPageInner: React.FC = () => {
             <div className="flex-1 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Revenue</p>
               <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">₹{Math.round(summary.totalRevenue).toLocaleString('en-IN')}</p>
+            </div>
+            <div className="flex-1 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Top Customer (Tickets)</p>
+              {summary.topCustomerByTickets ? (
+                <>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1 truncate">{summary.topCustomerByTickets.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{summary.topCustomerByTickets.ticketsBought} tickets</p>
+                </>
+              ) : (
+                <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">—</p>
+              )}
             </div>
           </div>
 
