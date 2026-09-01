@@ -70,54 +70,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        const effectiveCompanyId = companyId || firebaseUser.uid;
-
-        try {
-          const userDocRef = doc(db, 'companies', effectiveCompanyId, 'users', firebaseUser.uid);
-          const companyDocRef = doc(db, 'companies', effectiveCompanyId, 'business_info', 'profile');
-          const companyRootRef = doc(db, 'companies', effectiveCompanyId);
-
-          const [userSnap, companySnap, rootSnap] = await Promise.all([
-            getDoc(userDocRef).catch(() => null),
-            getDoc(companyDocRef).catch(() => null),
-            getDoc(companyRootRef).catch(() => null),
-          ]);
-
-          const userData = userSnap && userSnap.exists() ? userSnap.data() : {};
-          const companyData = companySnap && companySnap.exists() ? companySnap.data() : {};
-          const rootData = rootSnap && rootSnap.exists() ? rootSnap.data() : {};
-
-          const mergedCompany = { ...rootData, ...companyData };
- const finalRole = userData.role || mergedCompany.role || 'admin';
-          console.log('[AuthContext] Resolved role for current user:', JSON.stringify(finalRole)); // NEW — check exact value/casinga
-          setProfile({
-            fullName: userData.fullName || userData.name || mergedCompany.fullName || firebaseUser.displayName || 'Organizer User',
-            email: userData.email || mergedCompany.email || firebaseUser.email || '',
-            role: userData.role || mergedCompany.role || 'admin',
-            companyId: effectiveCompanyId,
-            phone: userData.phone || rootData.ownerPhoneNumber || mergedCompany.phone,
-            aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
-            panNumber: userData.panNumber || mergedCompany.panNumber,
-            gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
-            gstType: userData.gstType || mergedCompany.gstType,
-            aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
-            panDocUrls: normalizeDocFiles(userData.panDocUrls),
-            instagram: userData.instagram || mergedCompany.instagram,
-            facebook: userData.facebook || mergedCompany.facebook,
-            twitter: userData.twitter || mergedCompany.twitter,
-            whatsappNumber: userData.whatsappNumber || mergedCompany.whatsappNumber || rootData.ownerPhoneNumber,
-            profilePictureUrl: userData.profilePictureUrl || userData.profilePicture || mergedCompany.profilePictureUrl || firebaseUser.photoURL || undefined,
-            organizationName: mergedCompany.organizationName || rootData.name || userData.organizationName,
-            website: mergedCompany.website || userData.website,
-          });
-        } catch (e) {
-          console.warn('Error reading user document:', e);
+        if (!companyId) {
+          // Koi real company nahi bani abhi tak (e.g. user ne sirf Step 1 complete kiya hai).
+          // Pehle yahan firebaseUser.uid ko companyId bana kar app ko lagta tha company already
+          // exist karti hai — isi se Step 1 pe hi "company" create hua sa dikhta tha.
           setProfile({
             fullName: firebaseUser.displayName || 'Organizer User',
             email: firebaseUser.email || '',
             role: 'admin',
-            companyId: effectiveCompanyId,
+            companyId: '',
           });
+        } else {
+          try {
+            const userDocRef = doc(db, 'companies', companyId, 'users', firebaseUser.uid);
+            const companyDocRef = doc(db, 'companies', companyId, 'business_info', 'profile');
+            const companyRootRef = doc(db, 'companies', companyId);
+
+            const [userSnap, companySnap, rootSnap] = await Promise.all([
+              getDoc(userDocRef).catch(() => null),
+              getDoc(companyDocRef).catch(() => null),
+              getDoc(companyRootRef).catch(() => null),
+            ]);
+
+            const userData = userSnap && userSnap.exists() ? userSnap.data() : {};
+            const companyData = companySnap && companySnap.exists() ? companySnap.data() : {};
+            const rootData = rootSnap && rootSnap.exists() ? rootSnap.data() : {};
+            const mergedCompany = { ...rootData, ...companyData };
+
+            setProfile({
+              fullName: userData.fullName || userData.name || mergedCompany.fullName || firebaseUser.displayName || 'Organizer User',
+              email: userData.email || mergedCompany.email || firebaseUser.email || '',
+              role: userData.role || mergedCompany.role || 'admin',
+              companyId,
+              phone: userData.phone || rootData.ownerPhoneNumber || mergedCompany.phone,
+              aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
+              panNumber: userData.panNumber || mergedCompany.panNumber,
+              gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
+              gstType: userData.gstType || mergedCompany.gstType,
+              aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
+              panDocUrls: normalizeDocFiles(userData.panDocUrls),
+              instagram: userData.instagram || mergedCompany.instagram,
+              facebook: userData.facebook || mergedCompany.facebook,
+              twitter: userData.twitter || mergedCompany.twitter,
+              whatsappNumber: userData.whatsappNumber || mergedCompany.whatsappNumber || rootData.ownerPhoneNumber,
+              profilePictureUrl: userData.profilePictureUrl || userData.profilePicture || mergedCompany.profilePictureUrl || firebaseUser.photoURL || undefined,
+              organizationName: mergedCompany.organizationName || rootData.name || userData.organizationName,
+              website: mergedCompany.website || userData.website,
+            });
+          } catch (e) {
+            console.warn('Error reading user document:', e);
+            setProfile({
+              fullName: firebaseUser.displayName || 'Organizer User',
+              email: firebaseUser.email || '',
+              role: 'admin',
+              companyId,
+            });
+          }
         }
       } else {
         setProfile(null);

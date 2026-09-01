@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import type { PublicEvent } from '../data/events';
@@ -24,6 +24,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   pastEventsGallery: d.pastEventsGallery ?? [],
   status: d.status,
   featured: d.featured || false,
+  deletedAt: d.deletedAt ?? null,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -99,9 +100,23 @@ export const useOrganizerEvents = () => {
     await batch.commit();
   };
 
-  const deleteEvent = async (id: string) => {
+    const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
-    await deleteDoc(doc(db, 'companies', profile.companyId, 'events', id));
+    // Soft delete — doc stays in Firestore so it can be restored; a Cloud
+    // Function can hard-delete anything past deletedAt + N days later.
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      status: 'deleted',
+      deletedAt: serverTimestamp(),
+    });
+  };
+
+    const restoreEvent = async (id: string) => {
+    if (!profile?.companyId) return;
+    // Restored events come back as Draft — organizer republishes manually
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      status: 'draft',
+      deletedAt: null,
+    });
   };
 
   const duplicateEvent = async (id: string) => {
@@ -222,5 +237,5 @@ if (form.registrationMode === 'tickets') {
 await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent };
+    return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent };
 };

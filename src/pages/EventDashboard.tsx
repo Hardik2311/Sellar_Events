@@ -74,19 +74,20 @@ const EventDashboardContent: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
-            <LayoutDashboard size={20} />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Dashboard</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{profile?.organizationName ?? ''}</p>
-          </div>
+      <header className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
+        {/* Left: icon */}
+        <div className="p-2 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] w-fit">
+          <LayoutDashboard size={20} />
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* <ThemeToggle /> */}
+        {/* Center: title + org name */}
+        <div className="text-center">
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Dashboard</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{profile?.organizationName ?? ''}</p>
+        </div>
+
+        {/* Right: eye toggle button */}
+        <div className="flex items-center justify-end gap-2">
           {can(Permission.TOGGLE_SENSITIVE_DATA) && (
             <button
               onClick={() => setIsDataVisible(!isDataVisible)}
@@ -102,11 +103,12 @@ const EventDashboardContent: React.FC = () => {
       {/* ── Main Content ─────────────────────────────────────────────── */}
       <main className="grow overflow-y-auto p-3 sm:p-5">
         <div className="max-w-7xl mx-auto mb-4">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 text-center">
             Real-time ticketing & sales analytics
           </p>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div />
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
               <span>
                 Last updated:{' '}
                 {data?.lastUpdated
@@ -114,14 +116,16 @@ const EventDashboardContent: React.FC = () => {
                   : 'Never'}
               </span>
             </p>
-            <button
-              onClick={handleRefresh}
-              className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
-                }`}
-              title="Refresh data"
-            >
-              {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={handleRefresh}
+                className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
+                  }`}
+                title="Refresh data"
+              >
+                {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -295,6 +295,7 @@ const Signup: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    setShowSmokeScreen(true); // 👈 click hote hi turant poora smoke screen overlay dikhao
 
     try {
       const finalCategory =
@@ -344,12 +345,12 @@ const Signup: React.FC = () => {
       }
 
       setSubmitSuccess(true);
-      setShowSmokeScreen(true);
       setTimeout(() => {
         navigate('/events');
       }, 2500);
     } catch (err: any) {
       console.error('Signup error:', err);
+      setShowSmokeScreen(false);
       if (err.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please log in instead.');
       } else if (err.code === 'auth/weak-password') {
