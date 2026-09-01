@@ -73,26 +73,14 @@ const Account: React.FC = () => {
                 <div className="w-full max-w-4xl mx-auto space-y-4">
                     <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">Quick Actions</h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div
-                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70"
-                        >
-                            <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-400 dark:text-slate-500">
-                                <FiCreditCard className="w-5 h-5" />
-                            </div>
-                            <span className="text-sm font-bold flex-1">Subscription & Plans</span>
-                            <span className="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-1 rounded-full">
-                                Coming Soon
-                            </span>
-                        </div>
-
-                        <Link to={`${ROUTES.EVENTS}/${ROUTES.EVENTS_SUPPORT}`}
+                    <div className="grid grid-cols-2 gap-4">
+                        <Link to="/events/settings"
                             className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
                             <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
-                                <FiHelpCircle className="w-5 h-5" />
+                                <FiSettings className="w-5 h-5" />
                             </div>
-                            <span className="text-sm font-bold flex-1">Help & Support</span>
+                            <span className="text-sm font-bold flex-1">Platform Settings</span>
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
 
@@ -106,29 +94,38 @@ const Account: React.FC = () => {
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
 
-                        <Link
-                            to="/events/settings"
+                        <Link to={`${ROUTES.EVENTS}/${ROUTES.EVENTS_SUPPORT}`}
                             className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
-                            <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-500 dark:text-slate-400">
-                                <FiSettings className="w-5 h-5" />
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+                                <FiHelpCircle className="w-5 h-5" />
                             </div>
-                            <span className="text-sm font-bold flex-1">Platform Settings</span>
+                            <span className="text-sm font-bold flex-1">Help & Support</span>
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
-                    </div>
 
-                    {/* NEW — Add-ons block, just above Logout */}
-                    <Link
-                        to="/events/account/addons"
-                        className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
-                    >
-                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
-                            <FiGrid className="w-5 h-5" />
+                        <Link to="/events/account/addons"
+                            className="flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                        >
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
+                                <FiGrid className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-bold flex-1">Add-ons</span>
+                            <span className="text-slate-400 font-bold">→</span>
+                        </Link>
+
+                        <div
+                            className="col-span-2 flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70"
+                        >
+                            <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-400 dark:text-slate-500">
+                                <FiCreditCard className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-bold flex-1">Subscription & Plans</span>
+                            <span className="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-1 rounded-full">
+                                Coming Soon
+                            </span>
                         </div>
-                        <span className="text-sm font-bold flex-1">Add-ons</span>
-                        <span className="text-slate-400 font-bold">→</span>
-                    </Link>
+                    </div>
 
                     <div className="mt-8 flex flex-col items-center">
                         <button

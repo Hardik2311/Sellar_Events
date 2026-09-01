@@ -33,13 +33,14 @@ export interface PublicEvent {
   coverImageMobile: string | null;
   pastEventsGallery: GalleryMediaItem[];
   tiers: PublicTicketTier[];
-  status: 'draft' | 'published' | 'completed' | 'cancelled';
+  status: 'draft' | 'published' | 'completed' | 'cancelled' | 'deleted';
   featured?: boolean;
+  deletedAt?: string | null;
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
-   customFields: CustomField[];
-   titleStyle?: TextStyleConfig;
+  customFields: CustomField[];
+  titleStyle?: TextStyleConfig;
   descriptionStyle?: TextStyleConfig;
   consentText?: string;
   consentStyle?: TextStyleConfig;

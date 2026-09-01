@@ -68,10 +68,10 @@ const PnlReportPageInner: React.FC = () => {
         ],
         theme: 'plain',
         styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
-        headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },
-        footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 0 }, lineColor: [17, 24, 39] },
+        headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 0.75, bottom: 0.75 }, lineColor: [204, 251, 241] },
+        footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 0.75, bottom: 0 }, lineColor: [17, 24, 39] },
         alternateRowStyles: { fillColor: [250, 250, 250] },
-        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 24 }, 2: { cellWidth: 'auto' }, 3: { halign: 'right', cellWidth: 40 } },
+        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { halign: 'right', cellWidth: 40 } },
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 1) {
             const isExpense = data.cell.raw === 'Expense';
@@ -192,10 +192,10 @@ const PnlReportPageInner: React.FC = () => {
     <div className="flex min-h-screen flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 pb-16">
       <header className="sticky top-0 z-20 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
         <div className="relative flex items-center justify-between">
-    <div className="flex items-center gap-1">
-        <BackButton />
-    </div>
-    <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[60%] min-w-0">
+          <div className="flex items-center gap-1">
+            <BackButton />
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[60%] min-w-0">
             <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Profit &amp; Loss</h1>
             {selectedEvent && (
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">{selectedEvent.title}</p>

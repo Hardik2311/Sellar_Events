@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -70,20 +70,20 @@ const OrganizerEventCard: React.FC<{
   onToggleLive?: (id: string) => void;     // undefined => TOGGLE_EVENT_LIVE not permitted
   onToggleFeatured?: (id: string) => void; // undefined => TOGGLE_EVENT_FEATURED not permitted
   onDeleteRequest?: (event: PublicEvent) => void; // undefined => DELETE_EVENT not permitted
+  onRestore?: (event: PublicEvent) => void;       // undefined => DELETE_EVENT not permitted (reused for restore)
   onEdit?: (event: PublicEvent) => void;          // undefined => EDIT_EVENT not permitted
   onDuplicate?: (event: PublicEvent) => void;
   onLiveView: (event: PublicEvent) => void;
   onShare: (event: PublicEvent) => void;
   showFeaturedToggle: boolean;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onEdit, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onRestore, onEdit, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
 
-  // NOTE: assumes PublicEvent has `status: 'draft' | 'published' | 'completed'`
-  // and `featured: boolean`. Rename to match your real type if different.
   const isLive = event.status === 'published';
   const isCompleted = event.status === 'completed';
+  const isDeleted = event.status === 'deleted';
 
   return (
     <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden flex flex-col hover:shadow-md transition-shadow">
@@ -104,18 +104,20 @@ const OrganizerEventCard: React.FC<{
             <Wifi size={12} /> Online
           </span>
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShare(event);
-          }}
-          title="Share event"
-          className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
-        >
-          <Share2 size={14} />
-        </button>
-        {onEdit && (
+        {!isDeleted && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare(event);
+            }}
+            title="Share event"
+            className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+          >
+            <Share2 size={14} />
+          </button>
+        )}
+        {onEdit && !isDeleted && (
           <button
             type="button"
             onClick={(e) => {
@@ -128,7 +130,7 @@ const OrganizerEventCard: React.FC<{
             <Pencil size={14} />
           </button>
         )}
-        {onDuplicate && (
+        {onDuplicate && !isDeleted && (
           <button
             type="button"
             onClick={(e) => {
@@ -141,19 +143,33 @@ const OrganizerEventCard: React.FC<{
             <Copy size={14} />
           </button>
         )}
-        {onDeleteRequest && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteRequest(event);
-            }}
-            title="Delete event"
-            className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
+        {isDeleted
+          ? onRestore && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestore(event);
+              }}
+              title="Restore event"
+              className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+            >
+              <RotateCcw size={14} />
+            </button>
+          )
+          : onDeleteRequest && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteRequest(event);
+              }}
+              title="Delete event"
+              className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         {soldOut && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
             Sold out
@@ -168,7 +184,7 @@ const OrganizerEventCard: React.FC<{
 
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100 cursor-pointer" onClick={onOpen}>
-           {stripHtmlTags(event.title)}
+          {stripHtmlTags(event.title)}
         </h3>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
@@ -213,44 +229,66 @@ const OrganizerEventCard: React.FC<{
         </div>
 
         {/* ── Organizer controls ─────────────────────────────────── */}
-        <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
-          <div className="flex items-center gap-1.5">
-            <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
-            <ToggleSwitch
-              checked={isLive}
-              disabled={isCompleted || !onToggleLive}
-              onChange={() => onToggleLive?.(event.id)}
-            />
+        {isDeleted ? (
+          <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
+            <span className="rounded-sm bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-950 dark:text-red-400">
+              Deleted
+            </span>
+            {onRestore && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore(event);
+                }}
+                className="flex items-center gap-1 rounded-sm border border-[#007A78] px-2.5 py-1 text-xs font-semibold text-[#007A78] hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
+              >
+                <RotateCcw size={13} /> Restore
+              </button>
+            )}
           </div>
-
-          {showFeaturedToggle && onToggleFeatured ? (
-            <div className="flex items-center gap-1.5">
-              <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
-              <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
-            </div>
-          ) : (
-            event.featured && (
+        ) : (
+          <>
+            <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
               <div className="flex items-center gap-1.5">
-                <Star size={13} className="fill-[#007A78] text-[#007A78]" />
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Auto-featured</span>
+                <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
+                <ToggleSwitch
+                  checked={isLive}
+                  disabled={isCompleted || !onToggleLive}
+                  onChange={() => onToggleLive?.(event.id)}
+                />
               </div>
-            )
-          )}
-        </div>
 
-        {isLive && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onLiveView(event);
-            }}
-            className="flex items-center justify-center gap-1.5 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-          >
-            <Eye size={14} /> Live view
-          </button>
+              {showFeaturedToggle && onToggleFeatured ? (
+                <div className="flex items-center gap-1.5">
+                  <Star size={13} className={event.featured ? 'fill-[#007A78] text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Featured</span>
+                  <ToggleSwitch checked={!!event.featured} onChange={() => onToggleFeatured(event.id)} />
+                </div>
+              ) : (
+                event.featured && (
+                  <div className="flex items-center gap-1.5">
+                    <Star size={13} className="fill-[#007A78] text-[#007A78]" />
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Auto-featured</span>
+                  </div>
+                )
+              )}
+            </div>
+
+            {isLive && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLiveView(event);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Eye size={14} /> Live view
+              </button>
+            )}
+          </>
         )}
       </div>
     </Card>
@@ -264,7 +302,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { can } = usePermissions();
-  const { events, loading, toggleLive, toggleFeatured, deleteEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
+  const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
   const { settings } = useCompanySettings();
 
   // Direct share — native share sheet when available, else copy the link.
@@ -290,7 +328,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
-  const [showPastEvents, setShowPastEvents] = useState(false);
+  const [viewMode, setViewMode] = useState<'upcoming' | 'past' | 'deleted'>('upcoming');
   const [deletingEvent, setDeletingEvent] = useState<PublicEvent | null>(null);
   const [duplicatingEvent, setDuplicatingEvent] = useState<PublicEvent | null>(null);
 
@@ -312,13 +350,20 @@ const OrganizerEventDiscover: React.FC = () => {
         const matchesFormat = format === 'all' || (format === 'online' ? e.isOnline : !e.isOnline);
         const matchesSearch =
           !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
-        const matchesUpcoming = showPastEvents ? true : !isPastEvent(e); // toggle se past events dikhte hain
-        return matchesCategory && matchesFormat && matchesSearch && matchesUpcoming;
+
+        // Deleted tab => sirf deleted events; Upcoming/Past => deleted hamesha exclude
+        if (viewMode === 'deleted') {
+          return e.status === 'deleted' && matchesCategory && matchesFormat && matchesSearch;
+        }
+        if (e.status === 'deleted') return false;
+
+        const matchesTime = viewMode === 'past' ? isPastEvent(e) : !isPastEvent(e);
+        return matchesCategory && matchesFormat && matchesSearch && matchesTime;
       })
       .sort((a, b) =>
-        showPastEvents ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
-      ); // past view mein recent-most-past pehle dikhega
-  }, [events, activeCategory, format, search, showPastEvents]);
+        viewMode === 'upcoming' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
+      ); // past/deleted view mein recent-most pehle dikhega
+  }, [events, activeCategory, format, search, viewMode]);
 
   const clearFilters = () => {
     setSearch('');
@@ -427,17 +472,26 @@ const OrganizerEventDiscover: React.FC = () => {
               )}
             </div>
 
-            {/* Past events toggle */}
-            <button
-              type="button"
-              onClick={() => setShowPastEvents((v) => !v)}
-              className={`flex items-center gap-1 rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors shrink-0 ${showPastEvents
-                ? 'border-[#007A78] bg-teal-50 text-[#007A78] dark:bg-teal-950'
-                : 'border-gray-300 bg-white text-slate-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                }`}
-            >
-              {showPastEvents ? 'Past events' : 'Upcoming'}
-            </button>
+            {/* Upcoming / Past / Deleted view switch */}
+            <div className="flex items-center gap-1 rounded-sm border border-gray-300 bg-white p-0.5 text-xs font-medium shrink-0 dark:border-slate-700 dark:bg-slate-800">
+              {([
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'past', label: 'Past' },
+                { value: 'deleted', label: 'Deleted' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setViewMode(opt.value)}
+                  className={`rounded-sm px-2.5 py-1 transition-colors ${viewMode === opt.value
+                    ? 'bg-[#007A78] text-white'
+                    : 'text-slate-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             {/* Format filter — dropdown, right side */}
             <div className="relative shrink-0">
@@ -508,6 +562,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     onToggleLive={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => toggleLive(evId, event.status) : undefined}
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
+                    onRestore={can(Permission.DELETE_EVENT) ? (ev) => restoreEvent(ev.id) : undefined}
                     onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}
                     onDuplicate={can(Permission.DUPLICATE_EVENT) ? setDuplicatingEvent : undefined}
                     onLiveView={openLiveView}
@@ -544,7 +599,7 @@ const OrganizerEventDiscover: React.FC = () => {
               Delete event?
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Delete "{stripHtmlTags(deletingEvent.title)}"? This can't be undone.
+              Delete "{stripHtmlTags(deletingEvent.title)}"? It'll move to the Deleted tab and can be restored later.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -572,7 +627,7 @@ const OrganizerEventDiscover: React.FC = () => {
               Duplicate event?
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-               A new draft copy of "{stripHtmlTags(duplicatingEvent.title)}" will be created with:
+              A new draft copy of "{stripHtmlTags(duplicatingEvent.title)}" will be created with:
             </p>
             <ul className="mt-2 list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 space-y-1">
               <li>Title, description &amp; category</li>

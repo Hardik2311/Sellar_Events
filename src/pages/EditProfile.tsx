@@ -489,9 +489,10 @@ const EditProfile: React.FC = () => {
                                     <LabeledField label="Email Address">
                                         <input
                                             type="email"
+                                            name="email"
                                             value={formData.email}
-                                            readOnly
-                                            className={`${inputClass} bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed`}
+                                            disabled
+                                            className={`${inputClass} bg-slate-400 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70`}
                                         />
                                     </LabeledField>
                                 </div>
