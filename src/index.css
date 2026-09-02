@@ -116,3 +116,18 @@ body {
 .react-datepicker__navigation-icon::before {
   border-color: #64748b !important;
 }
+/* Autofill grey background fix — put in index.css / globals.css */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #1e293b !important; /* slate-800, matches text color */
+  transition: background-color 9999s ease-in-out 0s; /* delays browser's autofill repaint */
+}
+
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important; /* slate-800 */
+  -webkit-text-fill-color: #f1f5f9 !important; /* slate-100 */
+}

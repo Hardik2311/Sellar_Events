@@ -42,8 +42,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
-   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
-  qrImageUrl: d.qrImageUrl ?? null,
+  paymentCollectionMode: d.paymentCollectionMode || 'gateway',
+  //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
 });
@@ -100,7 +100,7 @@ export const useOrganizerEvents = () => {
     await batch.commit();
   };
 
-    const deleteEvent = async (id: string) => {
+  const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
     // Soft delete — doc stays in Firestore so it can be restored; a Cloud
     // Function can hard-delete anything past deletedAt + N days later.
@@ -110,7 +110,7 @@ export const useOrganizerEvents = () => {
     });
   };
 
-    const restoreEvent = async (id: string) => {
+  const restoreEvent = async (id: string) => {
     if (!profile?.companyId) return;
     // Restored events come back as Draft — organizer republishes manually
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
@@ -158,10 +158,10 @@ export const useOrganizerEvents = () => {
         tierEndDate: t.tierEndDate ?? null,
         tierEndTime: t.tierEndTime ?? null,
       })),
-       paymentCollectionMode: original.paymentCollectionMode ?? 'gateway',
-  qrImageUrl: original.qrImageUrl ?? null,
-  upiId: original.upiId ?? null,
-  payeeName: original.payeeName ?? null,
+      paymentCollectionMode: original.paymentCollectionMode ?? 'gateway',
+      //qrImageUrl: original.qrImageUrl ?? null,
+      upiId: original.upiId ?? null,
+      payeeName: original.payeeName ?? null,
       createdAt: serverTimestamp(),
     };
 
@@ -189,53 +189,53 @@ export const useOrganizerEvents = () => {
     });
 
     const payload: Record<string, any> = {
-  title: form.title,
-  category: form.category === 'Other' ? form.customCategory.trim() : form.category,
-  description: form.description,
-  date: form.date,
-  endDate: form.endDate,
-  time: form.time,
-  venue: form.venue,
-  isOnline: form.isOnline,
-  coverImageUrls: form.images,
-  coverImageUrl: form.images[0] || null,
-  coverImageDesktop: form.coverImageDesktop || null,
-  coverImageMobile: form.coverImageMobile || null,
-  pastEventsGallery: form.pastEventsGallery || [],
-  registrationMode: form.registrationMode,
-  rsvpLink: form.rsvpLink,
-  rsvpButtonLabel: form.rsvpButtonLabel,
-  customFields: form.customFields || [],
-  titleStyle: {
-    ...DEFAULT_TEXT_STYLE,
-    ...existingEvent?.titleStyle,
-    fontSize: form.titleFontSize,
-  },
-  descriptionStyle: {
-    ...DEFAULT_TEXT_STYLE,
-    ...existingEvent?.descriptionStyle,
-    fontSize: form.descriptionFontSize,
-  },
-  // NEW — only meaningful for ticketed events; null-out otherwise so stale
-  // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
-  paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
-  qrImageUrl: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
-    ? form.qrImage
-    : null,
-  upiId: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
-    ? form.upiId.trim()
-    : null,
-  payeeName: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
-    ? form.payeeName.trim()
-    : null,
-};
+      title: form.title,
+      category: form.category === 'Other' ? form.customCategory.trim() : form.category,
+      description: form.description,
+      date: form.date,
+      endDate: form.endDate,
+      time: form.time,
+      venue: form.venue,
+      isOnline: form.isOnline,
+      coverImageUrls: form.images,
+      coverImageUrl: form.images[0] || null,
+      coverImageDesktop: form.coverImageDesktop || null,
+      coverImageMobile: form.coverImageMobile || null,
+      pastEventsGallery: form.pastEventsGallery || [],
+      registrationMode: form.registrationMode,
+      rsvpLink: form.rsvpLink,
+      rsvpButtonLabel: form.rsvpButtonLabel,
+      customFields: form.customFields || [],
+      titleStyle: {
+        ...DEFAULT_TEXT_STYLE,
+        ...existingEvent?.titleStyle,
+        fontSize: form.titleFontSize,
+      },
+      descriptionStyle: {
+        ...DEFAULT_TEXT_STYLE,
+        ...existingEvent?.descriptionStyle,
+        fontSize: form.descriptionFontSize,
+      },
+      // NEW — only meaningful for ticketed events; null-out otherwise so stale
+      // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
+      paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
+      // qrImageUrl: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+      //   ? form.qrImage
+      //   : null,
+      upiId: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+        ? form.upiId.trim()
+        : null,
+      payeeName: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
+        ? form.payeeName.trim()
+        : null,
+    };
 
-if (form.registrationMode === 'tickets') {
-  payload.tiers = tiers;
-}
+    if (form.registrationMode === 'tickets') {
+      payload.tiers = tiers;
+    }
 
-await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
-    return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent };
+  return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent };
 };

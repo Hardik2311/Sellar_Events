@@ -9,7 +9,7 @@ const db = admin.firestore();
 
 // Role hierarchy: who is allowed to create whom
 const ALLOWED_TO_CREATE = {
-    admin: ["team_leader", "team"],        // "admin" = Organizer/Owner role
+    admin: ["admin", "team_leader", "team"],  // admins can now create other admins (multi-owner)
     team_leader: ["team"],
 };
 

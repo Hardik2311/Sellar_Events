@@ -10,6 +10,12 @@ import TicketConfirmation from '../components/TicketConfirmation';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking';
 
+const PAYMENT_MODE_LABELS: Record<PaymentMethod, 'UPI' | 'Card' | 'Netbanking'> = {
+  upi: 'UPI',
+  card: 'Card',
+  netbanking: 'Netbanking',
+};
+
 interface TaxSettings {
   enableTax?: boolean;
   gstScheme?: 'regular' | 'composition' | 'none';
@@ -146,7 +152,7 @@ const CheckoutPage: React.FC = () => {
   const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
   const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
   const taxRate = taxSettings?.defaultTaxRate || 0;
-  const applyExclusiveTax = scheme === 'regular' && taxType === 'exclusive';
+  //const applyExclusiveTax = scheme === 'regular' && taxType === 'exclusive';
 
   let baseSubtotal = 0;
   let totalTaxAmount = 0;
@@ -355,6 +361,8 @@ const CheckoutPage: React.FC = () => {
               checkedInAt: null,
               createdAt: serverTimestamp(),
               purchasedAt: serverTimestamp(),
+              paymentMode: PAYMENT_MODE_LABELS[method],
+              paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
             });
 
             created.push({ ticketId, tierName, attendeeName });
@@ -443,11 +451,6 @@ const CheckoutPage: React.FC = () => {
               <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">
                 Attendee details{totalQty > 1 ? ` · ${totalQty} tickets` : ''}
               </h2>
-              {!detailsComplete && attendeeDetails.some((a) => a.name || a.email || a.phone) && (
-                <p className="mb-3 text-xs font-medium text-amber-600">
-                  Enter a name, valid email, and a 10-digit mobile number (starting 6-9) for every ticket.
-                </p>
-              )}
               <div className="flex flex-col gap-5">
                 {attendeeDetails.map((entry, index) => (
                   <div key={index} className="flex flex-col gap-3">
@@ -472,8 +475,14 @@ const CheckoutPage: React.FC = () => {
                         value={entry.email}
                         onChange={(e) => updateAttendee(index, 'email', e.target.value)}
                         placeholder="you@example.com"
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
+                        className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
+                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                          }`}
                       />
+                      {entry.email.length > 0 && !isValidEmail(entry.email) && (
+                        <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
+                      )}
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
@@ -484,8 +493,18 @@ const CheckoutPage: React.FC = () => {
                         onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                         maxLength={10}
                         placeholder="10-digit mobile number"
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]"
+                        className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
+                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                          }`}
                       />
+                      {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
+                        <p className="mt-1 text-xs font-medium text-red-500">
+                          {entry.phone.length < 10
+                            ? 'Enter a 10-digit mobile number.'
+                            : 'Must start with 6, 7, 8, or 9.'}
+                        </p>
+                      )}
                     </div>
 
                     {customFields.map((field) => {
@@ -528,6 +547,7 @@ const CheckoutPage: React.FC = () => {
                                 type="checkbox"
                                 checked={value === 'true'}
                                 onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
+                                className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
                               />
                               {field.label}
                             </label>

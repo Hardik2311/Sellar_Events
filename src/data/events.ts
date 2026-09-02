@@ -46,7 +46,7 @@ export interface PublicEvent {
   consentStyle?: TextStyleConfig;
   // NEW
   paymentCollectionMode?: 'gateway' | 'manual_qr';
-  qrImageUrl?: string | null;
+  //qrImageUrl?: string | null;
   upiId?: string;
   payeeName?: string;
 }

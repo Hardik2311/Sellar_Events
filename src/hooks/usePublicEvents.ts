@@ -38,16 +38,16 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   registrationMode: d.registrationMode || 'tickets',
   rsvpLink: d.rsvpLink || '',
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
-   customFields: d.customFields || [],
+  customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
   consentText: d.consentText ?? undefined,
   consentStyle: d.consentStyle ?? undefined,
   // NEW
-paymentCollectionMode: d.paymentCollectionMode || 'gateway',
-qrImageUrl: d.qrImageUrl ?? null,
-upiId: d.upiId || '',
-payeeName: d.payeeName || '',
+  paymentCollectionMode: d.paymentCollectionMode || 'gateway',
+  //qrImageUrl: d.qrImageUrl ?? null,
+  upiId: d.upiId || '',
+  payeeName: d.payeeName || '',
 });
 
 export function usePublicEvents() {

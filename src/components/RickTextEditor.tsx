@@ -2,16 +2,17 @@ import React, { useEffect, useRef } from 'react';
 
 interface RichTextEditorProps {
     id: string;
-    value: string;              // HTML string
+    value: string;
     onChange: (html: string) => void;
     fontSize: number;
-    placeholder?: string;
+    label?: string;       // NEW — Category jaisa static label, placeholder ki jagah
+    required?: boolean;   // NEW — label ke aage "*" dikhane ke liye
     multiline?: boolean;
     editorRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({
-    id, value, onChange, fontSize, placeholder, multiline, editorRef,
+    id, value, onChange, fontSize, label, required, multiline, editorRef,
 }) => {
     const isFirstRender = useRef(true);
 
@@ -25,16 +26,25 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }, [value, editorRef]);
 
     return (
-        <div
-            id={id}
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
-            data-placeholder={placeholder}
-            style={{ fontSize }}
-            className={`w-full rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 ${multiline ? 'min-h-[100px]' : 'min-h-[44px]'}`}
-        />
+        <div className="relative">
+            {label && (
+                <label
+                    htmlFor={id}
+                    className="absolute -top-2 left-3 z-10 bg-white dark:bg-slate-800 px-1 text-xs font-medium text-gray-500 dark:text-slate-400"
+                >
+                    {label}{required && ' *'}
+                </label>
+            )}
+            <div
+                id={id}
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
+                style={{ fontSize }}
+                className={`w-full rounded-sm border border-[#7D7777A3] dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-3 text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF] ${multiline ? 'min-h-[100px]' : 'min-h-[44px]'}`}
+            />
+        </div>
     );
 };
 

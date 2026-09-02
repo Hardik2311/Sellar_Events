@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil, CheckCircle, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -94,12 +94,10 @@ const OrganizerEventDetail: React.FC = () => {
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [pastEventIndex, setPastEventIndex] = useState(0);
-  const [galleryAspect, setGalleryAspect] = useState<Record<number, number>>({});
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
-    setPastEventIndex(0);
   }, [event?.id]);
 
   const goToPrevImage = () => {
@@ -185,39 +183,39 @@ const OrganizerEventDetail: React.FC = () => {
     const isRsvp = updated.registrationMode === 'rsvp';
 
     // NEW — upload the QR image the same way cover images are uploaded
-const isManualQR = updated.registrationMode === 'tickets' && updated.paymentCollectionMode === 'manual_qr';
-const qrImageUrl = isManualQR ? await uploadIfNeeded(updated.qrImage, 'payment-qr') : null;
+    const isManualQR = updated.registrationMode === 'tickets' && updated.paymentCollectionMode === 'manual_qr';
+    //const qrImageUrl = isManualQR ? await uploadIfNeeded(updated.qrImage, 'payment-qr') : null;
 
-await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-  title: updated.title,
-  category: updated.category === 'Other' ? updated.customCategory : updated.category,
-  description: updated.description,
-  date: updated.date,
-  endDate: updated.endDate,
-  time: updated.time,
-  venue: updated.isOnline ? null : updated.venue,
-  isOnline: updated.isOnline,
-  coverImageUrl: coverImageUrls[0] ?? null,
-  coverImageUrls,
-  coverImageDesktop: coverImageDesktopUrl,
-  coverImageMobile: coverImageMobileUrl,
-  registrationMode: updated.registrationMode,
-  tiers: isRsvp ? [] : updated.tiers,
-  rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
-  rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
-  titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
-  descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
-  consentText: updated.consentText.trim() || null,
-  consentStyle: updated.consentText.trim()
-    ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
-    : null,
-  // NEW
-  paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
-  qrImageUrl: isManualQR ? qrImageUrl : null,
-  upiId: isManualQR ? updated.upiId.trim() : null,
-  payeeName: isManualQR ? updated.payeeName.trim() : null,
-  updatedAt: serverTimestamp(),
-});
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      title: updated.title,
+      category: updated.category === 'Other' ? updated.customCategory : updated.category,
+      description: updated.description,
+      date: updated.date,
+      endDate: updated.endDate,
+      time: updated.time,
+      venue: updated.isOnline ? null : updated.venue,
+      isOnline: updated.isOnline,
+      coverImageUrl: coverImageUrls[0] ?? null,
+      coverImageUrls,
+      coverImageDesktop: coverImageDesktopUrl,
+      coverImageMobile: coverImageMobileUrl,
+      registrationMode: updated.registrationMode,
+      tiers: isRsvp ? [] : updated.tiers,
+      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+      titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
+      descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
+      consentText: updated.consentText.trim() || null,
+      consentStyle: updated.consentText.trim()
+        ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
+        : null,
+      // NEW
+      paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
+     // qrImageUrl: isManualQR ? qrImageUrl : null,
+      upiId: isManualQR ? updated.upiId.trim() : null,
+      payeeName: isManualQR ? updated.payeeName.trim() : null,
+      updatedAt: serverTimestamp(),
+    });
 
     setIsEditOpen(false);          // close edit modal
     setShowSaveConfirmation(true); // show success confirmation
@@ -386,83 +384,85 @@ await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">{stripHtmlTags(event.description)}</p>
+              <p className="whitespace-pre-line leading-relaxed mb-3 break-words">{stripHtmlTags(event.description)}</p>
             </CardContent>
           </Card>
 
-          {/* Past events gallery slider */}
           {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
               <CardContent className="pt-4">
                 <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
-                <div
-                  className="relative w-full overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800 transition-[aspect-ratio] duration-300"
-                  style={{ aspectRatio: galleryAspect[pastEventIndex] ?? 16 / 9 }}
-                >
-                  {event.pastEventsGallery.map((item, i) => (
-                    <div
-                      key={item.url + i}
-                      className={`absolute inset-0 transition-opacity duration-500 ${i === pastEventIndex ? 'opacity-100' : 'opacity-0'}`}
-                    >
-                      {item.type === 'video' ? (
-                        <video
-                          src={item.url}
-                          className="h-full w-full object-contain"
-                          muted
-                          loop
-                          playsInline
-                          autoPlay
-                          onLoadedMetadata={(e) => {
-                            const v = e.currentTarget;
-                            setGalleryAspect((a) => ({ ...a, [i]: v.videoWidth / v.videoHeight }));
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={item.url}
-                          alt={`Past event ${i + 1}`}
-                          className="h-full w-full object-contain"
-                          onLoad={(e) => {
-                            const img = e.currentTarget;
-                            setGalleryAspect((a) => ({ ...a, [i]: img.naturalWidth / img.naturalHeight }));
-                          }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                  {event.pastEventsGallery.length > 1 && (
-                    <>
+                <div className="grid grid-cols-3 gap-2">
+                  {event.pastEventsGallery.slice(0, 6).map((item, i) => {
+                    const remaining = event.pastEventsGallery.length - 6;
+                    const isLastVisible = i === 5 && remaining > 0;
+                    return (
                       <button
-                        onClick={() =>
-                          setPastEventIndex((i) => (i - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length)
-                        }
-                        className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
-                        aria-label="Previous"
+                        key={item.url + i}
+                        onClick={() => setLightboxIndex(i)}
+                        className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800"
                       >
-                        <ArrowLeft size={16} />
+                        {item.type === 'video' ? (
+                          <video src={item.url} className="h-full w-full object-cover" muted playsInline />
+                        ) : (
+                          <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                        )}
+                        {isLastVisible && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                            +{remaining} more
+                          </div>
+                        )}
                       </button>
-                      <button
-                        onClick={() => setPastEventIndex((i) => (i + 1) % event.pastEventsGallery.length)}
-                        className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
-                        aria-label="Next"
-                      >
-                        <ArrowLeft size={16} />
-                      </button>
-                      <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-                        {event.pastEventsGallery.map((_, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setPastEventIndex(i)}
-                            className={`h-1.5 rounded-full transition-all ${i === pastEventIndex ? 'w-4 bg-[#007A78] dark:bg-[#2DD4BF]' : 'w-1.5 bg-slate-300 dark:bg-slate-600'}`}
-                            aria-label={`Slide ${i + 1}`}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Lightbox */}
+          {lightboxIndex !== null && event.pastEventsGallery && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+              onClick={() => setLightboxIndex(null)}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
+                className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+              {event.pastEventsGallery.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
+                    className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+                    aria-label="Previous"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
+                    className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
+                    aria-label="Next"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                </>
+              )}
+              <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
+                  <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
+                ) : (
+                  <img
+                    src={event.pastEventsGallery[lightboxIndex].url}
+                    alt={`Past event ${lightboxIndex + 1}`}
+                    className="max-h-[85vh] max-w-[90vw] object-contain"
+                  />
+                )}
+              </div>
+            </div>
           )}
 
           {/* Registration — ticket tiers, or the RSVP link if this is an RSVP event */}

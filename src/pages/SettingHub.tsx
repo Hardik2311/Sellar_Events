@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarCog, Landmark, Settings2, Users, ShieldCheck } from 'lucide-react'; // + ShieldCheck
+import { CalendarCog, Landmark, Settings2, Users } from 'lucide-react';
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
@@ -67,36 +67,18 @@ const SettingsHub: React.FC = () => {
                         </div>
                     </Link>
 
-                    {showManageUsers && (
+                                        {(showManageUsers || isOwner) && (
                         <Link
-                            to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_USERS}`.replace('//', '/')}
+                            to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_USER_SETTINGS}`.replace('//', '/')}
                             className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
                             <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
                                 <Users className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold">Manage Users</p>
+                                <p className="text-sm font-bold">User Settings</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Add Team Leaders and Team Members
-                                </p>
-                            </div>
-                        </Link>
-                    )}
-
-                    {/* NEW BLOCK — owner only */}
-                    {isOwner && (
-                        <Link
-                            to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_PERMISSIONS}`.replace('//', '/')}
-                            className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
-                        >
-                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
-                                <ShieldCheck className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold">Permissions</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Set what Team Leaders and Team Members can access
+                                    Manage users and their permissions
                                 </p>
                             </div>
                         </Link>

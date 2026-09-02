@@ -7,7 +7,7 @@ export const ROLES = {
 export type Role = typeof ROLES[keyof typeof ROLES];
 
 export const CREATABLE_ROLES: Record<string, Role[]> = {
-  [ROLES.ORGANIZER]: [ROLES.TEAM_LEADER, ROLES.TEAM],
+  [ROLES.ORGANIZER]: [ROLES.ORGANIZER, ROLES.TEAM_LEADER, ROLES.TEAM], // admins can now add co-owners
   [ROLES.TEAM_LEADER]: [ROLES.TEAM],
 };
 

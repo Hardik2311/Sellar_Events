@@ -51,7 +51,7 @@ const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
 const DEFAULT_TICKET_DISPLAY: TicketDisplaySettings = {
   showTicketsRemaining: true,
   useDummyThreshold: false,
-  enableTierAvailabilityWindow: false,
+  enableTierAvailabilityWindow: true,
 };
 
 // NEW

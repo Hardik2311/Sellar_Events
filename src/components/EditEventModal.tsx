@@ -5,10 +5,9 @@ import FormField from './ui/FormField';
 import {
   FloatingLabelInput,
   FloatingLabelSelect,
-  FloatingLabelTextArea,
 } from './ui/AuthUIComponents';
 import CoverPhotoUpload from './ui/CoverPhotoUpload';
-import QRCodeImageUpload from './ui/QRCodeImageUpload'; // NEW
+//import QRCodeImageUpload from './ui/QRCodeImageUpload'; // NEW
 import PastEventsGallery from './ui/PastEventsGallery';
 import TicketTierEditor from './TicketTierEditor';
 import CustomFieldsEditor from './CustomFieldsEditor';
@@ -72,7 +71,7 @@ const toFormState = (event: EventItem): EventFormState => ({
   consentFontSize: event.consentStyle?.fontSize ?? 14,
   // NEW
   paymentCollectionMode: event.paymentCollectionMode ?? 'gateway',
-  qrImage: event.qrImageUrl ?? null,
+  //qrImage: event.qrImageUrl ?? null,
   upiId: event.upiId ?? '',
   payeeName: event.payeeName ?? '',
 });
@@ -120,9 +119,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
   const isManualQRReady =
     form.registrationMode !== 'tickets' ||
     form.paymentCollectionMode !== 'manual_qr' ||
-    (Boolean(form.qrImage) && isValidUpi(form.upiId));
+    isValidUpi(form.upiId);
 
- const isSavable =
+  const isSavable =
     stripHtml(form.title).length > 0 &&
     Boolean(form.date) &&
     Boolean(form.time) &&
@@ -400,7 +399,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </FormField>
                 )}
 
-                                {form.registrationMode === 'tickets' ? (
+                {form.registrationMode === 'tickets' ? (
                   <>
                     {/* NEW — payment collection method (missing in the previous edit) */}
                     {companySettings.payments.allowManualQR && (
@@ -409,22 +408,20 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                           <button
                             type="button"
                             onClick={() => update('paymentCollectionMode', 'gateway')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                              form.paymentCollectionMode === 'gateway'
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
                                 ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
                                 : 'text-gray-500 dark:text-slate-400'
-                            }`}
+                              }`}
                           >
                             Payment gateway
                           </button>
                           <button
                             type="button"
                             onClick={() => update('paymentCollectionMode', 'manual_qr')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${
-                              form.paymentCollectionMode === 'manual_qr'
+                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
                                 ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
                                 : 'text-gray-500 dark:text-slate-400'
-                            }`}
+                              }`}
                           >
                             UPI QR (manual)
                           </button>
@@ -440,13 +437,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     {/* NEW — QR image + UPI details (missing in the previous edit) */}
                     {form.paymentCollectionMode === 'manual_qr' && (
                       <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
-                        <div>
+                        {/* <div>
                           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">QR code image *</p>
                           <QRCodeImageUpload
                             value={form.qrImage}
                             onChange={(src) => update('qrImage', src)}
                           />
-                        </div>
+                        </div> */}
                         <FloatingLabelInput
                           id="edit-upi-id"
                           label="UPI ID *"
@@ -460,6 +457,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                           value={form.payeeName}
                           onChange={(e) => update('payeeName', e.target.value)}
                         />
+                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                          Payment QR yahi UPI ID se automatically generate hoga — koi image upload nahi karni.
+                        </p>
                       </div>
                     )}
 

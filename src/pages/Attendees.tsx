@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, Eye, UserPlus } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud } from 'lucide-react';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
+import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
 import TicketConfirmation from '../components/TicketConfirmation';
 import BackButton from '../components/ui/BackButton';
 import {
@@ -89,6 +90,10 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   status: data.status,
   checkedInAt: data.checkedInAt instanceof Timestamp ? data.checkedInAt.toDate().toISOString() : null,
   customFieldAnswers: data.customFieldAnswers ?? {},
+  amountPaid: Number(data.amountPaid ?? 0),
+  paymentMode: data.paymentMode ?? undefined,
+  paymentMethod: data.paymentMethod ?? undefined,
+  screenshotUrl: data.screenshotUrl ?? undefined,
 });
 const Attendees: React.FC = () => {
   const navigate = useNavigate();
@@ -106,7 +111,8 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
-  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+    const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
   const [walkInTicket, setWalkInTicket] = useState<{ ticketId: string; tierName: string; attendeeName: string } | null>(null);
   const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
   const [pendingReviveAttendee, setPendingReviveAttendee] = useState<Attendee | null>(null);
@@ -222,14 +228,25 @@ const Attendees: React.FC = () => {
   );
 
   const handleSaveEdit = useCallback(
-    (id: string, updates: Pick<Attendee, 'name' | 'email' | 'phone' | 'tierName'>) => {
+    (
+      id: string,
+      updates: Pick<Attendee, 'name' | 'email' | 'phone' | 'tierName'> & {
+        tierId?: string;
+        amountPaid?: number;
+        paymentMode?: Attendee['paymentMode'];
+      }
+    ) => {
       if (!profile?.companyId || !selectedEventId) return;
 
+      // ticketTierId maps to Firestore's ticketTierId field, not "tierId" — rename before writing
+      const { tierId, ...rest } = updates;
+      const writePayload = { ...rest, ...(tierId ? { ticketTierId: tierId } : {}) };
+
       // Optimistic update — UI turant reflect kare, listener confirm kar dega
-      setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+      setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...writePayload } : a)));
 
       const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
-      updateDoc(attendeeRef, updates)
+      updateDoc(attendeeRef, writePayload)
         .then(() => {
           setScanFeedback({ type: 'success', message: `${updates.name}'s details updated.` });
         })
@@ -444,15 +461,27 @@ const Attendees: React.FC = () => {
               )}
 
               {/* 4a. Add Walk-in — its own full-width row */}
-              {can(Permission.ADD_WALK_IN_ATTENDEE) && (
-                <button
-                  onClick={() => setIsWalkInModalOpen(true)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-sm bg-[#007A78] hover:bg-[#006361] px-3 py-2.5 text-xs font-bold text-white transition-colors whitespace-nowrap dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950"
-                  title="Add a walk-in / on-the-spot attendee"
-                >
-                  <UserPlus size={14} /> Add Walk-in
-                </button>
-              )}
+                           {/* 4a. Add Walk-in + Import Excel — same row */}
+              <div className="flex gap-2">
+                {can(Permission.ADD_WALK_IN_ATTENDEE) && (
+                  <button
+                    onClick={() => setIsWalkInModalOpen(true)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-[#007A78] hover:bg-[#006361] px-3 py-2.5 text-xs font-bold text-white transition-colors whitespace-nowrap dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950"
+                    title="Add a walk-in / on-the-spot attendee"
+                  >
+                    <UserPlus size={14} /> Add Walk-in
+                  </button>
+                )}
+                {can(Permission.IMPORT_ATTENDEES) && (
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
+                    title="Bulk import attendees from Excel/CSV (e.g. RSVP form responses)"
+                  >
+                    <UploadCloud size={14} /> Import Excel
+                  </button>
+                )}
+              </div>
 
               {/* 4b. Sorter + Live page + Export — back on one row, like before */}
               <div className="flex items-center gap-2">
@@ -543,6 +572,7 @@ const Attendees: React.FC = () => {
       />
       <EditAttendeeModal
         attendee={pendingEditAttendee}
+        event={selectedEvent}
         onSave={handleSaveEdit}
         onCancel={handleCancelEdit}
       />
@@ -554,7 +584,14 @@ const Attendees: React.FC = () => {
         companyId={profile?.companyId}
         onSuccess={handleWalkInAdded}
       />
-
+      <ImportAttendeesModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        event={selectedEvent}
+        companyId={profile?.companyId}
+        existingAttendees={attendees}
+        onSuccess={(count) => setScanFeedback({ type: 'success', message: `${count} attendee(s) imported.` })}
+      />
       {walkInTicket && selectedEvent && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-slate-900">
           <TicketConfirmation

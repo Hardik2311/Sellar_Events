@@ -25,6 +25,7 @@ export const Permission = {
   EXPORT_ATTENDEES: 'exportAttendees',
   EDIT_ATTENDEE: 'editAttendee',
   SCAN_QR: 'scanQr',
+   IMPORT_ATTENDEES: 'import_attendees',
   ADD_WALK_IN_ATTENDEE: 'addWalkInAttendee', // NEW — manually add an attendee (on-the-spot / after sale closes)
 
   // Reports
@@ -88,6 +89,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: Permission.EXPORT_ATTENDEES, label: 'Export Attendee List' },
       { key: Permission.SCAN_QR, label: 'Scan QR Code' },
       { key: Permission.ADD_WALK_IN_ATTENDEE, label: 'Add Walk-in Attendee' },
+      { key: Permission.IMPORT_ATTENDEES, label: 'Import Attendees (Excel/CSV)' },
       { key: Permission.EDIT_ATTENDEE, label: 'Edit Attendee Details' },
     ],
   },
@@ -153,18 +155,23 @@ export const DEFAULT_PERMISSIONS: PermissionsByRole = {
     Permission.EXPORT_ATTENDEES,
     Permission.SCAN_QR,
     Permission.ADD_WALK_IN_ATTENDEE,
+    Permission.IMPORT_ATTENDEES,
+    Permission.EDIT_ATTENDEE,
     Permission.VIEW_REPORTS,
-    Permission.VIEW_EXPENSE_REPORT,
-    Permission.VIEW_SALES_REPORT,
-    Permission.VIEW_CUSTOMER_REPORT,
-    Permission.VIEW_PNL_REPORT,
     Permission.ADD_EXPENSE,
+    Permission.VIEW_SETTINGS,
+    Permission.EDIT_EVENT_SETTINGS,
+    Permission.EDIT_COMPANY_SETTINGS,
+    Permission.EDIT_APP_SETTINGS,
   ]),
   team: buildRole([
     Permission.VIEW_DASHBOARD,
     Permission.VIEW_ATTENDEES,
     Permission.CHECK_IN_ATTENDEE,
     Permission.SCAN_QR,
+    Permission.ADD_WALK_IN_ATTENDEE,
+    Permission.VIEW_SETTINGS,
+    Permission.EDIT_APP_SETTINGS,
   ]),
 };
 

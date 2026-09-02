@@ -60,11 +60,17 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
         <input
           id={id}
           placeholder=" "
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
           className={[
             'peer w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)]',
             'py-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none transition-colors',
             'focus:border-slate-500 dark:focus:border-[#2DD4BF]',
             icon ? 'pl-11 pr-3' : 'px-3',
+            // 👇 autofill grey background fix
+            'autofill:shadow-[inset_0_0_0px_1000px_white] dark:autofill:shadow-[inset_0_0_0px_1000px_theme(colors.slate.800)]',
+            'autofill:[-webkit-text-fill-color:theme(colors.slate.800)] dark:autofill:[-webkit-text-fill-color:theme(colors.slate.100)]',
             (rest.type === 'date' || rest.type === 'time') && '[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full dark:[&::-webkit-calendar-picker-indicator]:invert',
             className,
           ].join(' ')}
@@ -261,7 +267,7 @@ export const AuthHeroPanel: React.FC<{
     <div
       className={[
         'relative overflow-hidden flex items-center justify-center',
-        'bg-linear-to-br from-slate-900 via-slate-800 to-black',
+        'bg-linear-to-br from-[#0B4F4D] via-[#073D3B] to-[#03211F]',
         className,
       ].join(' ')}
     >
@@ -279,10 +285,10 @@ export const AuthHeroPanel: React.FC<{
 
       <div className="relative z-10 flex flex-col items-center text-center px-8">
         <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4">
-          <FiCalendar className="text-[#007A78] dark:text-[#2DD4BF]" size={28} />
+          <FiCalendar className="text-white" size={28} />
         </div>
         <h2 className="text-white text-2xl font-bold tracking-tight">{title}</h2>
-        <p className="text-slate-300 text-sm mt-2 max-w-55">{subtitle}</p>
+        <p className="text-white/90 text-sm mt-2 max-w-55">{subtitle}</p>
       </div>
     </div>
   );

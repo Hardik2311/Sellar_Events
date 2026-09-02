@@ -113,7 +113,7 @@ const ManageUsersPage: React.FC = () => {
         </button>
       </header>
 
-      <main className="flex-1 p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <main className="flex-1 p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 content-start auto-rows-min max-w-6xl mx-auto w-full">
         {users.length === 0 && (
           <p className="col-span-full text-center text-slate-500 py-10">No users yet.</p>
         )}

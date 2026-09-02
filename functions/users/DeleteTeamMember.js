@@ -9,7 +9,7 @@ const db = admin.firestore();
 
 // Role hierarchy: who is allowed to delete whom
 const ALLOWED_TO_DELETE = {
-    admin: ["team_leader", "team"],        // "admin" = Organizer/Owner role
+    admin: ["admin", "team_leader", "team"],  // admins can delete other admins too
     team_leader: ["team"],
 };
 
@@ -46,13 +46,25 @@ exports.deleteTeamMember = onCall(async (request) => {
     }
     const targetRole = targetDoc.data().role;
 
-    // 3. Check hierarchy permission
+        // 3. Check hierarchy permission
     const allowedRoles = ALLOWED_TO_DELETE[callerRole] || [];
     if (!allowedRoles.includes(targetRole)) {
         throw new HttpsError(
             "permission-denied",
             `A ${callerRole} is not allowed to delete a ${targetRole}.`
         );
+    }
+
+    // 3b. Safety guard: don't allow the LAST remaining admin to be deleted,
+    // so a company can never end up with zero owners.
+    if (targetRole === "admin") {
+        const adminCountSnap = await usersRef.where("role", "==", "admin").get();
+        if (adminCountSnap.size <= 1) {
+            throw new HttpsError(
+                "failed-precondition",
+                "You cannot delete the last remaining Owner/Admin of this company."
+            );
+        }
     }
 
     try {

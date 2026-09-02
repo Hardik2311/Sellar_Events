@@ -134,21 +134,30 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              className={`w-full rounded-sm border bg-white px-3 py-2 text-sm outline-none focus:ring-1 dark:bg-slate-800 dark:text-slate-100 ${email.trim().length > 0 && !isValidEmail
+                ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
+                : 'border-gray-300 focus:border-[#007A78] focus:ring-[#007A78] dark:border-slate-600'
+                }`}
             />
+            {email.trim().length > 0 && !isValidEmail && (
+              <p className="mt-1 text-xs text-red-600">Enter a valid email address (e.g. name@example.com)</p>
+            )}
           </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Phone</label>
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              maxLength={10}
-              className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </div>
+          <label className=" block text-xs font-medium text-slate-600 dark:text-slate-300">Phone</label>
+          <input
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            maxLength={10}
+            className={`w-full rounded-sm border bg-white px-3 py-2 text-sm outline-none focus:ring-1 dark:bg-slate-800 dark:text-slate-100 ${phone.trim().length > 0 && !isValidPhone
+              ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
+              : 'border-gray-300 focus:border-[#007A78] focus:ring-[#007A78] dark:border-slate-600'
+              }`}
+          />
+          {phone.trim().length > 0 && !isValidPhone && (
+            <p className="mt-1 text-xs text-red-600">Enter a valid 10-digit mobile number starting with 6-9</p>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Ticket tier</label>

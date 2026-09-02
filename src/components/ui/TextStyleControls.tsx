@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Bold, Italic } from 'lucide-react';
 
 interface TextStyleControlsProps {
@@ -16,7 +16,29 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
   editorRef,
   onChange,
 }) => {
-  const savedRange = useRef<Range | null>(null);
+    const savedRange = useRef<Range | null>(null);
+  const [isBoldActive, setIsBoldActive] = useState(false);
+  const [isItalicActive, setIsItalicActive] = useState(false);
+
+  // Cursor/selection jaha bhi ho, wahan <b>/<i> ancestor hai ya nahi check karke
+  // button ki highlight state update karta hai
+  const updateActiveFormats = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current) return;
+    const anchor = sel.anchorNode;
+    if (!anchor || !editorRef.current.contains(anchor)) return;
+
+    const node = anchor.nodeType === 3 ? anchor.parentElement : (anchor as Element);
+    setIsBoldActive(Boolean(node?.closest('b')));
+    setIsItalicActive(Boolean(node?.closest('i')));
+  };
+
+  // Poore document ki selection track karte hain — editor ke bahar click hone par
+  // bhi selection change/collapse hoti hai, isliye document-level listener
+  useEffect(() => {
+    document.addEventListener('selectionchange', updateActiveFormats);
+    return () => document.removeEventListener('selectionchange', updateActiveFormats);
+  }, []);
 
   // Dialog khulne / button click hone se PEHLE (mousedown pe) selection save kar lete hain
   const saveSelection = () => {
@@ -51,13 +73,17 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
         : (range.commonAncestorContainer as Element);
     const existing = container?.closest(tag);
 
-    if (existing && editorRef.current?.contains(existing)) {
+        if (existing && editorRef.current?.contains(existing)) {
       // already bold/italic — unwrap
       const parent = existing.parentNode;
       while (existing.firstChild) parent?.insertBefore(existing.firstChild, existing);
       parent?.removeChild(existing);
+      if (tag === 'b') setIsBoldActive(false);
+      if (tag === 'i') setIsItalicActive(false);
     } else {
       const wrapper = document.createElement(tag);
+      // Default browser bold (700) halka lagta hai — explicit heavier weight force karo
+      if (tag === 'b') wrapper.style.fontWeight = '800';
       try {
         range.surroundContents(wrapper);
       } catch {
@@ -65,6 +91,8 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
         wrapper.appendChild(contents);
         range.insertNode(wrapper);
       }
+      if (tag === 'b') setIsBoldActive(true);
+      if (tag === 'i') setIsItalicActive(true);
     }
     syncChange();
   };
@@ -101,12 +129,16 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
 
       <div className="h-6 w-px bg-gray-300 dark:bg-slate-700 mx-0.5" />
 
-      <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 overflow-hidden">
+           <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 overflow-hidden">
         <button
           type="button"
           onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
           onClick={() => toggleTag('b')}
-          className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
+          className={`h-8 w-8 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-slate-700 ${
+            isBoldActive
+              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+          }`}
         >
           <Bold size={14} />
         </button>
@@ -114,7 +146,11 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
           type="button"
           onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
           onClick={() => toggleTag('i')}
-          className="h-8 w-8 flex items-center justify-center border-l border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
+          className={`h-8 w-8 flex items-center justify-center border-l border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 ${
+            isItalicActive
+              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+          }`}
         >
           <Italic size={14} />
         </button>

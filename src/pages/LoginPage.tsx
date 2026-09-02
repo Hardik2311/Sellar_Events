@@ -8,7 +8,7 @@ import {
   Spinner,
   AuthHeroPanel,
 } from '../components/ui/AuthUIComponents';
-
+import FloatingEventIcons from '../components/ui/FloatingEventIcons';
 /**
  * Login page — UI ONLY.
  * Wire `handleLogin` up to your real auth call (Firebase/API) later.
@@ -58,7 +58,10 @@ const Login: React.FC = () => {
     <>
       {/* ================= MOBILE VIEW ================= */}
       <div className="relative min-h-screen w-screen flex flex-col lg:hidden bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
-        <AuthHeroPanel className="w-full h-64 shrink-0" />
+        <div className="relative w-full h-64 shrink-0 overflow-hidden">
+          <AuthHeroPanel className="w-full h-full" />
+          <FloatingEventIcons iconClassName="text-white" variant="mobile" />
+        </div>
 
         <div className="w-full bg-[#F9FAFB] dark:bg-[#1E293B] p-6 py-8 rounded-sm flex-1 z-20 -mt-6 border-t border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto">
           <div className="w-full max-w-sm mx-auto">
@@ -139,7 +142,10 @@ const Login: React.FC = () => {
       {/* ================= DESKTOP VIEW ================= */}
       <div className="hidden lg:flex h-screen w-screen items-center justify-center bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
         <div className="flex w-full h-full overflow-hidden bg-white dark:bg-[#0F172A]">
-          <AuthHeroPanel className="w-1/2 h-full" />
+          <div className="relative w-1/2 h-full overflow-hidden">
+            <AuthHeroPanel className="w-full h-full" />
+            <FloatingEventIcons iconClassName="text-white" />
+          </div>
 
           <div className="w-1/2 flex items-center justify-center bg-[#F9FAFB] dark:bg-[#1E293B] border-l border-slate-200 dark:border-slate-800">
             <div className="grow overflow-hidden flex flex-col justify-center">

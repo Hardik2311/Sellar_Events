@@ -158,12 +158,12 @@ const SupportPage: React.FC = () => {
           </h2>
 
           <AccordionItem
-            title="How do I upgrade my subscription plan?"
+            title="How do I purchase credits for my events?"
             icon={<HelpCircle className="w-5 h-5" />}
             isOpen={openSection === 'faq-1'}
             onClick={() => toggleSection('faq-1')}
           >
-            Go to the <Link to="/plans"><strong>Subscription & Plans</strong></Link> page from your Account menu, choose the plan that fits your event needs, and tap "Choose". Your benefits activate once payment is verified.
+            Go to the <Link to="/plans"><strong>Recharge & Buy Credits</strong></Link> page from your Account menu, select the credit pack that fits your event needs, and tap "Buy Now". Once payment is verified, credits are added to your wallet and get deducted per event you publish.
           </AccordionItem>
 
           <AccordionItem

@@ -19,6 +19,8 @@ export interface Attendee {
   paymentMethod?: 'gateway' | 'manual_qr';
   // NEW — only set when paymentMethod === 'manual_qr'; organizer verifies this at check-in
   screenshotUrl?: string;
+  paymentMode?: 'Cash' | 'UPI' | 'Card' | 'Netbanking' | 'Other';
+ source?: 'ticket' | 'walk_in' | 'import';
 }
 
 export const CONFIRMED_TICKET_STATUSES = new Set<TicketStatus>(['valid', 'checked_in']);

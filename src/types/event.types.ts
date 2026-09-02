@@ -112,7 +112,7 @@ export interface EventFormState {
 
   // NEW — only relevant when registrationMode === 'tickets'
   paymentCollectionMode: PaymentCollectionMode;
-  qrImage: string | null;   // base64 preview until uploaded, then https URL after save
+  //qrImage: string | null;   // base64 preview until uploaded, then https URL after save
   upiId: string;            // e.g. "9870577689@pthdfc"
   payeeName: string;        // optional label shown above QR, e.g. "Phase 1 Registrations"
 }

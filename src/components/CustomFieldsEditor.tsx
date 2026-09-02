@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import type { CustomField, CustomFieldType } from '../types/event.types';
 
@@ -15,6 +15,10 @@ const createEmptyField = (): CustomField => ({
 });
 
 const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({ fields, onChange }) => {
+  // Raw text typed in the "options" box per field — kept separate from
+  // field.options so a trailing/typed comma doesn't get stripped mid-typing.
+  const [optionsDraft, setOptionsDraft] = useState<Record<string, string>>({});
+
   const updateField = (id: string, patch: Partial<CustomField>) => {
     onChange(fields.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   };
@@ -87,15 +91,27 @@ const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({ fields, onChang
             </button>
           </div>
 
-          {field.type === 'select' && (
+                    {field.type === 'select' && (
             <input
               type="text"
-              value={field.options?.join(', ') ?? ''}
-              onChange={(e) =>
-                updateField(field.id, {
-                  options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                })
-              }
+              value={optionsDraft[field.id] ?? field.options?.join(', ') ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Keep the raw text as-is while typing (commas, trailing
+                // spaces, empty trailing entries — all allowed here).
+                setOptionsDraft((d) => ({ ...d, [field.id]: raw }));
+              }}
+              onBlur={(e) => {
+                const parsed = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                updateField(field.id, { options: parsed });
+                // Drop the draft so the input falls back to the clean,
+                // normalized value derived from field.options.
+                setOptionsDraft((d) => {
+                  const next = { ...d };
+                  delete next[field.id];
+                  return next;
+                });
+              }}
               placeholder="Options, comma separated (e.g. S, M, L, XL)"
               className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
             />
