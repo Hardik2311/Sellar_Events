@@ -4,7 +4,7 @@ import { Sun, Moon, Monitor, MessageCircle } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { useTheme } from '../context/ThemeContext';
 import { useCompanySettings } from '../hooks/useSettings'; // NEW
-import { ROUTES } from '../constants/routes.constants';
+//import { ROUTES } from '../constants/routes.constants';
 
 const AppSettings: React.FC = () => {
     const navigate = useNavigate();

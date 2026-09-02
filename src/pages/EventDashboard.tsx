@@ -29,12 +29,6 @@ const EventDashboardContent: React.FC = () => {
     [data, selectedEventId]
   );
 
-  const upcomingEvents = useMemo(() => {
-    if (!data?.events) return [];
-    const now = new Date();
-    return data.events.filter((e) => new Date(e.startDate) >= now);
-  }, [data]);
-
   const fetchData = useCallback(async (forceRefresh = false) => {
     if (!profile?.companyId || !filters.startDate || !filters.endDate) {
       setLoading(false);
@@ -132,7 +126,7 @@ const EventDashboardContent: React.FC = () => {
         <div className="mx-auto max-w-7xl relative">
           <div className="mb-2">
             <EventListCard
-              events={searchValue.trim() ? (data?.events ?? []) : upcomingEvents}
+               events={data?.events ?? []}
               selectedEventId={selectedEventId}
               onSelect={setSelectedEventId}
               searchValue={searchValue}

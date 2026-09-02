@@ -7,7 +7,6 @@ import FormField from '../components/ui/FormField';
 import {
   FloatingLabelInput,
   FloatingLabelSelect,
-  FloatingLabelTextArea,
 } from '../components/ui/AuthUIComponents'
 import CoverPhotoUpload from '../components/ui/CoverPhotoUpload';
 import PastEventsGallery from '../components/ui/PastEventsGallery';
@@ -26,7 +25,7 @@ import TextStyleControls from '../components/ui/TextStyleControls';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import RichTextEditor from '../components/RickTextEditor';
-import QRCodeImageUpload from '../components/ui/QRCodeImageUpload'; // NEW
+//import QRCodeImageUpload from '../components/ui/QRCodeImageUpload'; // NEW
 
 const createEmptyTier = (): TicketTierDraft => ({
   id: `tier-${Date.now()}`,
@@ -62,7 +61,7 @@ const INITIAL_STATE: EventFormState = {
   descriptionFontSize: 14,
   consentFontSize: 14,
   paymentCollectionMode: 'gateway',
-  qrImage: null,
+  //qrImage: null,
   upiId: '',
   payeeName: '',
 };
@@ -75,6 +74,7 @@ const CreateEvent: React.FC = () => {
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showPastEventConfirm, setShowPastEventConfirm] = useState(false);
   const titleEditorRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement>(null);
   const consentEditorRef = useRef<HTMLDivElement>(null);
@@ -95,6 +95,12 @@ const CreateEvent: React.FC = () => {
   }, [companySettings.rsvpEnabled]);
   const isOtherCategory = form.category === 'Other';
 
+  const isPastEventDateTime = () => {
+    if (!form.date) return false;
+    const eventDateTime = new Date(`${form.date}T${form.time || '00:00'}`);
+    return eventDateTime.getTime() < Date.now();
+  };
+
   const isValidUrl = (value: string) => {
     try {
       const u = new URL(value.trim());
@@ -111,7 +117,7 @@ const CreateEvent: React.FC = () => {
   const isManualQRReady =
     form.registrationMode !== 'tickets' ||
     form.paymentCollectionMode !== 'manual_qr' ||
-    (Boolean(form.qrImage) && isValidUpi(form.upiId));
+    isValidUpi(form.upiId);
 
   const isPublishable =
     stripHtml(form.title).length > 0 &&
@@ -182,15 +188,8 @@ const CreateEvent: React.FC = () => {
         })
       );
 
-      // NEW — QR image upload, only when manual QR mode is chosen
       const isManualQR = form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr';
-      const qrImageUrl = isManualQR && form.qrImage
-        ? await (async () => {
-          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/payment-qr.jpg`);
-          await uploadString(r, form.qrImage as string, 'data_url');
-          return getDownloadURL(r);
-        })()
-        : null;
+      // QR checkout screen par upiId se on-the-fly generate hota hai — upload karne ki zaroorat nahi.
 
       const eventsRef = collection(db, 'companies', profile.companyId, 'events');
       const isRsvp = form.registrationMode === 'rsvp';
@@ -230,7 +229,7 @@ const CreateEvent: React.FC = () => {
         consentStyle: form.consentText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.consentFontSize } : null,
         // NEW
         paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
-        qrImageUrl: isManualQR ? qrImageUrl : null,
+        //qrImageUrl: isManualQR ? qrImageUrl : null,
         upiId: isManualQR ? form.upiId.trim() : null,
         payeeName: isManualQR ? form.payeeName.trim() : null,
         status,
@@ -253,7 +252,16 @@ const CreateEvent: React.FC = () => {
   };
   const handlePublish = () => {
     if (!isPublishable || !can(Permission.PUBLISH_EVENT)) return;
+    if (isPastEventDateTime()) {
+      setShowPastEventConfirm(true);
+      return;
+    }
     saveEvent('published');
+  };
+
+  const confirmSavePastEventAsDraft = () => {
+    setShowPastEventConfirm(false);
+    saveEvent('draft');
   };
 
   return (
@@ -307,7 +315,8 @@ const CreateEvent: React.FC = () => {
                     value={form.title}
                     onChange={(html) => update('title', html)}
                     fontSize={form.titleFontSize}
-                    placeholder="Event title *"
+                    label="Event title"
+                    required
                   />
                 </div>
 
@@ -375,7 +384,8 @@ const CreateEvent: React.FC = () => {
                     value={form.description}
                     onChange={(html) => update('description', html)}
                     fontSize={form.descriptionFontSize}
-                    placeholder={req.description ? 'Description *' : 'Description'}
+                    label="Description"
+                    required={req.description}
                     multiline
                   />
                 </div>
@@ -454,13 +464,13 @@ const CreateEvent: React.FC = () => {
 
                     {form.paymentCollectionMode === 'manual_qr' && (
                       <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
-                        <div>
+                        {/* <div>
                           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">QR code image *</p>
                           <QRCodeImageUpload
                             value={form.qrImage}
                             onChange={(src) => update('qrImage', src)}
                           />
-                        </div>
+                        </div> */}
                         <FloatingLabelInput
                           id="upi-id"
                           label="UPI ID *"
@@ -474,6 +484,9 @@ const CreateEvent: React.FC = () => {
                           value={form.payeeName}
                           onChange={(e) => update('payeeName', e.target.value)}
                         />
+                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                          The payment QR will be generated automatically from this UPI ID no image upload needed.
+                        </p>
                       </div>
                     )}
 
@@ -534,7 +547,7 @@ const CreateEvent: React.FC = () => {
                   value={form.consentText}
                   onChange={(html) => update('consentText', html)}
                   fontSize={form.consentFontSize}
-                  placeholder="Important information & consent text (optional)"
+                  label="Important information & consent text (optional)"
                   multiline
                 />
                 <p className="text-xs text-gray-500 dark:text-slate-500">
@@ -683,6 +696,40 @@ const CreateEvent: React.FC = () => {
       {saveError && (
         <div className="fixed bottom-32 md:bottom-16 left-0 right-0 flex justify-center z-30 px-3">
           <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-sm px-4 py-2">{saveError}</p>
+        </div>
+      )}
+
+      {showPastEventConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+          onClick={() => setShowPastEventConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-sm bg-white dark:bg-[#1E293B] shadow-xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">
+              Event date has already passed
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              You can still save this as a <span className="font-semibold">draft</span> and update the date later.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowPastEventConfirm(false)}
+                className="rounded-sm border border-gray-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Edit date
+              </button>
+              <button
+                onClick={confirmSavePastEventAsDraft}
+                disabled={isSaving}
+                className="rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-4 py-2 text-sm font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-40"
+              >
+                {isSaving ? 'Saving…' : 'Save as draft'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">

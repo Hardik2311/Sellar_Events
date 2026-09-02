@@ -129,15 +129,15 @@ const ExpenseReportPageInner: React.FC = () => {
 
             autoTable(doc, {
                 startY: 38,
-                head: [['DATE', 'TITLE', 'DESCRIPTION', 'AMOUNT (Rs)']],
-                body: filtered.map(e => [formatDate(e.date), e.title, e.description, e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })]),
-                foot: [['TOTAL', '', '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
+                head: [['DATE', 'TITLE', 'DESCRIPTION', 'ADDED BY', 'AMOUNT (Rs)']],
+                body: filtered.map(e => [formatDate(e.date), e.title, e.description, e.createdBy || '—', e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })]),
+                foot: [['TOTAL', '', '', '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
                 theme: 'plain',
                 styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
                 headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },
                 footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [17, 24, 39] },
                 alternateRowStyles: { fillColor: [250, 250, 250] },
-                columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { halign: 'right', cellWidth: 42 } },
+                columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 28 }, 4: { halign: 'right', cellWidth: 42 } },
                 didDrawPage: () => {
                     doc.setFontSize(9); doc.setTextColor(156, 163, 175);
                     doc.text(`Page ${doc.getNumberOfPages()}`, pw - 14, ph - 10, { align: 'right' });
@@ -164,7 +164,7 @@ const ExpenseReportPageInner: React.FC = () => {
             const allBorders = { top: { style: 'thin', color: { rgb: 'CBD5E1' } }, bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
             const bblr = { bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
 
-            const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Title', width: 20 }, { header: 'Description', width: 32 }, { header: 'Amount (₹)', width: 18 }];
+            const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Title', width: 20 }, { header: 'Description', width: 32 }, { header: 'Added By', width: 18 }, { header: 'Amount (₹)', width: 18 }];
             const colCount = COLS.length;
             const dataStartRow = 7;
             const totalRows = dataStartRow + filtered.length + 1;
@@ -179,10 +179,10 @@ const ExpenseReportPageInner: React.FC = () => {
             COLS.forEach((c, i) => { aoa[6][i] = c.header; });
             filtered.forEach((exp, idx) => {
                 const r = dataStartRow + idx;
-                aoa[r] = [idx + 1, formatDate(exp.date), exp.title, exp.description, exp.amount];
+                aoa[r] = [idx + 1, formatDate(exp.date), exp.title, exp.description, exp.createdBy || '—', exp.amount];
             });
             const footerRow = dataStartRow + filtered.length;
-            aoa[footerRow] = ['TOTAL', '', '', '', summary.total];
+            aoa[footerRow] = ['TOTAL', '', '', '', '', summary.total];
 
             const ws: any = XLSX.utils.aoa_to_sheet(aoa);
             ws['!cols'] = COLS.map(c => ({ wch: c.width }));
@@ -203,8 +203,8 @@ const ExpenseReportPageInner: React.FC = () => {
                 const isAlt = idx % 2 === 1;
                 for (let ci = 0; ci < colCount; ci++) {
                     const addr = XLSX.utils.encode_cell({ r, c: ci });
-                    styleCell(addr, s({ sz: 9, color: { rgb: '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 4 ? 'center' : 'left', vertical: 'center' }, bblr));
-                    if (ci === 4 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00'; }
+                    styleCell(addr, s({ sz: 9, color: { rgb: '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 5 ? 'center' : 'left', vertical: 'center' }, bblr));
+                    if (ci === 5 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00'; }
                 }
             });
             for (let ci = 0; ci < colCount; ci++) {
@@ -423,7 +423,7 @@ const ExpenseReportPageInner: React.FC = () => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-                                        {(['date', 'title', 'description', 'amount'] as (keyof Expense)[]).map(col => {
+                                        {(['date', 'title', 'description', 'amount', 'createdBy'] as (keyof Expense)[]).map(col => {
                                             const isSorted = sortConfig.key === col;
                                             const directionIcon = sortConfig.direction === 'asc' ? '∧' : '∨';
                                             return (
@@ -451,19 +451,19 @@ const ExpenseReportPageInner: React.FC = () => {
                                 <tbody>
                                     {!selectedEventId ? (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={6} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 Select an event above to view its expenses.
                                             </td>
                                         </tr>
                                     ) : loading ? (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={6} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 Loading expenses...
                                             </td>
                                         </tr>
                                     ) : filtered.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={6} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 No expenses found for selected period.
                                             </td>
                                         </tr>
@@ -473,6 +473,7 @@ const ExpenseReportPageInner: React.FC = () => {
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{exp.title}</td>
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{exp.description}</td>
                                             <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">₹{exp.amount.toLocaleString('en-IN')}</td>
+                                            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{exp.createdBy || '—'}</td>
                                             <td className="px-4 py-3">
                                                 <button
                                                     onClick={() => setDeleteConfirm(exp.id)}

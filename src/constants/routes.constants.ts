@@ -21,6 +21,7 @@ export const ROUTES = {
   EVENTS_SETTINGS_APP: 'settings/app',
   EVENTS_SETTINGS_USERS: 'settings/users',      // NEW – list/manage users
   EVENTS_USER_ADD: 'settings/users/add',        // NEW – add user form
+  EVENTS_SETTINGS_USER_SETTINGS: 'settings/user-settings', // NEW – hub: Manage Users + Permissions
   EVENTS_SUPPORT: 'support',
   EVENTS_REPORTS: 'reports',
   EVENTS_REPORTS_EXPENSE: 'reports/expense/:eventId',

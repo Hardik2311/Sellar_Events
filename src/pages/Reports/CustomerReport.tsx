@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx-js-style';
 import BackButton from '../../components/ui/BackButton';
-import EventListCard, { ALL_EVENTS_ID } from '../../components/EventListCard';
+import EventListCard from '../../components/EventListCard';
 import { EventDateFilter, EventFilterProvider } from '../../components/ui/EventdateFilter';
 import { useAuth } from '../../context/AuthContext';
 import { useCustomerReport } from '../../hooks/useCustomerReport';

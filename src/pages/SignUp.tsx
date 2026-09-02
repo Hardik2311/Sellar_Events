@@ -36,6 +36,7 @@ import {
 } from '../components/ui/AuthUIComponents';
 import SmokeScreenLoader from '../components/ui/SmokeScreenLoader';
 import IdentityDocumentUpload, { type DocFile } from '../components/IdentityUpload';
+import FloatingEventIcons from '../components/ui/FloatingEventIcons';
 
 const eventCategoryOptions = [
   { value: 'Concert', label: 'Concert / Show' },
@@ -63,6 +64,9 @@ const gstRegistrationOptions = [
   { value: 'composition', label: 'Composite' },
   { value: 'none', label: 'Not Registered / NA' },
 ];
+
+const PHONE_REGEX = /^[6-9]\d{9}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface SignupFormData {
   // Step 1 — account
@@ -133,6 +137,8 @@ const Signup: React.FC = () => {
   const [authUser, setAuthUser] = useState<User | null>(null); // set once step 1 account is created
   const [aadhaarError, setAadhaarError] = useState<string | null>(null);
   const [panError, setPanError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const handleChange = (field: keyof SignupFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -149,12 +155,12 @@ const Signup: React.FC = () => {
       setError('Please fill out all required fields.');
       return false;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+    if (!EMAIL_REGEX.test(formData.email.trim())) {
       setError('Please enter a valid email address.');
       return false;
     }
-    if (formData.phone.length !== 10) {
-      setError('Phone number must be exactly 10 digits.');
+    if (!PHONE_REGEX.test(formData.phone)) {
+      setError('Please enter a valid 10-digit mobile number.');
       return false;
     }
     if (formData.password.length < 6) {
@@ -373,11 +379,13 @@ const Signup: React.FC = () => {
     <>
       <SmokeScreenLoader isVisible={showSmokeScreen} />
       <div className="flex h-screen overflow-hidden bg-gray-200">
-        {/* Left panel — CSS gradient, no image */}
-        <AuthHeroPanel
-          className="hidden lg:flex w-1/2 h-full"
-          subtitle="Create your organizer account and start listing events in minutes."
-        />
+        <div className="hidden lg:block relative w-1/2 h-full overflow-hidden">
+          <AuthHeroPanel
+            className="w-full h-full"
+            subtitle="Create your organizer account and start listing events in minutes."
+          />
+          <FloatingEventIcons iconClassName="text-white" />
+        </div>
 
         {/* Right content */}
         <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-slate-900 w-full lg:w-1/2">
@@ -418,28 +426,51 @@ const Signup: React.FC = () => {
                     required
                   />
 
-                  <FloatingLabelInput
-                    id="email"
-                    type="email"
-                    label="Email Address"
-                    icon={<FiMail size={20} />}
-                    value={formData.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    required
-                  />
+                  <div className="flex flex-col gap-1">
+                    <FloatingLabelInput
+                      id="email"
+                      type="email"
+                      label="Email Address"
+                      icon={<FiMail size={20} />}
+                      value={formData.email}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleChange('email', value);
+                        setEmailError(
+                          value.trim().length > 0 && !EMAIL_REGEX.test(value.trim())
+                            ? 'Enter a valid email address.'
+                            : null
+                        );
+                      }}
+                      required
+                    />
+                    {emailError && (
+                      <p className="text-red-500 text-[11px] font-bold mb-0">{emailError}</p>
+                    )}
+                  </div>
 
-                  <FloatingLabelInput
-                    id="phone"
-                    label="Phone Number"
-                    icon={<FiPhone size={20} />}
-                    inputMode="numeric"
-                    value={formData.phone}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '');
-                      if (digits.length <= 10) handleChange('phone', digits);
-                    }}
-                    required
-                  />
+                  <div className="flex flex-col gap-1">
+                    <FloatingLabelInput
+                      id="phone"
+                      label="Phone Number"
+                      icon={<FiPhone size={20} />}
+                      inputMode="numeric"
+                      value={formData.phone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        if (digits.length <= 10) handleChange('phone', digits);
+                        setPhoneError(
+                          digits.length === 10 && !PHONE_REGEX.test(digits)
+                            ? 'Enter a valid 10-digit mobile number.'
+                            : null
+                        );
+                      }}
+                      required
+                    />
+                    {phoneError && (
+                      <p className="text-red-500 text-[11px] font-bold mb-0">{phoneError}</p>
+                    )}
+                  </div>
 
                   <div className="relative">
                     <FloatingLabelInput

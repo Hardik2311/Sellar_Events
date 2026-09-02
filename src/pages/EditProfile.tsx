@@ -24,7 +24,7 @@ interface ProfileFormData {
     gstinNumber: string;
     gstType: string;
     streetAddress: string;
-    landmark: string;
+    //landmark: string;
     city: string;
     state: string;
     postalCode: string;
@@ -50,7 +50,7 @@ const emptyProfile: ProfileFormData = {
     gstinNumber: '',
     gstType: 'none',
     streetAddress: '',
-    landmark: '',
+    //landmark: '',
     city: '',
     state: '',
     postalCode: '',
@@ -115,7 +115,7 @@ const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 );
 
 const EditProfile: React.FC = () => {
-    const navigate = useNavigate();
+    //const navigate = useNavigate();
     const { user, profile: authProfile, loading: authLoading } = useAuth();
     const { profile, loading: dataLoading, saveData, refetch } =
         useProfileData(user?.uid, authProfile?.companyId);
@@ -146,7 +146,7 @@ const EditProfile: React.FC = () => {
                 gstinNumber: profile.gstinNumber || authProfile?.gstinNumber || '',
                 gstType: profile.gstType || authProfile?.gstType || 'none',
                 streetAddress: profile.streetAddress || '',
-                landmark: profile.landmark || '',
+                //landmark: profile.landmark || '',
                 city: profile.city || '',
                 state: profile.state || '',
                 postalCode: profile.postalCode || '',
@@ -346,7 +346,7 @@ const EditProfile: React.FC = () => {
                 gstinNumber: formData.gstinNumber,
                 gstType: formData.gstType,
                 streetAddress: formData.streetAddress,
-                landmark: formData.landmark,
+                //landmark: formData.landmark,
                 city: formData.city,
                 state: formData.state,
                 postalCode: formData.postalCode,
@@ -623,26 +623,18 @@ const EditProfile: React.FC = () => {
                                     </LabeledField>
                                 </div>
 
-                                <LabeledField label="Landmark">
-                                    <input
-                                        type="text"
-                                        name="landmark"
-                                        value={formData.landmark}
-                                        onChange={handleInputChange}
-                                        className={inputClass}
-                                        placeholder="Nearby Landmark"
-                                    />
-                                </LabeledField>
-                                <LabeledField label="City">
-                                    <input
-                                        type="text"
-                                        name="city"
-                                        value={formData.city}
-                                        onChange={handleInputChange}
-                                        className={inputClass}
-                                        placeholder="City / Town"
-                                    />
-                                </LabeledField>
+                                <div className="sm:col-span-2">
+                                    <LabeledField label="City">
+                                        <input
+                                            type="text"
+                                            name="city"
+                                            value={formData.city}
+                                            onChange={handleInputChange}
+                                            className={inputClass}
+                                            placeholder="City / Town"
+                                        />
+                                    </LabeledField>
+                                </div>
 
                                 <div className="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
                                     <LabeledField label="State">

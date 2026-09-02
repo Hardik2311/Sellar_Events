@@ -3,8 +3,10 @@ import { X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { addTeamMember } from '../lib/AuthOperations';
 import { ROLES, CREATABLE_ROLES } from '../enum/enum';
+import { FloatingLabelInput, FloatingLabelSelect } from '../components/ui/AuthUIComponents';
 
 const ROLE_LABELS: Record<string, string> = {
+  [ROLES.ORGANIZER]: 'Owner',
   [ROLES.TEAM_LEADER]: 'Team Leader',
   [ROLES.TEAM]: 'Team Member',
 };
@@ -21,6 +23,11 @@ export const UserAddModal: React.FC<UserAddModalProps> = ({ isOpen, onClose, onC
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, '');
+    setPhone(digitsOnly);
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<string>(allowedRoles[0] || '');
@@ -111,35 +118,52 @@ export const UserAddModal: React.FC<UserAddModalProps> = ({ isOpen, onClose, onC
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <input
-                className="border rounded-sm px-3 py-2 dark:bg-[#0F172A] dark:border-slate-700 dark:text-white"
-                placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)}
-                disabled={isSubmitting} required
+              <FloatingLabelInput
+                id="name"
+                label="Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={isSubmitting}
+                required
               />
-              <input
-                className="border rounded-sm px-3 py-2 dark:bg-[#0F172A] dark:border-slate-700 dark:text-white"
-                placeholder="Phone Number" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value)}
-                disabled={isSubmitting} required
+              <FloatingLabelInput
+                id="phone"
+                label="Phone Number"
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={phone}
+                onChange={handlePhoneChange}
+                disabled={isSubmitting}
+                required
               />
             </div>
-            <input
-              className="w-full border rounded-sm px-3 py-2 dark:bg-[#0F172A] dark:border-slate-700 dark:text-white"
-              type="email" placeholder="Gmail / Email Address" value={email} onChange={(e) => setEmail(e.target.value)}
-              disabled={isSubmitting} required
+            <FloatingLabelInput
+              id="email"
+              label="Gmail / Email Address"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
+              required
             />
-            <input
-              className="w-full border rounded-sm px-3 py-2 dark:bg-[#0F172A] dark:border-slate-700 dark:text-white"
-              type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
-              disabled={isSubmitting} required
+            <FloatingLabelInput
+              id="password"
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isSubmitting}
+              required
             />
-            <select
-              className="w-full border rounded-sm px-3 py-2 dark:bg-[#0F172A] dark:border-slate-700 dark:text-white"
-              value={role} onChange={(e) => setRole(e.target.value)} disabled={isSubmitting}
-            >
-              {allowedRoles.map((r) => (
-                <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>
-              ))}
-            </select>
+            <FloatingLabelSelect
+              id="role"
+              label="Role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              disabled={isSubmitting}
+              options={allowedRoles.map((r) => ({ value: r, label: ROLE_LABELS[r] || r }))}
+            />
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             {success && <p className="text-sm text-emerald-600">{success}</p>}

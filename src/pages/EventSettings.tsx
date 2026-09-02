@@ -51,7 +51,7 @@ const EventFieldSettings: React.FC = () => {
     attendeeQuestionsEnabled: settings.attendeeQuestionsEnabled,
     payments: settings.payments, // NEW
   });
-  
+
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -124,7 +124,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Auto-feature nearest event</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    When off, the soonest upcoming event is featured automatically and the Featured toggle is hidden on your event cards. Turn on to pick the Featured event yourself from the Discover page.
+                    Off = soonest event auto-featured. On = pick it yourself from Discover.
                   </p>
                 </div>
                 <SettingToggle
@@ -164,7 +164,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Use dummy threshold</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Show a manually-set "remaining" number instead of the real quantity, per tier. Doesn't affect actual ticket sales.
+                    Shows a custom "remaining" count per tier instead of real stock. Sales aren't affected.
                   </p>
                 </div>
                 <SettingToggle
@@ -183,7 +183,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Tier availability window</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Let organizers set an end date &amp; time per ticket tier (e.g. Early Bird). Once that time passes, the tier is hidden from customers.
+                    Set an end date &amp; time per tier (e.g. Early Bird) — hidden once it passes.
                   </p>
                 </div>
                 <SettingToggle
@@ -212,8 +212,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Allow manual UPI QR payments</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Lets organizers set up a UPI QR code as an alternative to the payment gateway for ticketed events.
-                    Attendees scan, pay, and upload a screenshot — they're added to the guest list immediately, and payment is verified manually at check-in.
+                    Adds UPI QR as an alternative to the gateway. QR is generated automatically from your UPI ID. Attendees scan, pay, upload a screenshot, and are added instantly for manual verification at check-in.
                   </p>
                 </div>
                 <SettingToggle
@@ -239,7 +238,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Enable RSVP registration</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Let organizers create events with an external RSVP link instead of ticket tiers.
+                    Create events with an external RSVP link instead of ticket tiers.
                   </p>
                 </div>
                 <SettingToggle
@@ -259,7 +258,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Enable attendee questions</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Let organizers add custom questions attendees must answer during registration. Turn off to hide this section entirely from Create/Edit Event.
+                    Add custom questions attendees must answer at registration. Off = hidden from Create/Edit Event.
                   </p>
                 </div>
                 <SettingToggle

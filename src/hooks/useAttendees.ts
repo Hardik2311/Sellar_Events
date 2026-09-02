@@ -44,6 +44,12 @@ export function useAttendees(companyId: string | undefined, eventId: string | un
             purchasedAt: purchasedAtMs,
             createdAt: purchasedAtMs,
             checkedInAt: data.checkedInAt ?? null,
+            // NEW — these existed on the Attendee type but were never actually read from Firestore
+            customFieldAnswers: data.customFieldAnswers ?? undefined,
+            paymentMethod: data.paymentMethod ?? undefined,
+            paymentMode: data.paymentMode ?? undefined,
+            screenshotUrl: data.screenshotUrl ?? undefined,
+            source: data.source ?? 'ticket',
           } as Attendee;
         });
         setAttendees(list);

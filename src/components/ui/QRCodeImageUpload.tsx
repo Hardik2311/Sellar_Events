@@ -27,7 +27,7 @@ const QRCodeImageUpload: React.FC<QRCodeImageUploadProps> = ({ value, onChange }
     }
     setError(null);
     setIsCompressing(true);
-        try {
+    try {
       // PNG output + modest cap — QR codes need to stay sharp/scannable,
       // so we resize rather than lossy-compress like a photo.
       const compressed = await compressImage(file, {
@@ -72,11 +72,10 @@ const QRCodeImageUpload: React.FC<QRCodeImageUploadProps> = ({ value, onChange }
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          className={`flex w-40 h-40 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-sm border-2 border-dashed p-3 text-center transition-colors ${
-            isDragging
+          className={`flex w-40 h-40 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-sm border-2 border-dashed p-3 text-center transition-colors ${isDragging
               ? 'border-[#007A78] bg-orange-50 dark:bg-[#2DD4BF]/10'
               : 'border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800'
-          }`}
+            }`}
         >
           {isCompressing ? (
             <Loader2 size={20} className="animate-spin text-slate-400" />

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, Copy, Check, Loader2 } from 'lucide-react';
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
 import type { PublicEvent } from '../data/events';
+import QRCode from 'qrcode';
 
 interface Breakdown {
   id: string;      // tierId
@@ -47,6 +48,19 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false); // NEW
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null); // NEW
+
+  
+  useEffect(() => {
+    if (!event.upiId) {
+      setQrDataUrl(null);
+      return;
+    }
+    const upiString = `upi://pay?pa=${event.upiId}&pn=${encodeURIComponent(event.payeeName || event.title)}&cu=INR`;
+    QRCode.toDataURL(upiString, { width: 240, margin: 1, errorCorrectionLevel: 'L' })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [event.upiId, event.payeeName, event.title]);
 
   const handleFile = async (file: File) => {
     if (file.size > 10 * 1024 * 1024) {
@@ -91,7 +105,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
       await uploadString(shotRef, screenshot, 'data_url');
       const screenshotUrl = await getDownloadURL(shotRef);
 
-            // 2 & 3. Atomically bump `sold` AND create attendee docs in the same
+      // 2 & 3. Atomically bump `sold` AND create attendee docs in the same
       //    transaction — mirrors CheckoutPage: initials + running count of
       //    tickets already sold, so IDs stay sequential and consistent
       //    across both gateway and manual-QR purchases.
@@ -204,8 +218,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
               {event.payeeName || 'Kindly pay the exact amount on the below QR'}
             </p>
 
-            {event.qrImageUrl ? (
-              <img src={event.qrImageUrl} alt="Payment QR" className="mx-auto w-48 h-48 rounded-sm border border-slate-200 dark:border-slate-700 object-contain bg-white" />
+
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="Payment QR" className="mx-auto w-48 h-48 rounded-sm border border-slate-200 dark:border-slate-700 object-contain bg-white" />
             ) : (
               <p className="text-xs text-red-500">QR not set up by the organizer.</p>
             )}

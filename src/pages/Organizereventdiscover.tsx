@@ -72,11 +72,12 @@ const OrganizerEventCard: React.FC<{
   onDeleteRequest?: (event: PublicEvent) => void; // undefined => DELETE_EVENT not permitted
   onRestore?: (event: PublicEvent) => void;       // undefined => DELETE_EVENT not permitted (reused for restore)
   onEdit?: (event: PublicEvent) => void;          // undefined => EDIT_EVENT not permitted
+  onEditBlocked?: (event: PublicEvent) => void;   // called instead of onEdit when event is in Deleted state
   onDuplicate?: (event: PublicEvent) => void;
   onLiveView: (event: PublicEvent) => void;
   onShare: (event: PublicEvent) => void;
   showFeaturedToggle: boolean;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onRestore, onEdit, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onRestore, onEdit, onEditBlocked, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
   const label = getCategoryLabel(event);
   const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -112,20 +113,24 @@ const OrganizerEventCard: React.FC<{
               onShare(event);
             }}
             title="Share event"
-            className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+            className="absolute top-2 right-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
           >
             <Share2 size={14} />
           </button>
         )}
-        {onEdit && !isDeleted && (
+        {onEdit && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onEdit(event);
+              if (isDeleted) {
+                onEditBlocked?.(event);
+              } else {
+                onEdit(event);
+              }
             }}
-            title="Edit event"
-            className="absolute bottom-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+            title={isDeleted ? 'Restore event to edit it' : 'Edit event'}
+            className="absolute bottom-2 right-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
           >
             <Pencil size={14} />
           </button>
@@ -138,7 +143,7 @@ const OrganizerEventCard: React.FC<{
               onDuplicate(event);
             }}
             title="Duplicate event"
-            className="absolute bottom-2 right-11 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+            className="absolute bottom-2 right-11 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
           >
             <Copy size={14} />
           </button>
@@ -152,7 +157,7 @@ const OrganizerEventCard: React.FC<{
                 onRestore(event);
               }}
               title="Restore event"
-              className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+              className="absolute top-2 left-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
             >
               <RotateCcw size={14} />
             </button>
@@ -165,7 +170,7 @@ const OrganizerEventCard: React.FC<{
                 onDeleteRequest(event);
               }}
               title="Delete event"
-              className="absolute top-2 left-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              className="absolute top-2 left-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
             >
               <Trash2 size={14} />
             </button>
@@ -331,6 +336,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [viewMode, setViewMode] = useState<'upcoming' | 'past' | 'deleted'>('upcoming');
   const [deletingEvent, setDeletingEvent] = useState<PublicEvent | null>(null);
   const [duplicatingEvent, setDuplicatingEvent] = useState<PublicEvent | null>(null);
+  const [editBlockedEvent, setEditBlockedEvent] = useState<PublicEvent | null>(null);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -399,6 +405,12 @@ const OrganizerEventDiscover: React.FC = () => {
     setDuplicatingEvent(null);
   };
 
+  const handleRestoreFromEditBlock = async () => {
+    if (!editBlockedEvent) return;
+    await restoreEvent(editBlockedEvent.id);
+    setEditBlockedEvent(null);
+  };
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
@@ -438,9 +450,9 @@ const OrganizerEventDiscover: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Category filter — dropdown, left side */}
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 order-1">
               <button
                 type="button"
                 onClick={() => setCategoryMenuOpen((o) => !o)}
@@ -471,30 +483,8 @@ const OrganizerEventDiscover: React.FC = () => {
                 </>
               )}
             </div>
-
-            {/* Upcoming / Past / Deleted view switch */}
-            <div className="flex items-center gap-1 rounded-sm border border-gray-300 bg-white p-0.5 text-xs font-medium shrink-0 dark:border-slate-700 dark:bg-slate-800">
-              {([
-                { value: 'upcoming', label: 'Upcoming' },
-                { value: 'past', label: 'Past' },
-                { value: 'deleted', label: 'Deleted' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setViewMode(opt.value)}
-                  className={`rounded-sm px-2.5 py-1 transition-colors ${viewMode === opt.value
-                    ? 'bg-[#007A78] text-white'
-                    : 'text-slate-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
             {/* Format filter — dropdown, right side */}
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 order-2 sm:order-3">
               <button
                 type="button"
                 onClick={() => setFormatMenuOpen((o) => !o)}
@@ -524,6 +514,26 @@ const OrganizerEventDiscover: React.FC = () => {
                   </div>
                 </>
               )}
+            </div>
+            {/* Upcoming / Past / Deleted view switch — row 2 on mobile, full width, buttons evenly stretched */}
+            <div className="order-3 sm:order-2 w-full sm:w-auto mt-2 sm:mt-0 flex items-center gap-1 rounded-sm border border-gray-300 bg-white p-0.5 text-xs font-medium shrink-0 dark:border-slate-700 dark:bg-slate-800">
+              {([
+                { value: 'upcoming', label: 'Upcoming' },
+                { value: 'past', label: 'Past' },
+                { value: 'deleted', label: 'Deleted' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setViewMode(opt.value)}
+                  className={`flex-1 sm:flex-none rounded-sm px-2.5 py-1 text-center transition-colors ${viewMode === opt.value
+                    ? 'bg-[#007A78] text-white'
+                    : 'text-slate-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -564,6 +574,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
                     onRestore={can(Permission.DELETE_EVENT) ? (ev) => restoreEvent(ev.id) : undefined}
                     onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}
+                    onEditBlocked={setEditBlockedEvent}
                     onDuplicate={can(Permission.DUPLICATE_EVENT) ? setDuplicatingEvent : undefined}
                     onLiveView={openLiveView}
                     onShare={handleShareRequest}
@@ -652,6 +663,34 @@ const OrganizerEventDiscover: React.FC = () => {
                 className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
               >
                 Duplicate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editBlockedEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Restore event to edit it
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              "{stripHtmlTags(editBlockedEvent.title)}" is currently deleted. Restore it first — then you'll be able to edit it.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditBlockedEvent(null)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreFromEditBlock}
+                className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
+              >
+                Restore
               </button>
             </div>
           </div>

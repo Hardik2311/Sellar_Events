@@ -3,6 +3,9 @@ import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown } from '
 import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 
+const TICKET_CANVAS_SCALE = 2;      // was 3 inside buildTicketCanvas — still crisp, ~55% fewer pixels
+const TICKET_IMAGE_QUALITY = 0.85;  // JPEG quality used everywhere a ticket image is produced
+
 interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -28,7 +31,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const qrCanvas = canvasRefs.current[ticketId];
         if (!qrCanvas) return null;
 
-        const SCALE = 3;
+        const SCALE = TICKET_CANVAS_SCALE;
         const width = 380;
         const cardMargin = 14;
         const cardW = width - cardMargin * 2;
@@ -60,7 +63,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const cardH = height - cardMargin * 2;
         const radius = 20;
 
-        // soft drop shadow behind card
         ctx.save();
         ctx.shadowColor = 'rgba(11,59,58,0.18)';
         ctx.shadowBlur = 24;
@@ -71,7 +73,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.fill();
         ctx.restore();
 
-        // clip to card
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, radius);
@@ -80,14 +81,12 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.fillStyle = CARD_BG;
         ctx.fillRect(cardX, cardY, cardW, cardH);
 
-        // gradient header band
         const grad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + headerH);
         grad.addColorStop(0, INK);
         grad.addColorStop(1, TEAL);
         ctx.fillStyle = grad;
         ctx.fillRect(cardX, cardY, cardW, headerH);
 
-        // subtle texture circles
         ctx.save();
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = '#ffffff';
@@ -95,7 +94,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.beginPath(); ctx.arc(cardX + 18, cardY + headerH - 6, 30, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
-        // header text
         ctx.textAlign = 'left';
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = 'bold 10px sans-serif';
@@ -105,7 +103,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.font = 'bold 18px sans-serif';
         ctx.fillText(attendeeName, cardX + 20, cardY + 50);
 
-        // tier pill
         ctx.font = 'bold 11px sans-serif';
         const pillText = tierName.toUpperCase();
         const pillW = ctx.measureText(pillText).width + 20;
@@ -124,7 +121,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
 
         ctx.restore();
 
-        // perforation seam
         const seamY = cardY + headerH;
         ctx.save();
         ctx.beginPath();
@@ -144,7 +140,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // QR box with viewfinder-style corner brackets
         let y = seamY + stubPadTop;
         const boxX = (width - boxSize) / 2;
         ctx.fillStyle = CARD_BG;
@@ -172,7 +167,6 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         drawCorner(bx, by + bh, 1, -1);
         drawCorner(bx + bw, by + bh, -1, -1);
 
-        // ticket id
         y += boxSize + 26;
         ctx.textAlign = 'center';
         ctx.fillStyle = INK;
@@ -191,11 +185,10 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
         if (!canvas) return;
         const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = `${ticketId}.png`;
+        link.href = canvas.toDataURL('image/jpeg', TICKET_IMAGE_QUALITY);
+        link.download = `${ticketId}.jpg`;
         link.click();
     };
-
     const [sharingId, setSharingId] = useState<string | null>(null); // add near top of component
 
     const handleShare = async (ticketId: string, tierName: string, attendeeName: string) => {
@@ -210,19 +203,17 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
             if (canvas && navigator.share) {
                 canvas.toBlob(async (blob) => {
                     if (!blob) return;
-                    const file = new File([blob], `${ticketId}.png`, { type: 'image/png' });
+                    const file = new File([blob], `${ticketId}.jpg`, { type: 'image/jpeg' });
                     try {
                         if (navigator.canShare?.({ files: [file] })) {
-                            // sirf image jaayegi, koi title/text/caption nahi
                             await navigator.share({ files: [file] });
                         } else {
-                            // file-share support nahi hai, tabhi fallback text use hoga
                             await navigator.share({ title: eventTitle, text });
                         }
                     } catch {
                         /* user cancelled share — ignore */
                     }
-                });
+                }, 'image/jpeg', TICKET_IMAGE_QUALITY);
             } else {
                 navigator.clipboard?.writeText(text);
             }
@@ -231,20 +222,28 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         }
     };
     const handleDownloadAllPdf = () => {
-        const SCALE = 3; // must match buildTicketCanvas
-        const pdf = new jsPDF({ unit: 'px', format: [360, 380] });
+        const pdf = new jsPDF({ unit: 'px', format: [360, 380], compress: true });
 
         tickets.forEach((t, index) => {
             const canvas = buildTicketCanvas(t.ticketId, t.tierName, t.attendeeName);
             if (!canvas) return;
 
-            const logicalW = canvas.width / SCALE;   // page/image size stays same as before
-            const logicalH = canvas.height / SCALE;  // only pixel density increased
+            const logicalW = canvas.width / TICKET_CANVAS_SCALE;
+            const logicalH = canvas.height / TICKET_CANVAS_SCALE;
 
             if (index > 0) pdf.addPage([logicalW, logicalH]);
             else pdf.internal.pageSize.width = logicalW;
 
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, logicalW, logicalH);
+            pdf.addImage(
+                canvas.toDataURL('image/jpeg', TICKET_IMAGE_QUALITY),
+                'JPEG',
+                0,
+                0,
+                logicalW,
+                logicalH,
+                undefined,
+                'FAST'
+            );
         });
 
         pdf.save(`${eventTitle.replace(/\s+/g, '_')}_tickets.pdf`);
@@ -280,40 +279,56 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                 <div className="flex w-full flex-col gap-6">
                     {tickets.map((t) => (
                         <div key={t.ticketId} className="w-full">
-                            {/* Header band */}
-                            <div className="flex items-center justify-between rounded-t-2xl bg-[#0B3B3A] px-5 py-3">
-                                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
-                                    E-Ticket
+                            {/* Header band — gradient, name + tier pill inside (matches canvas) */}
+                            <div
+                                className="relative overflow-hidden rounded-t-2xl px-5 py-4"
+                                style={{ background: 'linear-gradient(135deg, #0B3B3A 0%, #007A78 100%)' }}
+                            >
+                                <div className="pointer-events-none absolute -right-3 -top-3 h-24 w-24 rounded-full bg-white/[0.08]" />
+                                <div className="pointer-events-none absolute -left-3 bottom-[-24px] h-16 w-16 rounded-full bg-white/[0.08]" />
+
+                                <span className="relative block text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">
+                                    E · T I C K E T
                                 </span>
-                                <span className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">
+                                <p className="relative mt-1 text-lg font-bold text-white">{t.attendeeName}</p>
+                                <span className="relative mt-2 inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
                                     <TicketIcon size={11} /> {t.tierName}
                                 </span>
                             </div>
 
                             {/* Perforated seam */}
                             <div className="relative h-0">
-                                <div className="absolute left-0 right-0 top-0 border-t-2 border-dashed border-[#0B3B3A]/15" />
+                                <div className="absolute left-0 right-0 top-0 border-t-2 border-dashed border-[#0B3B3A]/18" />
                                 <div className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-gray-100" />
                                 <div className="absolute -right-3 -top-3 h-6 w-6 rounded-full bg-gray-100" />
                             </div>
 
                             {/* Body */}
-                            <div className="flex flex-col items-center gap-3 rounded-b-2xl bg-[#FBF8F3] px-5 pb-5 pt-6 shadow-md">
-                                <p className="text-base font-bold text-[#0B3B3A]">{t.attendeeName}</p>
+                            <div className="flex flex-col items-center gap-3 rounded-b-2xl bg-white px-5 pb-5 pt-7 shadow-md">
+                                <div className="relative rounded-xl border border-[#0B3B3A]/10 bg-white p-4 shadow-sm">
+                                    {/* viewfinder-style corner brackets, matches canvas */}
+                                    <span className="pointer-events-none absolute left-1.5 top-1.5 h-3.5 w-3.5 border-l-2 border-t-2 border-[#007A78]" />
+                                    <span className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 border-r-2 border-t-2 border-[#007A78]" />
+                                    <span className="pointer-events-none absolute bottom-1.5 left-1.5 h-3.5 w-3.5 border-b-2 border-l-2 border-[#007A78]" />
+                                    <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-3.5 w-3.5 border-b-2 border-r-2 border-[#007A78]" />
 
-                                <div className="rounded-xl border border-[#0B3B3A]/10 bg-white p-4 shadow-sm">
                                     <QRCodeCanvas
                                         value={t.ticketId}
-                                        size={340}                       // 2x actual pixels for crisp downscale
+                                        size={340}
                                         includeMargin
-                                        style={{ width: 170, height: 170 }}  // display size unchanged
+                                        style={{ width: 170, height: 170 }}
                                         ref={(el) => {
                                             canvasRefs.current[t.ticketId] = el as unknown as HTMLCanvasElement;
                                         }}
                                     />
                                 </div>
 
-                                <p className="font-mono text-xs tracking-[0.15em] text-[#0B3B3A]/50">{t.ticketId}</p>
+                                <p className="font-mono text-xs font-semibold tracking-[0.15em] text-[#0B3B3A]">
+                                    {t.ticketId.split('').join('\u200a')}
+                                </p>
+                                <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#0B3B3A]/40">
+                                    Scan at entry · Non-transferable
+                                </p>
 
                                 <div className="flex w-full gap-2 pt-1">
                                     <button

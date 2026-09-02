@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Phone, Mail, ChevronDown, Pencil } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
@@ -23,6 +23,15 @@ const STATUS_STYLES: Record<Attendee['status'], string> = {
   cancelled: 'bg-red-50 text-red-500',
 };
 
+// NEW — mirrors the colored payment-mode chip shown on invoice cards (e.g. "CASH" tag)
+const PAYMENT_MODE_BADGE_STYLES: Record<NonNullable<Attendee['paymentMode']>, string> = {
+  Cash: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  UPI: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  Card: 'bg-blue-50 text-blue-700 border-blue-200',
+  Netbanking: 'bg-purple-50 text-purple-700 border-purple-200',
+  Other: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
 const STATUS_LABEL: Record<Attendee['status'], string> = {
   valid: 'Not arrived',
   checked_in: 'Checked in',
@@ -41,7 +50,8 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   eventDate,
   customFields = [],
 }) => {
-  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
 
   const buildTicketCanvas = (): HTMLCanvasElement | null => {
     const qrCanvas = qrCanvasRef.current;
@@ -265,14 +275,6 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0">
-          {attendee.paymentMethod === 'manual_qr' && (
-            <span
-              className="text-[9px] font-bold px-2 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"
-              title="Paid via UPI QR — verify screenshot at check-in"
-            >
-              QR
-            </span>
-          )}
           <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-sm ${STATUS_STYLES[attendee.status]}`}>
             {STATUS_LABEL[attendee.status]}
           </span>
@@ -307,18 +309,6 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             )}
           </div>
 
-          {/* NEW — payment-proof link, only for tickets paid via manual UPI QR */}
-          {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
-            <a
-              href={attendee.screenshotUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-2.5 py-1.5 hover:bg-amber-100"
-            >
-              View payment screenshot
-            </a>
-          )}
-
           {attendee.customFieldAnswers && Object.keys(attendee.customFieldAnswers).length > 0 && (
             <div className="rounded-sm bg-slate-50 dark:bg-slate-800/60 p-2.5 space-y-1">
               {Object.entries(attendee.customFieldAnswers).map(([fieldId, value]) => {
@@ -332,6 +322,47 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Payment mode + amount + QR indicator + screenshot link — merged into single row */}
+          {(attendee.paymentMode || typeof attendee.amountPaid === 'number' || attendee.screenshotUrl) && (
+            <div className="flex items-center justify-between gap-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Paid via: {attendee.paymentMode ?? '—'}
+                {typeof attendee.amountPaid === 'number' && (
+                  <span className="text-slate-800 dark:text-slate-100 font-extrabold">
+                    {' '}₹{attendee.amountPaid.toLocaleString('en-IN')}
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {attendee.paymentMethod === 'manual_qr' && (
+                  <span
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"
+                    title="Paid via UPI QR — verify screenshot at check-in"
+                  >
+                    QR
+                  </span>
+                )}
+                {attendee.paymentMode && (
+                  <span
+                    className={`text-[9px] font-extrabold tracking-wide px-2 py-0.5 rounded-sm border ${PAYMENT_MODE_BADGE_STYLES[attendee.paymentMode] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                  >
+                    {attendee.paymentMode.toUpperCase()}
+                  </span>
+                )}
+                               {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setScreenshotModalOpen(true)}
+                    className="text-[10px] font-bold text-amber-700 underline underline-offset-2 hover:text-amber-800"
+                  >
+                    View screenshot
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -377,6 +408,36 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                 Revive
               </button>
             )}
+          </div>
+                </div>
+      )}
+
+      {screenshotModalOpen && attendee.screenshotUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setScreenshotModalOpen(false)}
+        >
+          <div
+            className="relative max-w-lg w-full max-h-[85vh] bg-white dark:bg-slate-900 rounded-sm shadow-xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-800">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Payment Screenshot</span>
+              <button
+                onClick={() => setScreenshotModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 text-lg leading-none px-1"
+                title="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="overflow-auto p-3 flex items-center justify-center bg-slate-50 dark:bg-slate-800/60">
+              <img
+                src={attendee.screenshotUrl}
+                alt="Payment screenshot"
+                className="max-w-full max-h-[70vh] object-contain rounded-sm"
+              />
+            </div>
           </div>
         </div>
       )}
