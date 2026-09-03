@@ -529,33 +529,6 @@ const CreateEvent: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Consent & Important Information */}
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <TextStyleControls
-                  fontSize={form.consentFontSize}
-                  onFontSizeChange={(size) => update('consentFontSize', size)}
-                  editorRef={consentEditorRef}
-                  onChange={(html) => update('consentText', html)}
-                />
-                <RichTextEditor
-                  id="consent-text"
-                  editorRef={consentEditorRef}
-                  value={form.consentText}
-                  onChange={(html) => update('consentText', html)}
-                  fontSize={form.consentFontSize}
-                  label="Important information & consent text (optional)"
-                  multiline
-                />
-                <p className="text-xs text-gray-500 dark:text-slate-500">
-                  Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
-                </p>
-              </CardContent>
-            </Card>
-
             {/* Custom attendee questions */}
             {companySettings.attendeeQuestionsEnabled && (
               <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
@@ -677,7 +650,32 @@ const CreateEvent: React.FC = () => {
                 )}
               </CardContent>
             </Card>
-
+            {/* Consent & Important Information — moved to sidebar for desktop */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <TextStyleControls
+                  fontSize={form.consentFontSize}
+                  onFontSizeChange={(size) => update('consentFontSize', size)}
+                  editorRef={consentEditorRef}
+                  onChange={(html) => update('consentText', html)}
+                />
+                <RichTextEditor
+                  id="consent-text"
+                  editorRef={consentEditorRef}
+                  value={form.consentText}
+                  onChange={(html) => update('consentText', html)}
+                  fontSize={form.consentFontSize}
+                  label="Important information & consent text (optional)"
+                  multiline
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-500">
+                  Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
+                </p>
+              </CardContent>
+            </Card>
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
               <CardContent className="pt-4">
                 <p className="text-sm font-semibold text-[#007A78] dark:text-[#2DD4BF] mb-2">Organizer Pro-Tips</p>

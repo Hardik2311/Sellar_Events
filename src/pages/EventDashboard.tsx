@@ -126,7 +126,7 @@ const EventDashboardContent: React.FC = () => {
         <div className="mx-auto max-w-7xl relative">
           <div className="mb-2">
             <EventListCard
-               events={data?.events ?? []}
+              events={data?.events ?? []}
               selectedEventId={selectedEventId}
               onSelect={setSelectedEventId}
               searchValue={searchValue}
@@ -158,7 +158,7 @@ const EventDashboardContent: React.FC = () => {
                   isDataVisible={isDataVisible}
                   loading={loading}
                 />
-                <SalesTrendCard data={data?.salesTrend ?? []} isDataVisible={isDataVisible} loading={loading} />
+                <SalesTrendCard data={selectedEvent?.salesTrend ?? []} isDataVisible={isDataVisible} loading={loading} />
               </div>
             </div>
           )}
