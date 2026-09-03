@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { doc, setDoc } from 'firebase/firestore';
@@ -33,9 +33,8 @@ const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const Settings: React.FC = () => {
-  //const navigate = useNavigate();
   const { profile } = useAuth();
-  const { settings, loading, updateSetting } = useCompanySettings();
+  const { settings, loading } = useCompanySettings();
 
   const [showGstModal, setShowGstModal] = useState(false);
   const [pendingScheme, setPendingScheme] = useState<'regular' | 'composition' | null>(null);
@@ -176,8 +175,8 @@ const Settings: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       <header className="relative sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 shadow-xs">
-    <BackButton title="Back" />
-    <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[70%]">
+        <BackButton title="Back" />
+        <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[70%]">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Company Settings</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tax and pricing rules</p>
         </div>

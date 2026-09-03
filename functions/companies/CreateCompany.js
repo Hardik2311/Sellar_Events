@@ -86,6 +86,24 @@ exports.createCompany = onCall(async (request) => {
     // Write placeholder for settings
     await companyRef.collection("settings").doc("default").set({ initialized: true });
 
+    // Write settings/general (moving from client to avoid token propagation delay)
+    let gstScheme = 'none';
+    let taxType = 'inclusive';
+    if (gstRegistrationType === 'regular_inclusive') {
+      gstScheme = 'regular';
+    } else if (gstRegistrationType === 'regular_exclusive') {
+      gstScheme = 'regular';
+      taxType = 'exclusive';
+    } else if (gstRegistrationType === 'composition') {
+      gstScheme = 'composition';
+    }
+
+    await companyRef.collection("settings").doc("general").set({
+      gstScheme,
+      taxType,
+      enableTax: gstScheme !== 'none',
+    });
+
        // Write users
     await companyRef.collection("users").doc(uid).set({
       fullName,
