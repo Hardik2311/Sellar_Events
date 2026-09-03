@@ -34,6 +34,10 @@ const MOBILE_RIGHT_ITEMS = [
   { to: '/events/account', label: 'Account', icon: <UserCircle size={18} />, permission: null },
 ];
 
+// const MOBILE_QUICK_LINKS = [
+//   { to: '/events/create', label: 'Create Event', icon: <PlusCircle size={20} /> },
+// ];
+
 const EventsLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();

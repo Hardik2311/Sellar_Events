@@ -24,12 +24,12 @@ const CustomerEventDetail: React.FC = () => {
   const { event, loading } = usePublicEvent(id);
   const { settings } = useCompanySettings();
 
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [, setShareToast] = useState<string | null>(null);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [consentAcknowledged, setConsentAcknowledged] = useState(false);
-  const [showManualQR, setShowManualQR] = useState(false); // NEW
+const [quantities, setQuantities] = useState<Record<string, number>>({});
+const [activeImageIndex, setActiveImageIndex] = useState(0);
+const [shareToast, setShareToast] = useState<string | null>(null);
+const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+const [showManualQR, setShowManualQR] = useState(false); // NEW
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -113,24 +113,24 @@ const CustomerEventDetail: React.FC = () => {
   const consentBlocking = hasConsent && !consentAcknowledged;
 
   const selectedTiersBreakdown = event.tiers
-    .filter((tier) => (quantities[tier.id] ?? 0) > 0)
-    .map((tier) => ({
-      id: tier.id,
-      name: tier.name,
-      qty: quantities[tier.id],
-      subtotal: tier.price * quantities[tier.id],
-      price: tier.price, // NEW — needed by ManualQRPaymentCard's batch write
-    }));
+  .filter((tier) => (quantities[tier.id] ?? 0) > 0)
+  .map((tier) => ({
+    id: tier.id,
+    name: tier.name,
+    qty: quantities[tier.id],
+    subtotal: tier.price * quantities[tier.id],
+    price: tier.price, // NEW — needed by ManualQRPaymentCard's batch write
+  }));
 
-  const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
+const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
 
-  const handleGetTickets = () => {
-    if (event.registrationMode === 'tickets' && event.paymentCollectionMode === 'manual_qr') {
-      setShowManualQR(true); // inline QR card, no navigation to /checkout
-      return;
-    }
-    navigate(`/checkout/${event.id}`, { state: { quantities } });
-  };
+const handleGetTickets = () => {
+  if (event.registrationMode === 'tickets' && event.paymentCollectionMode === 'manual_qr') {
+    setShowManualQR(true); // inline QR card, no navigation to /checkout
+    return;
+  }
+  navigate(`/checkout/${event.id}`, { state: { quantities } });
+};
   const handleShare = async () => {
     if (!event) return;
     if (navigator.share) {
@@ -298,81 +298,81 @@ const CustomerEventDetail: React.FC = () => {
           </Card>
 
           {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
-                <div className="grid grid-cols-3 gap-2">
-                  {event.pastEventsGallery.slice(0, 6).map((item, i) => {
-                    const remaining = event.pastEventsGallery.length - 6;
-                    const isLastVisible = i === 5 && remaining > 0;
-                    return (
-                      <button
-                        key={item.url + i}
-                        onClick={() => setLightboxIndex(i)}
-                        className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800"
-                      >
-                        {item.type === 'video' ? (
-                          <video src={item.url} className="h-full w-full object-cover" muted playsInline />
-                        ) : (
-                          <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                        )}
-                        {isLastVisible && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                            +{remaining} more
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Lightbox */}
-          {lightboxIndex !== null && event.pastEventsGallery && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-              onClick={() => setLightboxIndex(null)}
+  <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+    <CardContent className="pt-4">
+      <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
+      <div className="grid grid-cols-3 gap-2">
+        {event.pastEventsGallery.slice(0, 6).map((item, i) => {
+          const remaining = event.pastEventsGallery.length - 6;
+          const isLastVisible = i === 5 && remaining > 0;
+          return (
+            <button
+              key={item.url + i}
+              onClick={() => setLightboxIndex(i)}
+              className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800"
             >
-              <button
-                onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
-                className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
-              {event.pastEventsGallery.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
-                    className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
-                    aria-label="Previous"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
-                    className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
-                    aria-label="Next"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                </>
+              {item.type === 'video' ? (
+                <video src={item.url} className="h-full w-full object-cover" muted playsInline />
+              ) : (
+                <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
               )}
-              <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-                {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
-                  <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
-                ) : (
-                  <img
-                    src={event.pastEventsGallery[lightboxIndex].url}
-                    alt={`Past event ${lightboxIndex + 1}`}
-                    className="max-h-[85vh] max-w-[90vw] object-contain"
-                  />
-                )}
-              </div>
-            </div>
-          )}
+              {isLastVisible && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                  +{remaining} more
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </CardContent>
+  </Card>
+)}
+
+{/* Lightbox */}
+{lightboxIndex !== null && event.pastEventsGallery && (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    onClick={() => setLightboxIndex(null)}
+  >
+    <button
+      onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
+      className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+      aria-label="Close"
+    >
+      <X size={20} />
+    </button>
+    {event.pastEventsGallery.length > 1 && (
+      <>
+        <button
+          onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
+          className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+          aria-label="Previous"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
+          className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
+          aria-label="Next"
+        >
+          <ArrowLeft size={20} />
+        </button>
+      </>
+    )}
+    <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+      {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
+        <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
+      ) : (
+        <img
+          src={event.pastEventsGallery[lightboxIndex].url}
+          alt={`Past event ${lightboxIndex + 1}`}
+          className="max-h-[85vh] max-w-[90vw] object-contain"
+        />
+      )}
+    </div>
+  </div>
+)}
 
           {/* Consent / Important Information */}
           {hasConsent && (
@@ -498,7 +498,7 @@ const CustomerEventDetail: React.FC = () => {
         </div>
       </main>
 
-      {/* ── Sticky checkout bar — only for ticketed events ───────────── */}
+            {/* ── Sticky checkout bar — only for ticketed events ───────────── */}
       {!allSoldOut && event.registrationMode !== 'rsvp' && (
         <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 flex justify-center gap-3 z-30">
           <div className="flex w-full max-w-3xl items-center gap-3">

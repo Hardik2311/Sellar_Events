@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
+import { useNavigate } from 'react-router-dom';
 import BackButton from '../components/ui/BackButton';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -36,6 +36,7 @@ const FIELD_LABELS: { key: keyof EventFieldRequirements; label: string; hint: st
 ];
 
 const EventFieldSettings: React.FC = () => {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { settings, loading } = useCompanySettings();
 

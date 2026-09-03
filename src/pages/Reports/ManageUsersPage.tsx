@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-
+import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { deleteTeamMember } from '../../lib/AuthOperations';
@@ -24,6 +24,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ManageUsersPage: React.FC = () => {
+  const navigate = useNavigate();
   const { profile, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
