@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 // worker must be configured once app-wide, e.g. in lib/firebase.ts or main.tsx:
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+// pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 export interface CompressPdfOptions {
   /** Strip title/author/subject/keywords metadata. Default true. */

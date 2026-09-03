@@ -1,21 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Ticket, Loader2 } from 'lucide-react';
+import { Ticket, Smartphone, CreditCard, Landmark, Loader2 } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import TicketConfirmation from '../components/TicketConfirmation';
-import MockPGModal from '../components/MockPGModal';
 
-type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
+type PaymentMethod = 'upi' | 'card' | 'netbanking';
 
-const PAYMENT_MODE_LABELS: Record<PaymentMethod, 'UPI' | 'Card' | 'Netbanking' | 'Free'> = {
+const PAYMENT_MODE_LABELS: Record<PaymentMethod, 'UPI' | 'Card' | 'Netbanking'> = {
   upi: 'UPI',
   card: 'Card',
   netbanking: 'Netbanking',
-  free: 'Free',
 };
 
 interface TaxSettings {
@@ -71,8 +69,8 @@ const CheckoutPage: React.FC = () => {
   }, [event, quantities]);
 
   const [attendeeDetails, setAttendeeDetails] = useState<AttendeeFormEntry[]>([]);
+  const [method, setMethod] = useState<PaymentMethod>('upi');
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
-  const [showPGPopup, setShowPGPopup] = useState(false);
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -154,6 +152,7 @@ const CheckoutPage: React.FC = () => {
   const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
   const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
   const taxRate = taxSettings?.defaultTaxRate || 0;
+  //const applyExclusiveTax = scheme === 'regular' && taxType === 'exclusive';
 
   let baseSubtotal = 0;
   let totalTaxAmount = 0;
@@ -216,26 +215,7 @@ const CheckoutPage: React.FC = () => {
         })
     );
 
-  const initiatePayment = () => {
-    if (!detailsComplete || lineItems.length === 0) return;
-
-    const oversold = lineItems.find((item) => {
-      const remaining = item.tier.quantity - (item.tier.sold ?? 0);
-      return item.qty > remaining;
-    });
-    if (oversold) {
-      console.error(`Not enough tickets left for "${oversold.tier.name}".`);
-      return;
-    }
-
-    if (total === 0) {
-      handlePay();
-    } else {
-      setShowPGPopup(true);
-    }
-  };
-
-  const handlePay = async (method: PaymentMethod = 'free') => {
+  const handlePay = async () => {
     if (!detailsComplete || lineItems.length === 0) return;
 
     const oversold = lineItems.find((item) => {
@@ -592,6 +572,40 @@ const CheckoutPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Payment method */}
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="pt-4">
+              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Payment method</h2>
+              <div className="flex flex-col gap-2">
+                {(
+                  [
+                    { id: 'upi' as const, label: 'UPI', icon: <Smartphone size={16} /> },
+                    { id: 'card' as const, label: 'Credit / Debit card', icon: <CreditCard size={16} /> },
+                    { id: 'netbanking' as const, label: 'Net banking', icon: <Landmark size={16} /> },
+                  ]
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setMethod(opt.id)}
+                    className={`flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm font-medium transition-colors ${method === opt.id
+                      ? 'border-[#007A78] bg-orange-50 text-[#007A78] dark:bg-teal-950'
+                      : 'border-gray-300 text-slate-600 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'
+                      }`}
+                  >
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${method === opt.id ? 'border-[#007A78]' : 'border-gray-300 dark:border-slate-500'
+                        }`}
+                    >
+                      {method === opt.id && <span className="h-2 w-2 rounded-full bg-[#007A78]" />}
+                    </span>
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
@@ -605,7 +619,7 @@ const CheckoutPage: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={initiatePayment}
+            onClick={handlePay}
             disabled={!detailsComplete || lineItems.length === 0 || step === 'processing'}
             className="flex-1 rounded-md bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
           >
@@ -617,17 +631,6 @@ const CheckoutPage: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {showPGPopup && (
-        <MockPGModal
-          amount={total}
-          onSuccess={(method) => {
-            setShowPGPopup(false);
-            handlePay(method);
-          }}
-          onCancel={() => setShowPGPopup(false)}
-        />
-      )}
     </div>
   );
 };
