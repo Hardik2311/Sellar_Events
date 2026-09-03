@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { FiCamera, FiCheck, FiX, FiUser } from 'react-icons/fi';
 import BackButton from '../components/ui/BackButton';
@@ -115,7 +115,6 @@ const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 );
 
 const EditProfile: React.FC = () => {
-    //const navigate = useNavigate();
     const { user, profile: authProfile, loading: authLoading } = useAuth();
     const { profile, loading: dataLoading, saveData, refetch } =
         useProfileData(user?.uid, authProfile?.companyId);

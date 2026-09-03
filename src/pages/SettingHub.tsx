@@ -1,13 +1,12 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { CalendarCog, Landmark, Settings2, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CalendarCog, Landmark, Settings2, Users } from 'lucide-react'; // + ShieldCheck
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { canManageUsers, ROLES } from '../enum/enum';
 
 const SettingsHub: React.FC = () => {
-    const navigate = useNavigate();
     const { profile } = useAuth();
     const showManageUsers = canManageUsers(profile?.role);
     const isOwner = profile?.role === ROLES.ORGANIZER; // only owner sets permissions
@@ -67,7 +66,7 @@ const SettingsHub: React.FC = () => {
                         </div>
                     </Link>
 
-                                        {(showManageUsers || isOwner) && (
+                    {(showManageUsers || isOwner) && (
                         <Link
                             to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_USER_SETTINGS}`.replace('//', '/')}
                             className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"

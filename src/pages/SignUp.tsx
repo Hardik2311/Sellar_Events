@@ -8,7 +8,6 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, functions, db } from '../lib/firebase'
-import { mapGstRegistrationType } from '../lib/gstMapping';
 
 import {
   FiUser,
@@ -312,7 +311,6 @@ const Signup: React.FC = () => {
       const token = await authUser.getIdToken(true);
 
       // Execute Cloud Function
-      const { gstScheme, taxType } = mapGstRegistrationType(formData.gstRegistrationType);
 
       const createCompany = httpsCallable(functions, 'createCompany');
       const result = await createCompany({
@@ -337,18 +335,9 @@ const Signup: React.FC = () => {
       });
 
       const companyId = (result.data as { companyId?: string } | undefined)?.companyId;
-      if (companyId) {
-        const settingsRef = doc(db, 'companies', companyId, 'settings', 'general');
-        await setDoc(
-          settingsRef,
-          {
-            gstScheme,
-            taxType,
-            enableTax: gstScheme !== 'none',
-          },
-          { merge: true }
-        );
-      }
+      
+      // Refresh token so the client receives the new 'companyId' custom claim set by the cloud function
+      await authUser.getIdToken(true);
 
       setSubmitSuccess(true);
       setTimeout(() => {
