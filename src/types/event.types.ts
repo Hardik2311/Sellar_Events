@@ -30,6 +30,7 @@ export interface EventSummary {
   accentColor?: string;
   tiers: TicketTier[];
   customFields?: CustomField[];
+  salesTrend: SalesTrendPoint[]; // per-event daily revenue, scoped to the selected date range
 }
 
 export interface SalesTrendPoint {
@@ -37,11 +38,8 @@ export interface SalesTrendPoint {
   revenue: number;
 }
 
-// Shape the dashboard page works with as a whole.
-// When backend is wired, this is what `fetchDashboardData` should resolve to.
 export interface EventDashboardData {
   events: EventSummary[];
-  salesTrend: SalesTrendPoint[];
 }
 
 // ─── Create Event form types ──────────────────────────────────────────────────

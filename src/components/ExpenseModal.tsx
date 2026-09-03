@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { EventListCard } from './EventListCard';
 import { useAuth } from '../context/AuthContext';
-import { useTeamMembers } from '../hooks/useTeamMembers';
+//import { useTeamMembers } from '../hooks/useTeamMembers';
 import type { EventSummary } from '../types/event.types';
-import { ROLES } from '../enum/enum';
+//import { ROLES } from '../enum/enum';
 
 interface Props {
   isOpen: boolean;
@@ -23,20 +23,14 @@ interface Props {
 
 export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = false, onSave, preselectedEventId = null }: Props) => {
   const { user, profile } = useAuth();
-  const { members: teamMembers, loading: membersLoading } = useTeamMembers(profile?.companyId);
-
-  const members = user && profile && profile.role === ROLES.ORGANIZER && !teamMembers.some(m => m.id === user.uid)
-    ? [{ id: user.uid, name: profile.fullName, role: profile.role }, ...teamMembers]
-    : teamMembers;
+  const currentUserName = profile?.fullName || user?.displayName || 'Unknown User';
   const today = new Date().toISOString().split('T')[0];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(preselectedEventId);
   const [eventSearch, setEventSearch] = useState('');
-  const [addedBy, setAddedBy] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setSelectedEventId(preselectedEventId);
-      setAddedBy('');
     }
   }, [isOpen, preselectedEventId]);
   const [title, setTitle] = useState('');
@@ -48,9 +42,8 @@ export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = fal
 
   if (!isOpen) return null;
 
-    const handleSave = async () => {
+  const handleSave = async () => {
     if (!selectedEventId) return setError('Please select an event.');
-    if (!addedBy) return setError('Please select who is adding this expense.');
     if (!title.trim()) return setError('Title is required.');
     if (!description.trim()) return setError('Description is required.');
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
@@ -64,7 +57,7 @@ export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = fal
         description: description.trim(),
         amount: Number(amount),
         date: new Date(date).getTime(),
-        createdBy: addedBy,
+        createdBy: currentUserName,
       });
       setTitle('');
       setDescription('');
@@ -72,7 +65,6 @@ export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = fal
       setDate(today);
       setSelectedEventId(null);
       setEventSearch('');
-      setAddedBy('');
       onClose();
     } catch {
       setError('Failed to save. Try again.');
@@ -84,7 +76,12 @@ export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = fal
   return (
     <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-black/40 px-4">
       <div className="bg-white dark:bg-[#1E293B] w-full max-w-sm rounded-sm shadow-xl p-5 border border-slate-200 dark:border-slate-800">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Add Expense</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Add Expense</h2>
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            Added by: <span className="text-slate-900 dark:text-white font-semibold">{currentUserName}</span>
+          </span>
+        </div>
 
         <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Event</label>
         <div className="mb-3">
@@ -97,19 +94,6 @@ export const ExpenseModal = ({ isOpen, onClose, events = [], eventsLoading = fal
             loading={eventsLoading}
           />
         </div>
-
-                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Added By</label>
-        <select
-          value={addedBy}
-          onChange={e => setAddedBy(e.target.value)}
-          disabled={membersLoading}
-          className="w-full border border-slate-200 dark:border-slate-700 rounded-sm p-2 text-sm mb-3 bg-slate-50 dark:bg-[#0F172A] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007A78] dark:focus:ring-[#2DD4BF]"
-        >
-          <option value="">{membersLoading ? 'Loading…' : 'Select team member'}</option>
-          {members.map(m => (
-            <option key={m.id} value={m.name}>{m.name}</option>
-          ))}
-        </select>
 
         <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Title</label>
         <input

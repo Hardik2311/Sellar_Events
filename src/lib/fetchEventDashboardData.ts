@@ -43,8 +43,8 @@ export async function fetchEventDashboardData(
     const start = new Date(startDate); start.setHours(0, 0, 0, 0);
     const end = new Date(endDate); end.setHours(23, 59, 59, 999);
 
-    // Events are NOT date-filtered anymore — always fetch all of them.
-    // The selected date range only scopes ticketsSold/revenue/tier stats below.
+        // Events are NOT date-filtered anymore — always fetch all of them.
+    // The selected date range only scopes ticketsSold/revenue/tier/trend stats below.
     const eventsSnap = await getDocs(query(
         collection(db, 'companies', companyId, 'events'),
         orderBy('date', 'asc')
@@ -54,13 +54,17 @@ export async function fetchEventDashboardData(
     //    N+1 reads — fine for a handful of events; if the event count grows,
     //    consider denormalizing ticketsSold/revenue onto the event doc via a
     //    Cloud Function trigger on attendee writes instead.
-    const salesByDate: Record<string, number> = {};
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        salesByDate[d.toLocaleDateString('en-CA')] = 0;
-    }
+    const makeEmptySalesByDate = (): Record<string, number> => {
+        const map: Record<string, number> = {};
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            map[d.toLocaleDateString('en-CA')] = 0;
+        }
+        return map;
+    };
 
     const eventResults: PromiseSettledResult<EventSummary>[] = await Promise.allSettled(
         eventsSnap.docs.map(async (eventDoc): Promise<EventSummary> => {
+            const salesByDate = makeEmptySalesByDate();
             const e = eventDoc.data();
 
             const rawDate = e.date;
@@ -113,9 +117,11 @@ export async function fetchEventDashboardData(
                 if (dateKey in salesByDate) salesByDate[dateKey] += Number(resolvedAmount) || 0;
             });
 
-            const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({
+                        const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({
                 id: t.id, name: t.name, price: t.price, total: t.quantity, sold: tierSold[t.id] || 0,
             }));
+
+            const salesTrend: SalesTrendPoint[] = Object.entries(salesByDate).map(([date, revenue]) => ({ date, revenue }));
 
             return {
                 id: eventDoc.id,
@@ -131,6 +137,7 @@ export async function fetchEventDashboardData(
                 ticketsTotal: tiers.reduce((sum, t) => sum + t.total, 0),
                 revenue,
                 tiers,
+                salesTrend,
             };
         })
     );
@@ -144,11 +151,8 @@ export async function fetchEventDashboardData(
         console.warn(`${skipped.length} event(s) skipped due to bad data:`, skipped.map((r) => r.reason?.message));
     }
 
-    const salesTrend: SalesTrendPoint[] = Object.entries(salesByDate).map(([date, revenue]) => ({ date, revenue }));
-
     const result: WithCacheMeta<EventDashboardData> = {
         events,
-        salesTrend,
         lastUpdated: Date.now(),
         cacheStart: startDate,
         cacheEnd: endDate,
