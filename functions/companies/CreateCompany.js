@@ -52,7 +52,7 @@ exports.createCompany = onCall(async (request) => {
     expiryDate.setDate(expiryDate.getDate() + 3);
 
     // Write root document fields matching screenshot exactly
-    await companyRef.set({
+       await companyRef.set({
       createdAt: now,
       expiryDate: admin.firestore.Timestamp.fromDate(expiryDate),
       isTrial: true,
@@ -61,7 +61,8 @@ exports.createCompany = onCall(async (request) => {
       ownerUID: uid,
       pack: "enterprise",
       referralDetails: null,
-      validity: "active"
+      validity: "active",
+      eventCredits: 0 // NEW — naye company ke paas start me 0 event credits, admin manually recharge karega
     });
   
 

@@ -13,6 +13,11 @@ const CustomerEventDiscover = lazy(() => import('../pages/Customereventdiscover'
 const CustomerEventDetail = lazy(() => import('../pages/Customereventdetail'));
 const CheckoutPage = lazy(() => import('../pages/Checkout'));
 
+// Super Admin — standalone, no Events sidebar/layout
+const SuperAdminHub = lazy(() => import('../pages/SuperAdmin/SuperAdminHub'));
+const SuperAdminSupportTickets = lazy(() => import('../pages/SuperAdmin/SupportAdminSupportTickets'));
+const SuperAdminPlanLeads = lazy(() => import('../pages/SuperAdmin/SuperAdminPlanLeads'));
+
 const Loading = () => <div>Loading...</div>;
 
 const generateDynamicRoutes = (layoutType: 'EVENTS') => {
@@ -42,7 +47,7 @@ const router = createBrowserRouter([
       { path: ROUTES.FORGOT_PASSWORD, element: <ForgotPasswordPage /> },
       { path: ROUTES.RESET_PASSWORD, element: <ResetPassword /> },
 
-      // Protected organizer app
+            // Protected organizer app
       {
         path: ROUTES.EVENTS,
         element: (
@@ -51,6 +56,21 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         children: generateDynamicRoutes('EVENTS'),
+      },
+
+      // Super Admin — protected (auth required) but NOT wrapped in EventsLayout/sidebar
+      {
+        path: ROUTES.EVENTS_SUPER_ADMIN,
+        element: (
+          <ProtectedRoute>
+            <Outlet />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <SuperAdminHub /> },
+          { path: 'support-tickets', element: <SuperAdminSupportTickets /> },
+          { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
+        ],
       },
 
       // Public customer-facing routes

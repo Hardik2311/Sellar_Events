@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// import { db } from '../lib/firebase';
-// import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
-// import { getAuth } from 'firebase/auth';
+import { db } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import BackButton from '../components/ui/BackButton';
 
 import {
@@ -13,7 +13,9 @@ import {
   Phone,
   MessageCircle,
   FileText,
-  Send
+  Send,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 // --- TYPES ---
 interface AccordionItemProps {
@@ -56,80 +58,81 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, icon, children, is
 const SupportPage: React.FC = () => {
   const [openSection, setOpenSection] = useState<string | null>('faq-1');
 
-  // const [userProfile, setUserProfile] = useState({ fullName: '', email: '', phone: '' });
-  // const [formData, setFormData] = useState({ subject: '', description: '' });
-  // const [submitting, setSubmitting] = useState(false);
-  // const [submitted, setSubmitted] = useState(false);
+  const [userProfile, setUserProfile] = useState({ fullName: '', email: '', phone: '' });
+  const [formData, setFormData] = useState({ subject: '', description: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [ticketRef, setTicketRef] = useState<string | null>(null);
 
-  // --- FETCH LOGGED-IN ORGANIZER PROFILE ---
-  // useEffect(() => {
-  //   const auth = getAuth();
-  //   const currentUser = auth.currentUser;
-  //   if (!currentUser) return;
+  useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
 
-  //   const fetchProfile = async () => {
-  //     const companiesSnapshot = await getDocs(collection(db, "companies"));
+    const fetchProfile = async () => {
+      const companiesSnapshot = await getDocs(collection(db, "companies"));
 
-  //     for (const companyDoc of companiesSnapshot.docs) {
-  //       const userDoc = await getDoc(doc(db, "companies", companyDoc.id, "users", currentUser.uid));
+      for (const companyDoc of companiesSnapshot.docs) {
+        const userDoc = await getDoc(doc(db, "companies", companyDoc.id, "users", currentUser.uid));
 
-  //       if (userDoc.exists()) {
-  //         const data = userDoc.data();
+        if (userDoc.exists()) {
+          const data = userDoc.data();
 
-  //         setUserProfile({
-  //           fullName: data.name || currentUser.email || 'Unknown',
-  //           email: currentUser.email || 'N/A',
-  //           phone: data.phoneNumber || 'N/A',
-  //         });
-  //         break;
-  //       }
-  //     }
-  //   };
+          setUserProfile({
+            fullName: data.name || currentUser.email || 'Unknown',
+            email: currentUser.email || 'N/A',
+            phone: data.phoneNumber || 'N/A',
+          });
+          break;
+        }
+      }
+    };
 
-  //   fetchProfile();
-  // }, []);
+    fetchProfile();
+  }, []);
 
-  // const generateRefNumber = async () => {
-  //   const counterRef = doc(db, "counters", "support_tickets");
-  //   const counterSnap = await getDoc(counterRef);
+  const generateRefNumber = async () => {
+    const counterRef = doc(db, "counters", "event_support_tickets");
+    const counterSnap = await getDoc(counterRef);
 
-  //   let nextNumber = 1;
-  //   if (counterSnap.exists()) {
-  //     nextNumber = (counterSnap.data().count || 0) + 1;
-  //   }
+    let nextNumber = 1;
+    if (counterSnap.exists()) {
+      nextNumber = (counterSnap.data().count || 0) + 1;
+    }
 
-  //   await setDoc(counterRef, { count: nextNumber });
+    await setDoc(counterRef, { count: nextNumber });
 
-  //   return `TKT-${String(nextNumber).padStart(4, '0')}`;
-  // };
+    return `TKT-${String(nextNumber).padStart(4, '0')}`;
+  };
 
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   if (!formData.subject || !formData.description) {
-  //     alert("Please fill all fields.");
-  //     return;
-  //   }
-  //   setSubmitting(true);
-  //   try {
-  //     const refNumber = await generateRefNumber();
-  //     await addDoc(collection(db, "support_tickets"), {
-  //       referenceNumber: refNumber,
-  //       fullName: userProfile.fullName,
-  //       email: userProfile.email,
-  //       phone: userProfile.phone,
-  //       subject: formData.subject,
-  //       description: formData.description,
-  //       status: 'received',
-  //       createdAt: serverTimestamp(),
-  //     });
-  //     setSubmitted(true);
-  //     setFormData({ subject: '', description: '' });
-  //   } catch (err) {
-  //     alert("Failed to submit ticket. Please try again.");
-  //   } finally {
-  //     setSubmitting(false);
-  //   }
-  // };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.subject || !formData.description) {
+      alert("Please fill all fields.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const refNumber = await generateRefNumber();
+      await addDoc(collection(db, "event_support_tickets"), {
+        referenceNumber: refNumber,
+        fullName: userProfile.fullName,
+        email: userProfile.email,
+        phone: userProfile.phone,
+        subject: formData.subject,
+        description: formData.description,
+        status: 'received',
+        createdAt: serverTimestamp(),
+      });
+      setTicketRef(refNumber);
+      setSubmitted(true);
+      setFormData({ subject: '', description: '' });
+    } catch (err) {
+      alert("Failed to submit ticket. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const toggleSection = (id: string) => {
     setOpenSection(prev => (prev === id ? null : id));
@@ -255,21 +258,65 @@ const SupportPage: React.FC = () => {
 
         {/* --- SECTION 3: RAISE TICKET --- */}
         <div className="mb-8">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 ml-1">
+          <h2 className="text-sm font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-4 ml-1">
             Report an Issue
           </h2>
 
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-700 mb-3 text-gray-400 dark:text-slate-500 cursor-not-allowed shadow-sm">
-            <div className="flex items-center gap-3">
-              <Send className="w-5 h-5 text-gray-300 dark:text-slate-600" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                  Coming Soon
-                </span>
-                <span className="font-semibold text-sm sm:text-base">Raise a Support Ticket</span>
+          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-lg border border-gray-200 dark:border-slate-800 shadow-sm">
+            {submitted ? (
+              <div className="flex flex-col items-center text-center gap-2 py-4">
+                <div className="p-3 rounded-full bg-[#007A78]/10 dark:bg-[#2DD4BF]/15 text-[#007A78] dark:text-[#2DD4BF]">
+                  <CheckCircle2 size={22} />
+                </div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Ticket raised — {ticketRef}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
+                  Our team will get back to you shortly on your registered email/phone.
+                </p>
+                <button
+                  onClick={() => setSubmitted(false)}
+                  className="mt-2 text-xs font-semibold text-[#007A78] dark:text-[#2DD4BF] hover:underline"
+                >
+                  Raise another ticket
+                </button>
               </div>
-            </div>
-            <span className="text-xl text-gray-300 dark:text-slate-600">→</span>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Send className="w-4 h-4 text-[#007A78] dark:text-[#2DD4BF]" />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Raise a Support Ticket</span>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Subject</label>
+                  <input
+                    type="text"
+                    value={formData.subject}
+                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                    placeholder="Briefly describe the issue"
+                    className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-[#007A78] dark:focus:ring-[#2DD4BF]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Description</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Explain the issue in detail"
+                    rows={4}
+                    className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-[#007A78] dark:focus:ring-[#2DD4BF] resize-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="mt-1 flex items-center justify-center gap-2 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] py-2.5 text-sm font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-60"
+                >
+                  {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {submitting ? 'Submitting...' : 'Submit Ticket'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
 

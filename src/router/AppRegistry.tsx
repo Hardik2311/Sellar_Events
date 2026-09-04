@@ -19,6 +19,7 @@ const UserAdd = lazy(() => import('../pages/UserAdd'));
 const SupportPage = lazy(() => import('../pages/SupportPage'));
 const AddOns = lazy(() => import('../pages/AddOns'));
 const WhatsAppIntegration = lazy(() => import('../pages/Whatsapp/WhatsAppIntegration'));
+const RechargePage = lazy(() => import('../components/RechargeModal')); // NEW – Event credits recharge page
 const ReportsHub = lazy(() => import('../pages/ReportsHub'));
 const ExpenseReportPage = lazy(() => import('../pages/Reports/ExpenseReport'));
 const SalesReportPage = lazy(() => import('../pages/Reports/SalesReport'));
@@ -75,6 +76,7 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_SUPPORT, component: SupportPage },
       { path: ROUTES.EVENTS_ACCOUNT_ADDONS, component: AddOns },
       { path: ROUTES.EVENTS_WHATSAPP_INTEGRATION, component: WhatsAppIntegration },
+      { path: ROUTES.EVENTS_ACCOUNT_RECHARGE, component: RechargePage }, // NEW
       { path: ROUTES.EVENTS_REPORTS, component: guarded(Permission.VIEW_REPORTS, ReportsHub) },
       { path: ROUTES.EVENTS_REPORTS_EXPENSE, component: guarded(Permission.VIEW_EXPENSE_REPORT, ExpenseReportPage) },
       { path: ROUTES.EVENTS_REPORTS_SALES, component: guarded(Permission.VIEW_SALES_REPORT, SalesReportPage) },

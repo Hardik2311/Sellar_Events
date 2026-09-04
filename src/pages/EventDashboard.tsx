@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { RefreshCw, Loader2, Eye, EyeOff, LayoutDashboard } from 'lucide-react';
+import { RefreshCw, Loader2, Eye, EyeOff, LayoutDashboard, Wallet } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useEventCredits } from '../hooks/useEventCredits';
 import { fetchEventDashboardData, CACHE_DURATION } from '../lib/fetchEventDashboardData';
 import type { WithCacheMeta } from '../lib/fetchEventDashboardData';
 import type { EventDashboardData } from '../types/event.types';
@@ -17,6 +19,8 @@ const EventDashboardContent: React.FC = () => {
   const { profile } = useAuth();
   const { can } = usePermissions();
   const { filters } = useEventFilter();
+  const { credits, loading: creditsLoading } = useEventCredits();
+  const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isDataVisible, setIsDataVisible] = useState<boolean>(false);
@@ -80,8 +84,17 @@ const EventDashboardContent: React.FC = () => {
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{profile?.organizationName ?? ''}</p>
         </div>
 
-        {/* Right: eye toggle button */}
+        {/* Right: credits badge + eye toggle button */}
         <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => navigate('/events/account/recharge')}
+            className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            title="Event credits — click to recharge"
+          >
+            <Wallet size={16} />
+            {creditsLoading ? '…' : credits}
+          </button>
+
           {can(Permission.TOGGLE_SENSITIVE_DATA) && (
             <button
               onClick={() => setIsDataVisible(!isDataVisible)}
