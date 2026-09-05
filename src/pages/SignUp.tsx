@@ -36,6 +36,7 @@ import {
 import SmokeScreenLoader from '../components/ui/SmokeScreenLoader';
 import IdentityDocumentUpload, { type DocFile } from '../components/IdentityUpload';
 import FloatingEventIcons from '../components/ui/FloatingEventIcons';
+import { useAuth } from '../context/AuthContext';
 
 const eventCategoryOptions = [
   { value: 'Concert', label: 'Concert / Show' },
@@ -125,6 +126,7 @@ const initialFormData: SignupFormData = {
  */
 const Signup: React.FC = () => {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [formData, setFormData] = useState<SignupFormData>(initialFormData);
   const [showPassword, setShowPassword] = useState(false);
@@ -335,9 +337,15 @@ const Signup: React.FC = () => {
       });
 
       const companyId = (result.data as { companyId?: string } | undefined)?.companyId;
-      
+
       // Refresh token so the client receives the new 'companyId' custom claim set by the cloud function
       await authUser.getIdToken(true);
+
+      // getIdToken(true) alone does NOT re-trigger onAuthStateChanged, so
+      // AuthContext's profile would still show blank organizationName until
+      // a manual page refresh. Force it to re-read now that the company
+      // docs exist.
+      await refreshProfile();
 
       setSubmitSuccess(true);
       setTimeout(() => {

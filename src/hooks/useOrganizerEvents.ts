@@ -41,6 +41,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
   customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
+   consentText: d.consentText ?? undefined,
+  consentStyle: d.consentStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
   //qrImageUrl: d.qrImageUrl ?? null,
@@ -216,6 +218,10 @@ export const useOrganizerEvents = () => {
         ...existingEvent?.descriptionStyle,
         fontSize: form.descriptionFontSize,
       },
+      consentText: form.consentText.trim() || null,
+      consentStyle: form.consentText.trim()
+        ? { ...DEFAULT_TEXT_STYLE, ...existingEvent?.consentStyle, fontSize: form.consentFontSize }
+        : null,
       // NEW — only meaningful for ticketed events; null-out otherwise so stale
       // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
       paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
