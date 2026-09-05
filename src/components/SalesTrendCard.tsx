@@ -37,7 +37,7 @@ export const SalesTrendCard: React.FC<SalesTrendCardProps> = ({ data, isDataVisi
                   style={{ width: data.length > 14 ? '32px' : `${100 / data.length}%` }}
                 >
                   <div
-                    className="w-full rounded-t-sm bg-[#007A78]/20 hover:bg-[#007A78] dark:bg-[#2DD4BF]/30 dark:hover:bg-[#2DD4BF] transition-all"
+                    className="w-full rounded-t-sm bg-[#007A78] dark:bg-[#2DD4BF] transition-all"
                     style={{ height: `${heightPercent}%` }}
                     title={`₹${point.revenue.toLocaleString('en-IN')}`}
                   />

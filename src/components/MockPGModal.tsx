@@ -22,13 +22,13 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div 
-        className="relative w-full max-w-md rounded-xl bg-white dark:bg-[#1E293B] shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-md rounded-sm bg-white dark:bg-[#1E293B] shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-5 py-4">
           <div className="flex items-center gap-2">
-            <div className="bg-[#007A78] text-white p-1.5 rounded-md">
+            <div className="bg-[#007A78] text-white p-1.5 rounded-sm">
               <Lock size={16} />
             </div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Secure Payment</h2>
@@ -36,7 +36,7 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
           <button 
             onClick={onCancel} 
             disabled={isProcessing}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-sm text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
           >
             <X size={20} />
           </button>
@@ -54,7 +54,7 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
         <div className="px-5 py-5 space-y-3 flex-1 overflow-y-auto">
           <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Select Payment Method</p>
           
-          <label className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-all ${method === 'upi' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
+          <label className={`flex cursor-pointer items-center justify-between rounded-sm border p-4 transition-all ${method === 'upi' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
             <div className="flex items-center gap-3">
               <div className={`flex h-10 w-10 items-center justify-center rounded-full ${method === 'upi' ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-900' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
                 <Smartphone size={20} />
@@ -70,9 +70,9 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
             />
           </label>
 
-          <label className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-all ${method === 'card' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
+          <label className={`flex cursor-pointer items-center justify-between rounded-sm border p-4 transition-all ${method === 'card' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${method === 'card' ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-900' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+              <div className={`flex h-10 w-10 items-center justify-center rounded-sm ${method === 'card' ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-900' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
                 <CreditCard size={20} />
               </div>
               <span className="font-semibold text-slate-700 dark:text-slate-200">Credit / Debit Card</span>
@@ -86,9 +86,9 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
             />
           </label>
 
-          <label className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-all ${method === 'netbanking' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
+          <label className={`flex cursor-pointer items-center justify-between rounded-sm border p-4 transition-all ${method === 'netbanking' ? 'border-[#007A78] bg-[#007A78]/5 dark:border-[#2DD4BF] dark:bg-[#2DD4BF]/10' : 'border-gray-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50'}`}>
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${method === 'netbanking' ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-900' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+              <div className={`flex h-10 w-10 items-center justify-center rounded-sm ${method === 'netbanking' ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-900' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
                 <Landmark size={20} />
               </div>
               <span className="font-semibold text-slate-700 dark:text-slate-200">Netbanking</span>
@@ -108,7 +108,7 @@ const MockPGModal: React.FC<MockPGModalProps> = ({ amount, onSuccess, onCancel }
           <button
             onClick={handleSimulatePayment}
             disabled={isProcessing}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#007A78] py-4 text-sm font-bold text-white transition-all hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-900 dark:hover:bg-[#22b8a5] disabled:opacity-70 shadow-md"
+            className="w-full flex items-center justify-center gap-2 rounded-sm bg-[#007A78] py-4 text-sm font-bold text-white transition-all hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-900 dark:hover:bg-[#22b8a5] disabled:opacity-70 shadow-md"
           >
             {isProcessing ? (
               <>

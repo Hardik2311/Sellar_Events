@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
+import { stripHtmlTags } from '../lib/utils';
 
 const TICKET_CANVAS_SCALE = 2;      // was 3 inside buildTicketCanvas — still crisp, ~55% fewer pixels
 const TICKET_IMAGE_QUALITY = 0.85;  // JPEG quality used everywhere a ticket image is produced
@@ -25,6 +26,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     tickets,
     onDone,
 }) => {
+    const cleanEventTitle = stripHtmlTags(eventTitle);
     const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
     const buildTicketCanvas = (ticketId: string, tierName: string, attendeeName: string): HTMLCanvasElement | null => {
@@ -208,7 +210,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                         if (navigator.canShare?.({ files: [file] })) {
                             await navigator.share({ files: [file] });
                         } else {
-                            await navigator.share({ title: eventTitle, text });
+                            await navigator.share({ title: cleanEventTitle, text });
                         }
                     } catch {
                         /* user cancelled share — ignore */
@@ -246,7 +248,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
             );
         });
 
-        pdf.save(`${eventTitle.replace(/\s+/g, '_')}_tickets.pdf`);
+        pdf.save(`${cleanEventTitle.replace(/\s+/g, '_')}_tickets.pdf`);
     };
 
     return (
@@ -260,7 +262,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                     <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#007A78]">
                         Booking Confirmed
                     </span>
-                    <h1 className="text-2xl font-extrabold text-[#0B3B3A]">{eventTitle}</h1>
+                    <h1 className="text-2xl font-extrabold text-[#0B3B3A]">{cleanEventTitle}</h1>
                     <p className="text-sm text-slate-500">{eventDate}</p>
                 </div>
 

@@ -8,6 +8,7 @@ import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import TicketConfirmation from '../components/TicketConfirmation';
 import MockPGModal from '../components/MockPGModal';
+import { stripHtmlTags } from '../lib/utils';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
 
@@ -416,7 +417,7 @@ const CheckoutPage: React.FC = () => {
         <BackButton />
         <div className="absolute left-1/2 -translate-x-1/2 text-center min-w-0 max-w-[65%]">
           <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">Checkout</h1>
-          <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{event.title}</p>
+          <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{stripHtmlTags(event.title)}</p>
         </div>
         <div className="w-9" />
       </header>
@@ -485,6 +486,8 @@ const CheckoutPage: React.FC = () => {
                         value={entry.name}
                         onChange={(e) => updateAttendee(index, 'name', e.target.value)}
                         placeholder="As it should appear on the ticket"
+                        autoComplete="name"
+                        spellCheck={false}
                         className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                       />
                     </div>
@@ -495,9 +498,11 @@ const CheckoutPage: React.FC = () => {
                         value={entry.email}
                         onChange={(e) => updateAttendee(index, 'email', e.target.value)}
                         placeholder="you@example.com"
+                        autoComplete="email"
+                        spellCheck={false}
                         className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
-                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                          : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
                           }`}
                       />
                       {entry.email.length > 0 && !isValidEmail(entry.email) && (
@@ -513,9 +518,10 @@ const CheckoutPage: React.FC = () => {
                         onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                         maxLength={10}
                         placeholder="10-digit mobile number"
+                        autoComplete="tel"
                         className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
-                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                          : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
                           }`}
                       />
                       {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
