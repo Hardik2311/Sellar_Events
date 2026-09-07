@@ -77,6 +77,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     description: data.description,
     tiers,
     customFields: data.customFields ?? [],
+    salesTrend: data.salesTrend ?? [],
   };
 };
 
@@ -357,6 +358,8 @@ const Attendees: React.FC = () => {
         return [...searchedAttendees].sort((a, b) => b.name.localeCompare(a.name));
       case 'checked_in':
         return searchedAttendees.filter((a) => a.status === 'checked_in');
+      case 'pending':
+        return searchedAttendees.filter((a) => a.status === 'valid');
       case 'cancelled':
         return searchedAttendees.filter((a) => a.status === 'cancelled');
       default:

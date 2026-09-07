@@ -17,6 +17,7 @@ import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
 import { stripHtmlTags } from '../lib/utils';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
+import { DEFAULT_TEXT_STYLE } from '../types/event.types';
 
 const CustomerEventDetail: React.FC = () => {
   const { slug, companyId } = useParams<{ slug: string; companyId?: string }>();
@@ -291,14 +292,20 @@ const CustomerEventDetail: React.FC = () => {
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
               <p
-                className="whitespace-pre-line leading-relaxed break-words"
+                className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
+                    ? 'text-slate-800 dark:text-slate-100'
+                    : ''
+                  }`}
                 style={
                   event.descriptionStyle
                     ? {
                       fontSize: event.descriptionStyle.fontSize,
                       fontWeight: event.descriptionStyle.fontWeight,
                       fontStyle: event.descriptionStyle.fontStyle,
-                      color: event.descriptionStyle.color,
+                      color:
+                        event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
+                          ? undefined
+                          : event.descriptionStyle.color,
                     }
                     : undefined
                 }
@@ -391,14 +398,20 @@ const CustomerEventDetail: React.FC = () => {
               <CardContent className="pt-4">
                 <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Important Information &amp; Consent</h2>
                 <p
-                  className="whitespace-pre-line leading-relaxed mb-3"
+                  className={`whitespace-pre-line leading-relaxed mb-3 ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                      ? 'text-slate-800 dark:text-slate-100'
+                      : ''
+                    }`}
                   style={
                     event.consentStyle
                       ? {
                         fontSize: event.consentStyle.fontSize,
                         fontWeight: event.consentStyle.fontWeight,
                         fontStyle: event.consentStyle.fontStyle,
-                        color: event.consentStyle.color,
+                        color:
+                          event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                            ? undefined
+                            : event.consentStyle.color,
                       }
                       : undefined
                   }
