@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -12,6 +13,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "clsx": "^2.1.1",
+    "express": "^5.2.1",
     "firebase": "^12.16.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
