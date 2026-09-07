@@ -135,7 +135,7 @@ const OrganizerEventDetail: React.FC = () => {
       if (profile?.companyId) {
         const companySnap = await getDoc(doc(db, 'companies', profile.companyId));
         if (companySnap.exists() && companySnap.data().subdomain) {
-          shareUrl = `https://${companySnap.data().subdomain}.sellar.in/e/${slugId}`;
+          shareUrl = `https://${companySnap.data().subdomain}.outsold.in/e/${slugId}`;
         }
       }
     } catch (error) {

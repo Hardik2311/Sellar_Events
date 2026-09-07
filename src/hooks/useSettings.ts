@@ -40,6 +40,8 @@ export interface CompanySettings {
   whatsappShareTemplate: string;
   organizationName: string;
  payments: PaymentSettings; // NEW
+ subdomain?: string;
+ domainAliases?: string[];
 }
 
 const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
@@ -76,18 +78,19 @@ const DEFAULT_SETTINGS: CompanySettings = {
   payments: DEFAULT_PAYMENTS, // NEW
 };
 
-export function useCompanySettings() {
+export function useCompanySettings(targetCompanyId?: string | null) {
   const { profile } = useAuth();
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-    if (!profile?.companyId) {
+  useEffect(() => {
+    const effectiveCompanyId = targetCompanyId || profile?.companyId;
+    if (!effectiveCompanyId) {
       setLoading(false);
       return;
     }
-    const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
-    const companyRef = doc(db, 'companies', profile.companyId);
+    const settingsRef = doc(db, 'companies', effectiveCompanyId, 'settings', 'general');
+    const companyRef = doc(db, 'companies', effectiveCompanyId);
 
     let latestSettingsData: Partial<CompanySettings> = {};
     let latestOrgName = '';
@@ -128,7 +131,7 @@ export function useCompanySettings() {
       unsubscribeSettings();
       unsubscribeCompany();
     };
-  }, [profile?.companyId]);
+  }, [targetCompanyId, profile?.companyId]);
 
   const updateSetting = useCallback(
     async <K extends keyof CompanySettings>(key: K, value: CompanySettings[K]) => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { db } from '../../lib/firebase';
 import {
   collection,
@@ -41,7 +41,7 @@ interface SupportTicket {
 const SUPER_ADMIN_UIDS: string[] = [];
 
 const SuperAdminSupportTickets: React.FC = () => {
-  const navigate = useNavigate();
+
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'received' | 'solved' | 'problem'>('all');

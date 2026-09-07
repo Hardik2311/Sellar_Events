@@ -79,6 +79,13 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
 
       setIsChecking(true);
       try {
+        const reserved = ['www', 'app', 'api', 'admin', 'localhost', 'mail', 'support', 'help'];
+        if (reserved.includes(subdomain)) {
+          setAvailability('taken');
+          setIsChecking(false);
+          return;
+        }
+
         const companiesRef = collection(db, 'companies');
         const q = query(companiesRef, where('domainAliases', 'array-contains', subdomain));
         const querySnapshot = await getDocs(q);
@@ -159,12 +166,12 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
           {existingSubdomain && (
             <div className="flex items-center justify-between bg-gray-100 border border-gray-200 rounded-md px-3 py-2 mt-4">
               <span className="text-xs font-bold text-gray-600 truncate">
-                https://{existingSubdomain}.sellar.in
+                https://{existingSubdomain}.outsold.in
               </span>
               <div className="flex items-center gap-1 ml-2 shrink-0">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`https://${existingSubdomain}.sellar.in`);
+                    navigator.clipboard.writeText(`https://${existingSubdomain}.outsold.in`);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
@@ -176,7 +183,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
                 <button
                   onClick={() => {
                     window.open(
-                      `https://${existingSubdomain}.sellar.in${ROUTES.DISCOVER}`,
+                      `https://${existingSubdomain}.outsold.in${ROUTES.DISCOVER}`,
                       '_blank',
                       'noopener,noreferrer'
                     );
@@ -207,7 +214,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
             />
             <span className="text-gray-400 font-bold text-base sm:text-lg select-none shrink-0">-events</span>
             <div className="bg-gray-100 px-2 sm:px-3 py-2.5 sm:py-3 border border-gray-200 rounded-md text-gray-500 font-bold text-[13px] sm:text-sm select-none shadow-sm shrink-0">
-              .sellar.in
+              .outsold.in
             </div>
           </div>
 

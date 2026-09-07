@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
@@ -15,6 +15,7 @@ import {
     buildEventSlugId,
 } from '../data/events';
 import { usePublicEvents } from '../hooks/usePublicEvents';
+import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
 import { stripHtmlTags } from '../lib/utils';
 
@@ -132,8 +133,14 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
 // ─────────────────────────────────────────────────────────────────────────
 const CustomerEventDiscover: React.FC = () => {
     const navigate = useNavigate();
-    const { events, loading } = usePublicEvents(); // organizer-published events only
-    const { settings } = useCompanySettings();
+    const { companyId } = useParams<{ companyId: string }>();
+    const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
+
+    const { events, loading: eventsLoading } = usePublicEvents(resolvedCompanyId); // organizer-published events only
+    const { settings } = useCompanySettings(resolvedCompanyId);
+    
+    const loading = domainLoading || eventsLoading;
+
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [format, setFormat] = useState<FormatFilter>('all');
@@ -192,6 +199,33 @@ const CustomerEventDiscover: React.FC = () => {
     };
 
     const openEvent = (event: PublicEvent) => navigate(`/e/${buildEventSlugId(event.title, event.id)}`);
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0F172A]">
+                <div className="flex flex-col items-center gap-4 text-slate-500 dark:text-slate-400">
+                    <Loader2 size={32} className="animate-spin text-[#007A78] dark:text-[#2DD4BF]" />
+                    <p className="text-sm font-medium">Loading events...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (domainError || (!loading && !resolvedCompanyId)) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0F172A] p-4 text-center">
+                <div className="max-w-md w-full bg-white dark:bg-[#1E293B] rounded-xl shadow-sm p-8 border border-slate-200 dark:border-slate-800">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">🏪</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Store Not Found</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mb-6">
+                        The store you are looking for does not exist or has been moved.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
