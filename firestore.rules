@@ -77,12 +77,20 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    function isSuperAdminCreditTopUp(companyId) {
+      let affected = request.resource.data.diff(resource.data).affectedKeys();
+      return affected.hasOnly(['eventCredits']) &&
+        request.resource.data.eventCredits is number &&
+        request.resource.data.eventCredits > (resource.data.eventCredits == null ? 0 : resource.data.eventCredits);
+    }
+
     // --- Tenant Data (Sellar Events) ---
     match /companies/{companyId} {
 
       // Company document
       allow read: if true;
-      allow update: if isCompanyMember(companyId) && isValidEventCreditsUpdate(companyId);
+      allow update: if (isCompanyMember(companyId) && isValidEventCreditsUpdate(companyId))
+        || (isAuthenticated() && isSuperAdminCreditTopUp(companyId)); // TODO: tighten to SUPER_ADMIN_UIDS
 
       // Business Info (Organization name, website, branding)
       match /business_info/{docId} {
