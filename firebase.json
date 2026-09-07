@@ -5,6 +5,11 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "apphosting": [
+    {
+      "backend": "sellar-events"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

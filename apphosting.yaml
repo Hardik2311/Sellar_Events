@@ -1,0 +1,34 @@
+# App Hosting Configuration
+runConfig:
+  minInstances: 0
+  maxInstances: 10
+
+env:
+  - variable: VITE_API_KEY
+    value: AIzaSyBRgDNLxBkbNcXfvcV66xVo324JZ4X9Qc4
+    availability:
+      - BUILD
+  - variable: VITE_AUTH_DOMAIN
+    value: sellar-events-9923f.firebaseapp.com
+    availability:
+      - BUILD
+  - variable: VITE_PROJECT_ID
+    value: sellar-events-9923f
+    availability:
+      - BUILD
+  - variable: VITE_STORAGE_BUCKET
+    value: sellar-events-9923f.firebasestorage.app
+    availability:
+      - BUILD
+  - variable: VITE_MESSAGING_SENDER_ID
+    value: "114084354723"
+    availability:
+      - BUILD
+  - variable: VITE_APP_ID
+    value: "1:114084354723:web:6d1d2425ebac6064f17d16"
+    availability:
+      - BUILD
+  - variable: VITE_MEASUREMENT_ID
+    value: G-QQVZ0QS6QK
+    availability:
+      - BUILD
