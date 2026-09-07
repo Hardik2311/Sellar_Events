@@ -186,39 +186,51 @@ const OrganizerEventDetail: React.FC = () => {
     const isManualQR = updated.registrationMode === 'tickets' && updated.paymentCollectionMode === 'manual_qr';
     //const qrImageUrl = isManualQR ? await uploadIfNeeded(updated.qrImage, 'payment-qr') : null;
 
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-      title: updated.title,
-      category: updated.category === 'Other' ? updated.customCategory : updated.category,
-      description: updated.description,
-      date: updated.date,
-      endDate: updated.endDate,
-      time: updated.time,
-      venue: updated.isOnline ? null : updated.venue,
-      isOnline: updated.isOnline,
-      coverImageUrl: coverImageUrls[0] ?? null,
-      coverImageUrls,
-      coverImageDesktop: coverImageDesktopUrl,
-      coverImageMobile: coverImageMobileUrl,
-      registrationMode: updated.registrationMode,
-      tiers: isRsvp ? [] : updated.tiers,
-      rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
-      rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
-      titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
-      descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
-      consentText: updated.consentText.trim() || null,
-      consentStyle: updated.consentText.trim()
-        ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
-        : null,
-      // NEW
-      paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
-     // qrImageUrl: isManualQR ? qrImageUrl : null,
-      upiId: isManualQR ? updated.upiId.trim() : null,
-      payeeName: isManualQR ? updated.payeeName.trim() : null,
-      updatedAt: serverTimestamp(),
-    });
+        // Strip any `undefined` values — Firestore rejects the whole write
+    // if even one field is undefined, which was silently killing saves.
+    const sanitize = <T,>(obj: T): T =>
+      JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)));
 
-    setIsEditOpen(false);          // close edit modal
-    setShowSaveConfirmation(true); // show success confirmation
+    try {
+      const payload = sanitize({
+        title: updated.title,
+        category: updated.category === 'Other' ? updated.customCategory : updated.category,
+        description: updated.description,
+        date: updated.date,
+        endDate: updated.endDate,
+        time: updated.time,
+        venue: updated.isOnline ? null : updated.venue,
+        isOnline: updated.isOnline,
+        coverImageUrl: coverImageUrls[0] ?? null,
+        coverImageUrls,
+        coverImageDesktop: coverImageDesktopUrl,
+        coverImageMobile: coverImageMobileUrl,
+        registrationMode: updated.registrationMode,
+        tiers: isRsvp ? [] : updated.tiers,
+        rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
+        rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+        titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
+        descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
+        consentText: updated.consentText.trim() || null,
+        consentStyle: updated.consentText.trim()
+          ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
+          : null,
+        paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
+        upiId: isManualQR ? updated.upiId.trim() : null,
+        payeeName: isManualQR ? updated.payeeName.trim() : null,
+      });
+
+      await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+        ...payload,
+        updatedAt: serverTimestamp(), // added after sanitize — serverTimestamp() sentinel must not go through JSON.stringify
+      });
+
+      setIsEditOpen(false);          // close edit modal
+      setShowSaveConfirmation(true); // show success confirmation
+    } catch (err) {
+      console.error('Failed to save event:', err);
+      // TODO: surface a user-facing error toast instead of failing silently
+    }
   };
 
   if (loading) {

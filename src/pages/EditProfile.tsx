@@ -115,7 +115,7 @@ const LabeledField: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 );
 
 const EditProfile: React.FC = () => {
-    const { user, profile: authProfile, loading: authLoading } = useAuth();
+    const { user, profile: authProfile, loading: authLoading, refreshProfile } = useAuth();
     const { profile, loading: dataLoading, saveData, refetch } =
         useProfileData(user?.uid, authProfile?.companyId);
 
@@ -359,6 +359,7 @@ const EditProfile: React.FC = () => {
             });
 
             refetch();
+            await refreshProfile(); // AuthContext ka profile bhi sync karo, warna Account page pe stale pic dikhega
             setFormData((prev) => ({ ...prev, profilePicture: profilePictureUrl }));
             setPhotoRemoved(false);
             setSubmitSuccess('Profile updated successfully!');

@@ -8,6 +8,7 @@ import EventListCard from '../../components/EventListCard';
 import { EventDateFilter, EventFilterProvider } from '../../components/ui/EventdateFilter';
 import { useAuth } from '../../context/AuthContext';
 import { usePnlReport } from '../../hooks/usePNLReport';
+import { stripHtmlTags } from '../../lib/utils';
 
 const formatDate = (ms: number) =>
   new Date(ms).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -45,8 +46,9 @@ const PnlReportPageInner: React.FC = () => {
       const ph = doc.internal.pageSize.getHeight();
       doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 6, 'F');
       doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
-      const reportTitle = profile?.organizationName
-        ? `Profit & Loss Report — ${profile.organizationName}`
+      const orgName = stripHtmlTags(profile?.organizationName);
+      const reportTitle = orgName
+        ? `Profit & Loss Report — ${orgName}`
         : 'Profit & Loss Report';
       doc.text(reportTitle, 14, 24);
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
@@ -198,7 +200,9 @@ const PnlReportPageInner: React.FC = () => {
           <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[60%] min-w-0">
             <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Profit &amp; Loss</h1>
             {selectedEvent && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">{selectedEvent.title}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                {stripHtmlTags(selectedEvent.title)}
+              </p>
             )}
           </div>
           <div className="flex items-center gap-1">

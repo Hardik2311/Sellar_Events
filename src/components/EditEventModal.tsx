@@ -25,7 +25,7 @@ type EventItem = PublicEvent;
 interface EditEventModalProps {
   event: EventItem;
   onClose: () => void;
-  onSave: (updated: EventFormState) => void;
+  onSave: (updated: EventFormState) => void | Promise<void>;
 }
 
 const toFormState = (event: EventItem): EventFormState => ({
@@ -134,10 +134,15 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
     (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink)) &&
     isManualQRReady;
 
-  const handleSave = () => {
-    if (!isSavable) return;
-    console.log('Save edited event:', form); // TODO: PATCH /events/:id
-    onSave(form);
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSave = async () => {
+    if (!isSavable || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(form); // onSave prop type becomes (updated) => Promise<void>
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -409,8 +414,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                             type="button"
                             onClick={() => update('paymentCollectionMode', 'gateway')}
                             className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
-                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                                : 'text-gray-500 dark:text-slate-400'
+                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                              : 'text-gray-500 dark:text-slate-400'
                               }`}
                           >
                             Payment gateway
@@ -419,8 +424,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                             type="button"
                             onClick={() => update('paymentCollectionMode', 'manual_qr')}
                             className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
-                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                                : 'text-gray-500 dark:text-slate-400'
+                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                              : 'text-gray-500 dark:text-slate-400'
                               }`}
                           >
                             UPI QR (manual)

@@ -8,11 +8,12 @@ interface RichTextEditorProps {
     label?: string;       // NEW — Category jaisa static label, placeholder ki jagah
     required?: boolean;   // NEW — label ke aage "*" dikhane ke liye
     multiline?: boolean;
+    placeholder?: string;
     editorRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({
-    id, value, onChange, fontSize, label, required, multiline, editorRef,
+    id, value, onChange, fontSize, label, required, multiline, placeholder,editorRef,
 }) => {
     const isFirstRender = useRef(true);
 
@@ -42,7 +43,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 suppressContentEditableWarning
                 onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
                 style={{ fontSize }}
-                className={`w-full rounded-sm border border-[#7D7777A3] dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-3 text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF] ${multiline ? 'min-h-[100px]' : 'min-h-[44px]'}`}
+                data-placeholder={placeholder}
+                className={`rich-text-editable w-full rounded-sm border border-[#7D7777A3] dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-3 text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF] ${multiline ? 'min-h-[100px]' : 'min-h-[44px]'}`}
             />
         </div>
     );
