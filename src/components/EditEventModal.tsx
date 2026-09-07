@@ -196,7 +196,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     value={form.title}
                     onChange={(html) => update('title', html)}
                     fontSize={form.titleFontSize}
-                    placeholder="Event title *"
+                    label="Event title *"
                   />
                 </div>
 
@@ -362,7 +362,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                     value={form.description}
                     onChange={(html) => update('description', html)}
                     fontSize={form.descriptionFontSize}
-                    placeholder={req.description ? 'Description *' : 'Description'}
+                    label={req.description ? 'Description *' : 'Description'}
                     multiline
                   />
                 </div>
@@ -534,7 +534,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   value={form.consentText}
                   onChange={(html) => update('consentText', html)}
                   fontSize={form.consentFontSize}
-                  placeholder="Important information & consent text (optional)"
+                  label="Important information & consent text (optional)"
                   multiline
                 />
                 <p className="text-xs text-gray-500 dark:text-slate-500">

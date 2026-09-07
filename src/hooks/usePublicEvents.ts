@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import type { PublicEvent } from '../data/events';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
@@ -50,38 +51,61 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   payeeName: d.payeeName || '',
 });
 
-export function usePublicEvents() {
+export function usePublicEvents(targetCompanyId?: string | null) {
   const { profile } = useAuth();
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!profile?.companyId) return;
-
-    // Same collection useOrganizerEvents reads, just filtered to published —
-    // this is a single-company storefront, not a cross-tenant marketplace.
-    const publicEventsQuery = query(
-      collection(db, 'companies', profile.companyId, 'events'),
-      where('status', '==', 'published')
-    );
-
-    const unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
-      const organizerName = profile.organizationName || '';
-      const mapped = snapshot.docs.map((docSnap) =>
-        mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, profile.companyId)
-      );
-      setEvents(mapped);
+    const effectiveCompanyId = targetCompanyId || profile?.companyId;
+    if (!effectiveCompanyId) {
       setLoading(false);
-    });
+      return;
+    }
+
+    setLoading(true);
+
+    let unsubscribe = () => {};
+
+    const setup = async () => {
+      let organizerName = profile?.organizationName || '';
+
+      // If we are overriding the company ID (e.g. public storefront), fetch the org name
+      if (targetCompanyId && targetCompanyId !== profile?.companyId) {
+        try {
+          const companySnap = await getDoc(doc(db, 'companies', effectiveCompanyId));
+          if (companySnap.exists()) {
+            organizerName = companySnap.data().organizationName || companySnap.data().name || '';
+          }
+        } catch (err) {
+          console.error("Failed to fetch company details:", err);
+        }
+      }
+
+      const publicEventsQuery = query(
+        collection(db, 'companies', effectiveCompanyId, 'events'),
+        where('status', '==', 'published')
+      );
+
+      unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
+        const mapped = snapshot.docs.map((docSnap) =>
+          mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId)
+        );
+        setEvents(mapped);
+        setLoading(false);
+      });
+    };
+
+    setup();
 
     return () => unsubscribe();
-  }, [profile?.companyId, profile?.organizationName]);
+  }, [targetCompanyId, profile?.companyId, profile?.organizationName]);
 
   return { events, loading };
 }
 
-export function usePublicEvent(id?: string) {
-  const { events, loading } = usePublicEvents();
+export function usePublicEvent(id?: string, targetCompanyId?: string | null) {
+  const { events, loading } = usePublicEvents(targetCompanyId);
   const event = id ? events.find((e) => e.id === id) : undefined;
   return { event, loading };
 }

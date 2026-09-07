@@ -6,6 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
+import { useDomainResolution } from '../hooks/useDomainResolution';
 import TicketConfirmation from '../components/TicketConfirmation';
 import MockPGModal from '../components/MockPGModal';
 import { stripHtmlTags } from '../lib/utils';
@@ -46,11 +47,13 @@ const getEventInitials = (title: string): string => {
     .toUpperCase();
 };
 const CheckoutPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, companyId } = useParams<{ id: string; companyId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { event, loading } = usePublicEvent(id);
+  const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
+  const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
+  const loading = domainLoading || eventLoading;
   const quantities: Record<string, number> = (location.state as { quantities?: Record<string, number> })?.quantities ?? {};
 
   interface AttendeeFormEntry {
@@ -129,20 +132,28 @@ const CheckoutPage: React.FC = () => {
     );
   }
 
-  if (!event) {
+  if (domainError || (!loading && !event)) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-3 bg-gray-100 p-6 text-center">
-        <Ticket size={28} className="text-gray-300" />
-        <p className="text-sm font-medium text-slate-700">We couldn&rsquo;t find this order.</p>
+      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-gray-100 p-6 text-center">
+        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+          <Ticket size={28} className="text-gray-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800">Order Not Found</h2>
+        <p className="text-sm text-gray-500 max-w-xs">
+          We couldn&rsquo;t find this order. The event might have been removed or the link is incorrect.
+        </p>
         <button
-          onClick={() => navigate('/discover')}
-          className="rounded-md bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2DD4BF]"
+          onClick={() => navigate('/')}
+          className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361]"
         >
-          Back to events
+          Return to Store
         </button>
       </div>
     );
   }
+
+  // Fallback to satisfy typescript
+  if (!event) return null;
 
   const lineItems = event.tiers
     .map((t) => {

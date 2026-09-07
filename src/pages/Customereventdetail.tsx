@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, Ticket, User, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
@@ -12,17 +12,22 @@ import {
   isTierExpired,
 } from '../data/events';
 import { usePublicEvent } from '../hooks/usePublicEvents';
+import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
 import { stripHtmlTags } from '../lib/utils';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 
 const CustomerEventDetail: React.FC = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, companyId } = useParams<{ slug: string; companyId?: string }>();
   const id = slug ? parseEventIdFromSlug(slug) : undefined;
   const navigate = useNavigate();
-  const { event, loading } = usePublicEvent(id);
-  const { settings } = useCompanySettings();
+  
+  const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
+  const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
+  const { settings } = useCompanySettings(resolvedCompanyId);
+
+  const loading = domainLoading || eventLoading;
 
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -51,7 +56,6 @@ const CustomerEventDetail: React.FC = () => {
     if (!event?.id) return;
     sessionStorage.setItem(`eventTicketQty:${event.id}`, JSON.stringify(quantities));
   }, [quantities, event?.id]);
-
   if (loading) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
@@ -60,20 +64,27 @@ const CustomerEventDetail: React.FC = () => {
     );
   }
 
-  if (!event) {
+  if (domainError || (!loading && !event)) {
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-3 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
-        <Ticket size={28} className="text-gray-300 dark:text-slate-600" />
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">This event doesn&rsquo;t exist or isn&rsquo;t published yet.</p>
+      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
+        <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
+          <span className="text-2xl">🎟️</span>
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Event Not Found</h2>
+        <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
+          We couldn&apos;t find this event. It might have been removed or the link is incorrect.
+        </p>
         <button
-          onClick={() => navigate('/discover')}
-          className="rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2DD4BF]"
+          onClick={() => navigate('/')}
+          className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-900 dark:hover:bg-[#22b8a5]"
         >
-          Back to events
+          Return to Events
         </button>
       </div>
     );
   }
+
+  if (!event) return null;
 
   const label = getCategoryLabel(event);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;

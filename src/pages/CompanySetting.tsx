@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { useCompanySettings } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
+import EventSubdomainModal from '../components/SubDomainModal';
 
 const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean }> = ({
   checked,
@@ -37,6 +38,7 @@ const Settings: React.FC = () => {
   const { settings, loading } = useCompanySettings();
 
   const [showGstModal, setShowGstModal] = useState(false);
+  const [showSubdomainModal, setShowSubdomainModal] = useState(false);
   const [pendingScheme, setPendingScheme] = useState<'regular' | 'composition' | null>(null);
   const [gstInput, setGstInput] = useState('');
   const [gstError, setGstError] = useState<string | null>(null);
@@ -312,6 +314,28 @@ const Settings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Public Storefront</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Storefront Link</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Claim a unique URL for your public events storefront.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSubdomainModal(true)}
+                  className="px-4 py-2 text-sm font-semibold rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
+                >
+                  Manage Link
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Future settings go here */}
         </div>
       </main>
@@ -381,6 +405,14 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {profile?.companyId && (
+        <EventSubdomainModal
+          companyId={profile.companyId}
+          forceOpen={showSubdomainModal}
+          onClose={() => setShowSubdomainModal(false)}
+        />
       )}
     </div>
   );

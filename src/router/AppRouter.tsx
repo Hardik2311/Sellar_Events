@@ -4,6 +4,7 @@ import EventsLayout from '../Layout/EventsLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { ROUTES } from '../constants/routes.constants';
 import { AppRegistry } from './AppRegistry';
+import { getSubdomain } from '../lib/subdomain';
 
 const Login = lazy(() => import('../pages/LoginPage'));
 const Signup = lazy(() => import('../pages/SignUp'));
@@ -30,56 +31,79 @@ const generateDynamicRoutes = (layoutType: 'EVENTS') => {
   );
 };
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: (
-      <>
-        <ScrollRestoration />
-        <Outlet />
-      </>
-    ),
-    children: [
-      { index: true, element: <Navigate to={ROUTES.EVENTS} replace /> },
+const subdomain = getSubdomain();
 
-      { path: ROUTES.LOGIN, element: <Login /> },
-      { path: ROUTES.SIGNUP, element: <Signup /> },
-      { path: ROUTES.FORGOT_PASSWORD, element: <ForgotPasswordPage /> },
-      { path: ROUTES.RESET_PASSWORD, element: <ResetPassword /> },
-
-            // Protected organizer app
+const router = subdomain
+  ? createBrowserRouter([
       {
-        path: ROUTES.EVENTS,
+        path: '/',
         element: (
-          <ProtectedRoute>
-            <EventsLayout />
-          </ProtectedRoute>
-        ),
-        children: generateDynamicRoutes('EVENTS'),
-      },
-
-      // Super Admin — protected (auth required) but NOT wrapped in EventsLayout/sidebar
-      {
-        path: ROUTES.EVENTS_SUPER_ADMIN,
-        element: (
-          <ProtectedRoute>
+          <>
+            <ScrollRestoration />
             <Outlet />
-          </ProtectedRoute>
+          </>
         ),
         children: [
-          { index: true, element: <SuperAdminHub /> },
-          { path: 'support-tickets', element: <SuperAdminSupportTickets /> },
-          { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
+          { index: true, element: <CustomerEventDiscover /> },
+          { path: 'e/:slug', element: <CustomerEventDetail /> },
+          { path: 'checkout/:id', element: <CheckoutPage /> },
+          { path: '*', element: <Navigate to="/" replace /> },
         ],
       },
+    ])
+  : createBrowserRouter([
+      {
+        path: '/',
+        element: (
+          <>
+            <ScrollRestoration />
+            <Outlet />
+          </>
+        ),
+        children: [
+          { index: true, element: <Navigate to={ROUTES.EVENTS} replace /> },
 
-      // Public customer-facing routes
-      { path: ROUTES.DISCOVER, element: <CustomerEventDiscover /> },
-      { path: ROUTES.EVENT_DETAIL, element: <CustomerEventDetail /> },
-      { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
-    ],
-  },
-]);
+          { path: ROUTES.LOGIN, element: <Login /> },
+          { path: ROUTES.SIGNUP, element: <Signup /> },
+          { path: ROUTES.FORGOT_PASSWORD, element: <ForgotPasswordPage /> },
+          { path: ROUTES.RESET_PASSWORD, element: <ResetPassword /> },
+
+          // Protected organizer app
+          {
+            path: ROUTES.EVENTS,
+            element: (
+              <ProtectedRoute>
+                <EventsLayout />
+              </ProtectedRoute>
+            ),
+            children: generateDynamicRoutes('EVENTS'),
+          },
+
+          // Super Admin — protected (auth required) but NOT wrapped in EventsLayout/sidebar
+          {
+            path: ROUTES.EVENTS_SUPER_ADMIN,
+            element: (
+              <ProtectedRoute>
+                <Outlet />
+              </ProtectedRoute>
+            ),
+            children: [
+              { index: true, element: <SuperAdminHub /> },
+              { path: 'support-tickets', element: <SuperAdminSupportTickets /> },
+              { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
+            ],
+          },
+
+          // Public customer-facing routes (for fallback/development/testing without subdomain)
+          { path: ROUTES.DISCOVER, element: <CustomerEventDiscover /> },
+          { path: ROUTES.EVENT_DETAIL, element: <CustomerEventDetail /> },
+          { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
+          
+          // Legacy fallback / explicit public path
+          { path: '/public/:companyId', element: <CustomerEventDiscover /> },
+        ],
+      },
+    ]);
 
 const AppRouter = () => {
   return (

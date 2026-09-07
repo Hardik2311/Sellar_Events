@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { Search, ArrowLeft } from "lucide-react";
+import { Search } from "lucide-react";
 import BackButton from "../../components/ui/BackButton";
 
 type PlanLead = {
@@ -26,7 +26,7 @@ type FilterType = "all" | "Pending" | "Interested" | "Not interested" | "Issue";
 const toDateStr = (date: Date) => date.toISOString().split("T")[0];
 
 function SuperAdminPlanLeads() {
-  const navigate = useNavigate();
+
   const [leads, setLeads] = useState<PlanLead[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [currentUid, setCurrentUid] = useState<string | null>(null);

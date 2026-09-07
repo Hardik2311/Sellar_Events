@@ -6,8 +6,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, functions, db } from '../lib/firebase'
+import { auth, functions } from '../lib/firebase'
 
 import {
   FiUser,
@@ -315,7 +314,7 @@ const Signup: React.FC = () => {
       // Execute Cloud Function
 
       const createCompany = httpsCallable(functions, 'createCompany');
-      const result = await createCompany({
+      await createCompany({
         token,
         fullName: formData.fullName,
         organizationName: formData.organizationName,
@@ -335,8 +334,6 @@ const Signup: React.FC = () => {
         aadhaarDocUrls: formData.aadhaarDocUrls,
         panDocUrls: formData.panDocUrls,
       });
-
-      const companyId = (result.data as { companyId?: string } | undefined)?.companyId;
 
       // Refresh token so the client receives the new 'companyId' custom claim set by the cloud function
       await authUser.getIdToken(true);
