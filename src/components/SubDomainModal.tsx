@@ -16,7 +16,6 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
   const [copied, setCopied] = useState(false);
 
   const [prefix, setPrefix] = useState('');
-  const suffix = 'events'; // fixed — all links are -events
   const [subdomain, setSubdomain] = useState('');
 
   const [existingSubdomain, setExistingSubdomain] = useState<string | null>(null);
@@ -35,11 +34,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
           const data = docSnap.data();
           if (data.subdomain) {
             setExistingSubdomain(data.subdomain);
-            if (data.subdomain.endsWith('-events')) {
-              setPrefix(data.subdomain.replace('-events', ''));
-            } else {
-              setPrefix(data.subdomain);
-            }
+            setPrefix(data.subdomain);
           }
 
           if (forceOpen || (!data.subdomain && !sessionStorage.getItem('eventSubdomainDismissed'))) {
@@ -63,10 +58,9 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
       return;
     }
     const formattedPrefix = prefix.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/-$/, '');
-    const combined = `${formattedPrefix}-${suffix}`;
-    setSubdomain(combined);
+    setSubdomain(formattedPrefix);
 
-    if (combined === existingSubdomain) {
+    if (formattedPrefix === existingSubdomain) {
       setAvailability('available');
     } else {
       setAvailability('idle');
@@ -212,7 +206,6 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
               className="flex-1 min-w-0 p-2.5 sm:p-3 bg-white border border-gray-200 rounded-md text-[13px] sm:text-sm font-bold text-slate-800 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] transition-all text-right shadow-sm"
               autoFocus
             />
-            <span className="text-gray-400 font-bold text-base sm:text-lg select-none shrink-0">-events</span>
             <div className="bg-gray-100 px-2 sm:px-3 py-2.5 sm:py-3 border border-gray-200 rounded-md text-gray-500 font-bold text-[13px] sm:text-sm select-none shadow-sm shrink-0">
               .outsold.in
             </div>
