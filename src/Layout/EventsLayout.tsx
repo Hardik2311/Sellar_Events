@@ -1,6 +1,6 @@
 import { Suspense, useRef, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, Ticket, IndianRupee, UserPlus, Share2 } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { usePermissions } from '../hooks/usePermissions';
@@ -111,19 +111,7 @@ const EventsLayout = () => {
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-[#1E293B] border-r border-slate-200 dark:border-slate-800 h-full shrink-0 z-20">
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#007A78] dark:bg-[#2DD4BF] text-white dark:text-slate-950 shadow-xs">
-              <Ticket size={20} className="rotate-[-10deg]" />
-            </div>
-            <div>
-              <p className="font-extrabold text-base text-slate-900 dark:text-white">
-                <span className="text-[#007A78] dark:text-[#2DD4BF]">Out</span>sold
-              </p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-bold">
-                Platform
-              </p>
-            </div>
-          </div>
+          <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3.5 space-y-1.5">
