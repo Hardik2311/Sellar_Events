@@ -7,6 +7,7 @@ import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'fireba
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import { useDomainResolution } from '../hooks/useDomainResolution';
+import { getSubdomain } from '../lib/subdomain';
 import TicketConfirmation from '../components/TicketConfirmation';
 import MockPGModal from '../components/MockPGModal';
 import { stripHtmlTags } from '../lib/utils';
@@ -143,7 +144,11 @@ const CheckoutPage: React.FC = () => {
           We couldn&rsquo;t find this order. The event might have been removed or the link is incorrect.
         </p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() =>
+            navigate(
+              getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
+            )
+          }
           className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361]"
         >
           Return to Store
