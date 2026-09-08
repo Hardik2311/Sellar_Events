@@ -7,7 +7,15 @@
   },
   "apphosting": [
     {
-      "backend": "sellar-events"
+      "backendId": "sellar-events",
+      "rootDir": "/",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "functions"
+      ]
     }
   ],
   "hosting": {

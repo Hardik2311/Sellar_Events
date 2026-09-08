@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 8080;
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // SPA Catch-all: Route all other requests to index.html
-app.get('/*', (req, res) => {
+app.get('/*splat', (req, res) => {
   // Guard against missing static assets
   // If the request path looks like a file (has an extension), return 404 instead of index.html
   if (req.path.match(/\.[a-zA-Z0-9]+$/)) {
