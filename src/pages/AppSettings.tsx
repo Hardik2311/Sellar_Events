@@ -71,7 +71,7 @@ const AppSettings: React.FC = () => {
                             value={whatsappTemplate}
                             onChange={(e) => setWhatsappTemplate(e.target.value)}
                             rows={3}
-                            placeholder="Check out {{eventTitle}} on Sellar Events! {{link}}"
+                            placeholder="Check out {{eventTitle}} on Outsold! {{link}}"
                             className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
                         />
                         <div className="mt-2 flex items-center gap-3">
