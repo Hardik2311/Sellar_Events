@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Loader2, CheckCircle, AlertCircle, X, Copy, Check, ExternalLink } from 'lucide-react';
-import { ROUTES } from '../constants/routes.constants';
 
 interface EventSubdomainModalProps {
   companyId: string;
@@ -177,7 +176,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
                 <button
                   onClick={() => {
                     window.open(
-                      `https://${existingSubdomain}.outsold.in${ROUTES.DISCOVER}`,
+                      `https://${existingSubdomain}.outsold.in`,
                       '_blank',
                       'noopener,noreferrer'
                     );
