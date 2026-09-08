@@ -72,7 +72,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   ticketDisplay: DEFAULT_TICKET_DISPLAY,
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,
   attendeeQuestionsEnabled: true,
-  whatsappShareTemplate: 'Check out {{eventTitle}} on Sellar Events! {{link}}',
+  whatsappShareTemplate: 'Check out {{eventTitle}} on Outsold! {{link}}',
   autoFeatureNearest: true,
   organizationName: '',
   payments: DEFAULT_PAYMENTS, // NEW

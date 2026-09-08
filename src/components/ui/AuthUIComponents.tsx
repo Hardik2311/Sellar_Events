@@ -262,7 +262,7 @@ export const AuthHeroPanel: React.FC<{
   title?: string;
   subtitle?: string;
   className?: string;
-}> = ({ title = 'Sellar Events', subtitle = 'Plan it. List it. Fill every seat.', className = '' }) => {
+}> = ({ title = 'Outsold', subtitle = 'Plan it. List it. Fill every seat.', className = '' }) => {
   return (
     <div
       className={[

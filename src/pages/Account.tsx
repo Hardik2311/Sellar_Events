@@ -61,7 +61,7 @@ const Account: React.FC = () => {
                     {profile?.fullName || 'Organizer User'}
                 </h2>
                 <p className="text-xs font-semibold text-[#007A78] dark:text-[#2DD4BF] mt-0.5">
-                    {profile?.organizationName || 'Sellar Events Partner'}
+                    {profile?.organizationName || 'Outsold Partner'}
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
                     {profile?.email || 'organizer@outsold.in'}

@@ -249,7 +249,7 @@ const SupportPage: React.FC = () => {
             isOpen={openSection === 'contact-2'}
             onClick={() => toggleSection('contact-2')}
           >
-            <p className="font-medium text-gray-800 dark:text-slate-100">Sellar HQ</p>
+            <p className="font-medium text-gray-800 dark:text-slate-100">Outsold HQ</p>
             <p>2nd Floor, Parsvnath Arcade, Unit 22, Vaibhav Khand</p>
             <p>Indirapuram, Ghaziabad, Uttar Pradesh 201014</p>
             <p className="mt-2 text-xs text-gray-400 dark:text-slate-500">(Visits by appointment only)</p>

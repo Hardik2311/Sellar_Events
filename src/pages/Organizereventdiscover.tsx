@@ -427,7 +427,7 @@ const OrganizerEventDiscover: React.FC = () => {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
           <div className="flex items-center justify-between">
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-              Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
+              <span className="text-[#007A78] dark:text-[#2DD4BF]">Out</span>sold
             </h1>
             <div className="flex items-center gap-3">
               <button

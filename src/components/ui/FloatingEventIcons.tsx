@@ -40,7 +40,7 @@ const icons: FloatingIconConfig[] = [
 
 // Mobile-safe set — the mobile hero panel is short (h-64), and the center
 // column (roughly left 32%–68%, top 20%–95%) is occupied by the calendar
-// badge + "Sellar Events" title + subtitle. So icons are kept OFF to the
+// badge + "Outsold" title + subtitle. So icons are kept OFF to the
 // left and right edges (left <22% or >78%) at varying heights, instead of
 // squeezed into a thin top strip — keeps the panel feeling full without
 // ever sitting on top of the text.

@@ -117,7 +117,7 @@ const EventsLayout = () => {
             </div>
             <div>
               <p className="font-extrabold text-base text-slate-900 dark:text-white">
-                Sellar <span className="text-[#007A78] dark:text-[#2DD4BF]">Events</span>
+                <span className="text-[#007A78] dark:text-[#2DD4BF]">Out</span>sold
               </p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-bold">
                 Platform
