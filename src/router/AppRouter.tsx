@@ -98,9 +98,11 @@ const router = subdomain
           { path: ROUTES.DISCOVER, element: <CustomerEventDiscover /> },
           { path: ROUTES.EVENT_DETAIL, element: <CustomerEventDetail /> },
           { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
-          
-          // Legacy fallback / explicit public path
-          { path: '/public/:companyId', element: <CustomerEventDiscover /> },
+
+          // Company-scoped fallback for merchants without a claimed subdomain
+          { path: ROUTES.PUBLIC_STORE, element: <CustomerEventDiscover /> },
+          { path: ROUTES.PUBLIC_EVENT_DETAIL, element: <CustomerEventDetail /> },
+          { path: ROUTES.PUBLIC_CHECKOUT, element: <CheckoutPage /> },
         ],
       },
     ]);

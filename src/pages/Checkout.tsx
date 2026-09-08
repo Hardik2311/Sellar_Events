@@ -421,7 +421,9 @@ const CheckoutPage: React.FC = () => {
         eventTitle={event.title}
         eventDate={event.date}
         tickets={purchasedTickets}
-        onDone={() => navigate('/discover')}
+        onDone={() =>
+          navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/')
+        }
       />
     );
   }

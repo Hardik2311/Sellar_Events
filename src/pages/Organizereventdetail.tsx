@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil, CheckCircle, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
-import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent } from '../components/ui/card';
 import {
@@ -18,6 +18,7 @@ import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { buildEventSlugId } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import { stripHtmlTags } from '../lib/utils';
@@ -130,18 +131,9 @@ const OrganizerEventDetail: React.FC = () => {
   const resolveShareUrl = async () => {
     if (!event) return '';
     const slugId = buildEventSlugId(event.title, event.id);
-    let shareUrl = `${window.location.origin}/e/${slugId}`;
-    try {
-      if (profile?.companyId) {
-        const companySnap = await getDoc(doc(db, 'companies', profile.companyId));
-        if (companySnap.exists() && companySnap.data().subdomain) {
-          shareUrl = `https://${companySnap.data().subdomain}.outsold.in/e/${slugId}`;
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching subdomain for sharing:', error);
-    }
-    return shareUrl;
+    if (!profile?.companyId) return `${window.location.origin}/e/${slugId}`;
+    const baseUrl = await getShareBaseUrl(profile.companyId);
+    return `${baseUrl}/e/${slugId}`;
   };
 
   const handleOpenShare = async () => {

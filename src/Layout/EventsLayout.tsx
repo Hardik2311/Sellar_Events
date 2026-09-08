@@ -295,6 +295,7 @@ const EventsLayout = () => {
         onClose={() => setIsShareLinkModalOpen(false)}
         events={events}
         eventsLoading={eventsLoading}
+        companyId={profile?.companyId}
       />
     </div >
   );

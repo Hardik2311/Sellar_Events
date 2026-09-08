@@ -16,6 +16,7 @@ import {
   getAvailability,
   buildEventSlugId,
 } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { useCompanySettings } from '../hooks/useSettings';
 import { usePermissions } from '../hooks/usePermissions';
@@ -313,7 +314,10 @@ const OrganizerEventDiscover: React.FC = () => {
   // Direct share — native share sheet when available, else copy the link.
   // No WhatsApp/Copy-link picker popup here anymore.
   const handleShareRequest = async (event: PublicEvent) => {
-    const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
+    const baseUrl = profile?.companyId
+      ? await getShareBaseUrl(profile.companyId)
+      : window.location.origin;
+    const shareUrl = `${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: event.title, url: shareUrl });
@@ -378,7 +382,12 @@ const OrganizerEventDiscover: React.FC = () => {
   };
 
   const openEvent = (event: PublicEvent) => navigate(`/events/e/${event.id}`);
-  const openLiveView = (event: PublicEvent) => window.open(`/e/${buildEventSlugId(event.title, event.id)}`, '_blank');
+  const openLiveView = async (event: PublicEvent) => {
+    const baseUrl = profile?.companyId
+      ? await getShareBaseUrl(profile.companyId)
+      : window.location.origin;
+    window.open(`${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`, '_blank', 'noopener,noreferrer');
+  };
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   useEffect(() => {
     if (!showSaveConfirmation) return;

@@ -146,7 +146,10 @@ const CustomerEventDetail: React.FC = () => {
       setShowManualQR(true); // inline QR card, no navigation to /checkout
       return;
     }
-    navigate(`/checkout/${event.id}`, { state: { quantities } });
+    const checkoutPath = getSubdomain()
+      ? `/checkout/${event.id}`
+      : `/public/${resolvedCompanyId}/checkout/${event.id}`;
+    navigate(checkoutPath, { state: { quantities } });
   };
   const handleShare = async () => {
     if (!event) return;
