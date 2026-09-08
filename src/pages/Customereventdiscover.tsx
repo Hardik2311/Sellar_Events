@@ -16,6 +16,7 @@ import {
 } from '../data/events';
 import { usePublicEvents } from '../hooks/usePublicEvents';
 import { useDomainResolution } from '../hooks/useDomainResolution';
+import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { stripHtmlTags } from '../lib/utils';
 
@@ -24,7 +25,7 @@ type FormatFilter = 'all' | 'in-person' | 'online';
 // ─────────────────────────────────────────────────────────────────────────
 // Event card
 // ─────────────────────────────────────────────────────────────────────────
-const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event, onOpen }) => {
+const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void; shareBaseUrl: string }> = ({ event, onOpen, shareBaseUrl }) => {
     const label = getCategoryLabel(event);
     const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
     const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -56,7 +57,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void }> = ({ event
                     type="button"
                     onClick={async (e) => {
                         e.stopPropagation();
-                        const shareUrl = `${window.location.origin}/e/${buildEventSlugId(event.title, event.id)}`;
+                        const shareUrl = `${shareBaseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
                         if (navigator.share) {
                             try {
                                 await navigator.share({ title: event.title, url: shareUrl });
@@ -198,7 +199,15 @@ const CustomerEventDiscover: React.FC = () => {
         setFormat('all');
     };
 
-    const openEvent = (event: PublicEvent) => navigate(`/e/${buildEventSlugId(event.title, event.id)}`);
+    const subdomain = getSubdomain();
+    const shareBaseUrl = subdomain
+        ? window.location.origin
+        : `${window.location.origin}/public/${resolvedCompanyId}`;
+
+    const openEvent = (event: PublicEvent) => {
+        const slugId = buildEventSlugId(event.title, event.id);
+        navigate(subdomain ? `/e/${slugId}` : `/public/${resolvedCompanyId}/e/${slugId}`);
+    };
 
     if (loading) {
         return (
@@ -394,7 +403,7 @@ const CustomerEventDiscover: React.FC = () => {
                                 </p>
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {gridEvents.map((event) => (
-                                        <EventCard key={event.id} event={event} onOpen={() => openEvent(event)} />
+                                        <EventCard key={event.id} event={event} onOpen={() => openEvent(event)} shareBaseUrl={shareBaseUrl} />
                                     ))}
                                 </div>
                             </div>

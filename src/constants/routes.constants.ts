@@ -41,4 +41,11 @@ export const ROUTES = {
   DISCOVER: '/discover',
   EVENT_DETAIL: '/e/:slug',
   CHECKOUT: '/checkout/:id',
+
+  // Company-scoped fallback for merchants without a claimed subdomain —
+  // these carry :companyId in the path since the bare routes above have no
+  // way to know which company's data to load outside the subdomain tree.
+  PUBLIC_STORE: '/public/:companyId',
+  PUBLIC_EVENT_DETAIL: '/public/:companyId/e/:slug',
+  PUBLIC_CHECKOUT: '/public/:companyId/checkout/:id',
 };

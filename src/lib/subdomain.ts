@@ -13,6 +13,14 @@ export const getSubdomain = (): string | null => {
   if (typeof window === 'undefined') return null;
 
   const hostname = window.location.hostname;
+
+  // Dev/testing override: real wildcard subdomains can't be hit on localhost,
+  // so simulate one via ?subdomain=<slug>, e.g. localhost:5178/?subdomain=my-brand
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    const override = new URLSearchParams(window.location.search).get('subdomain');
+    return override ? override.toLowerCase() : null;
+  }
+
   const parts = hostname.split('.');
 
   // If there are at least 3 parts (e.g., store.domain.com) and it's not a localhost IP

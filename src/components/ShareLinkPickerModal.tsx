@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { buildEventSlugId } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
 import { ShareOptionsModal } from './ShareOptionsModal';
 import type { EventSummary } from '../types/event.types';
-import { ROUTES } from '../constants/routes.constants';
 
 interface ShareLinkPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   events: EventSummary[];
   eventsLoading: boolean;
+  companyId?: string;
 }
 
 export const ShareLinkPickerModal: React.FC<ShareLinkPickerModalProps> = ({
@@ -16,12 +17,20 @@ export const ShareLinkPickerModal: React.FC<ShareLinkPickerModalProps> = ({
   onClose,
   events,
   eventsLoading,
+  companyId,
 }) => {
   // No picker UI — just share whatever event is available (first/active one).
   const shareEvent = events[0] ?? null;
 
+  const [storeBaseUrl, setStoreBaseUrl] = useState(window.location.origin);
+
+  useEffect(() => {
+    if (!isOpen || !companyId) return;
+    getShareBaseUrl(companyId).then(setStoreBaseUrl);
+  }, [isOpen, companyId]);
+
   const getDiscoverUrl = (event: EventSummary) =>
-    `${window.location.origin}${ROUTES.EVENT_DETAIL.replace(':slug', buildEventSlugId(event.title, event.id))}`;
+    `${storeBaseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
 
   if (!isOpen) return null;
 
@@ -54,7 +63,7 @@ export const ShareLinkPickerModal: React.FC<ShareLinkPickerModalProps> = ({
       onClose={onClose}
       shareUrl={getDiscoverUrl(shareEvent)}
       onViewStore={() => {
-        window.open(`${window.location.origin}${ROUTES.DISCOVER}`, '_blank', 'noopener,noreferrer');
+        window.open(storeBaseUrl, '_blank', 'noopener,noreferrer');
       }}
     />
   );

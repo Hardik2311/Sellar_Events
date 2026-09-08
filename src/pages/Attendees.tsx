@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud } from 'lucide-react';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
 import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
@@ -20,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
 import { buildEventSlugId } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
 import EventListCard from '../components/EventListCard';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
@@ -98,7 +98,6 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   screenshotUrl: data.screenshotUrl ?? undefined,
 });
 const Attendees: React.FC = () => {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const { can } = usePermissions(); // MOVED — hooks must run inside the component, not at module scope
   const [events, setEvents] = useState<EventSummary[]>([]);
@@ -502,7 +501,15 @@ const Attendees: React.FC = () => {
                 </select>
                 {selectedEvent.status === 'published' && (
                   <button
-                    onClick={() => navigate(`/e/${buildEventSlugId(selectedEvent.title, selectedEvent.id)}`)}
+                    onClick={async () => {
+                      if (!profile?.companyId) return;
+                      const baseUrl = await getShareBaseUrl(profile.companyId);
+                      window.open(
+                        `${baseUrl}/e/${buildEventSlugId(selectedEvent.title, selectedEvent.id)}`,
+                        '_blank',
+                        'noopener,noreferrer'
+                      );
+                    }}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
                     title="View public event page"
                   >
