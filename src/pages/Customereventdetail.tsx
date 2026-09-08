@@ -13,6 +13,7 @@ import {
 } from '../data/events';
 import { usePublicEvent } from '../hooks/usePublicEvents';
 import { useDomainResolution } from '../hooks/useDomainResolution';
+import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
 import { stripHtmlTags } from '../lib/utils';
@@ -76,7 +77,11 @@ const CustomerEventDetail: React.FC = () => {
           We couldn&apos;t find this event. It might have been removed or the link is incorrect.
         </p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() =>
+            navigate(
+              getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
+            )
+          }
           className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-900 dark:hover:bg-[#22b8a5]"
         >
           Return to Events
