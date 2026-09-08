@@ -16,6 +16,21 @@ export function useDomainResolution(fallbackCompanyId?: string) {
         // No subdomain, use fallback if provided (e.g. from route params)
         if (fallbackCompanyId) {
           setResolvedCompanyId(fallbackCompanyId);
+          setLoading(false);
+          return;
+        }
+
+        // Dev convenience: on localhost, let any company be tested via
+        // ?company=<companyId> — e.g. /discover?company=abc123 — instead of
+        // only working through /public/:companyId or a claimed subdomain.
+        const isLocalhost =
+          typeof window !== 'undefined' &&
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const companyOverride = isLocalhost
+          ? new URLSearchParams(window.location.search).get('company')
+          : null;
+        if (companyOverride) {
+          setResolvedCompanyId(companyOverride);
         } else {
           setError('No store specified.');
         }
