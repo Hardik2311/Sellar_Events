@@ -43,6 +43,7 @@ const toFormState = (event: EventItem): EventFormState => ({
   venue: event.venue ?? '',
   isOnline: event.isOnline,
   images: event.images ?? (event.coverImage ? [event.coverImage] : []),
+  isPrivate: event.isPrivate ?? false,
   // NEW
   coverImageDesktop: event.coverImageDesktop ?? null,
   coverImageMobile: event.coverImageMobile ?? null,
@@ -174,13 +175,23 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cover photo</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Cover photo{req.images && ' *'}
+                  </p>
                   <CoverPhotoUpload
                     desktopSrc={form.coverImageDesktop}
                     mobileSrc={form.coverImageMobile}
                     onChangeDesktop={(src) => update('coverImageDesktop', src)}
                     onChangeMobile={(src) => update('coverImageMobile', src)}
                   />
+                  {req.images &&
+                    form.images.length === 0 &&
+                    !form.coverImageDesktop &&
+                    !form.coverImageMobile && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                        At least one cover image (desktop or mobile) is required.
+                      </p>
+                    )}
                 </div>
 
                 <div>
@@ -250,6 +261,30 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         }`}
                     >
                       Online
+                    </button>
+                  </div>
+                </FormField>
+
+                <FormField label="Visibility" htmlFor="edit-is-private">
+                  <div className="flex items-center justify-between rounded-sm border border-gray-300 dark:border-slate-700 p-3 bg-white dark:bg-slate-800">
+                    <div className="pr-3">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Make this event private</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500">
+                        Hidden from Discover. Attendees need an access code to view and register.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.isPrivate}
+                      onClick={() => update('isPrivate', !form.isPrivate)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.isPrivate ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                        }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isPrivate ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                      />
                     </button>
                   </div>
                 </FormField>

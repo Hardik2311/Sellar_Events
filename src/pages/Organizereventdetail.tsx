@@ -14,12 +14,14 @@ import {
 } from '../data/events';
 import EditEventModal from '../components/EditEventModal';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay';
+import { ShareOptionsModal } from '../components/ShareOptionsModal';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { usePermissions } from '../hooks/usePermissions';
+import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { Permission } from '../types/permissions.types';
 import { stripHtmlTags } from '../lib/utils';
 
@@ -55,6 +57,7 @@ const useEvent = (companyId?: string, id?: string) => {
           pastEventsGallery: d.pastEventsGallery ?? [],
           status: d.status,
           featured: d.featured || false,
+          isPrivate: d.isPrivate || false,
           tiers: (d.tiers || []).map((t: any) => ({
             id: t.id,
             name: t.name,
@@ -91,11 +94,14 @@ const OrganizerEventDetail: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { can } = usePermissions();
+  const { regenerateAccessCode } = useOrganizerEvents();
   const { event: rawEvent, loading } = useEvent(profile?.companyId, id);
   const event = rawEvent ? { ...rawEvent, organizerName: profile?.organizationName || '' } : undefined;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -138,17 +144,9 @@ const OrganizerEventDetail: React.FC = () => {
 
   const handleOpenShare = async () => {
     if (!event) return;
-    const shareUrl = await resolveShareUrl();
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: event.title, url: shareUrl });
-        return;
-      } catch {
-        return; // user cancelled share sheet, no-op
-      }
-    }
-    await navigator.clipboard.writeText(shareUrl);
-    setLinkCopiedToast(true);
+    const url = await resolveShareUrl();
+    setShareUrl(url);
+    setIsShareModalOpen(true);
   };
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
   const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
@@ -178,7 +176,7 @@ const OrganizerEventDetail: React.FC = () => {
     const isManualQR = updated.registrationMode === 'tickets' && updated.paymentCollectionMode === 'manual_qr';
     //const qrImageUrl = isManualQR ? await uploadIfNeeded(updated.qrImage, 'payment-qr') : null;
 
-        // Strip any `undefined` values — Firestore rejects the whole write
+    // Strip any `undefined` values — Firestore rejects the whole write
     // if even one field is undefined, which was silently killing saves.
     const sanitize = <T,>(obj: T): T =>
       JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)));
@@ -197,6 +195,7 @@ const OrganizerEventDetail: React.FC = () => {
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
         coverImageMobile: coverImageMobileUrl,
+        isPrivate: updated.isPrivate,
         registrationMode: updated.registrationMode,
         tiers: isRsvp ? [] : updated.tiers,
         rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
@@ -302,24 +301,6 @@ const OrganizerEventDetail: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          <div className="flex items-center gap-2">
-            <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
-            {can(Permission.EDIT_EVENT) && (
-              <button
-                onClick={() => setIsEditOpen(true)}
-                className="flex items-center gap-1.5 rounded-sm border border-white/40 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white transition-colors"
-              >
-                <Pencil size={14} /> Edit
-              </button>
-            )}
-          </div>
-          <button
-            onClick={handleOpenShare}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
-          >
-            <Share2 size={18} />
-          </button>
-        </div><div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <div className="flex items-center gap-2">
             <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
             {can(Permission.EDIT_EVENT) && (
@@ -520,6 +501,17 @@ const OrganizerEventDetail: React.FC = () => {
           event={event}
           onClose={() => setIsEditOpen(false)}
           onSave={handleSaveEdit}
+        />
+      )}
+
+      {isShareModalOpen && (
+        <ShareOptionsModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          shareUrl={shareUrl}
+          eventId={event.id}
+          isPrivate={event.isPrivate}
+          onRegenerateCode={regenerateAccessCode}
         />
       )}
       {showSaveConfirmation && (

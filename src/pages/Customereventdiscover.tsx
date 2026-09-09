@@ -148,10 +148,18 @@ const CustomerEventDiscover: React.FC = () => {
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [formatMenuOpen, setFormatMenuOpen] = useState(false);
 
+        // Private events must never show up in the public discover grid — only
+    // a direct shared link + code should reach them. `isPrivate` is the
+    // real source of truth (activeAccessCode was never populated by the mapper).
+    const visibleEvents = useMemo(
+        () => events.filter((e) => !e.isPrivate),
+        [events]
+    );
+
     const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
     const upcomingEvents = useMemo(
-        () => events.filter((e) => (e.endDate || e.date) >= todayISO),
-        [events, todayISO]
+        () => visibleEvents.filter((e) => (e.endDate || e.date) >= todayISO),
+        [visibleEvents, todayISO]
     );
 
     const categories = useMemo(

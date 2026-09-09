@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Store, Link2 } from 'lucide-react';
 
 interface ShareOptionsModalProps {
@@ -6,6 +6,12 @@ interface ShareOptionsModalProps {
   onClose: () => void;
   shareUrl: string;
   onViewStore?: () => void;
+
+  // Only needed for a code-protected SINGLE event share — the generic
+  // storefront share (ShareLinkPickerModal) doesn't pass these.
+  eventId?: string;
+  onRegenerateCode?: (eventId: string) => Promise<string>;
+  isPrivate?: boolean;
 }
 
 export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
@@ -13,16 +19,27 @@ export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
   onClose,
   shareUrl,
   onViewStore,
+  eventId,
+  onRegenerateCode,
+  isPrivate,
 }) => {
   if (!isOpen) return null;
-
   const handleShareLink = async () => {
     if (!shareUrl) {
-      console.warn('Share link blocked: shareUrl is empty');
+      console.warn('Share link blocked: url is empty');
       return;
     }
-    const shareData = { url: shareUrl };
-    // Native share sheet — same as "share to any app" normally works
+
+    // Private events: bake the code straight into the shared message so the
+    // organizer never has to copy/paste it separately. Public events share
+    // the plain link as before.
+    let message = shareUrl;
+    if (isPrivate && eventId && onRegenerateCode) {
+      const newCode = await onRegenerateCode(eventId);
+      message = `Use code ${newCode} to access this event: ${shareUrl}`;
+    }
+
+    const shareData = isPrivate ? { text: message } : { url: shareUrl };
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         if (navigator.canShare && !navigator.canShare(shareData)) {
@@ -33,13 +50,12 @@ export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
         }
       } catch (err) {
         const error = err as Error;
-        if (error?.name === 'AbortError') return; // user cancelled the sheet — not a bug
+        if (error?.name === 'AbortError') return;
         console.error('Native share failed:', error?.name, error?.message);
       }
     }
-    // Fallback for browsers/devices without navigator.share (e.g. desktop Chrome)
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(message);
     } catch (err) {
       console.error('Copy link fallback failed:', err);
     }
@@ -65,7 +81,7 @@ export const ShareOptionsModal: React.FC<ShareOptionsModalProps> = ({
           )}
 
           <button
-            onClick={() => { handleShareLink(); onClose(); }}
+            onClick={handleShareLink}
             className="flex items-center gap-2 rounded-sm border border-gray-200 dark:border-slate-700 px-3 py-2.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             <Link2 size={18} className="text-[#007A78]" /> Share Link

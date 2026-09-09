@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import type { PublicEvent } from '../data/events';
+import { generateAccessCode, type PublicEvent } from '../data/events'; // NEW — import generateAccessCode alongside existing type import
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
@@ -25,6 +25,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   status: d.status,
   featured: d.featured || false,
   deletedAt: d.deletedAt ?? null,
+  isPrivate: d.isPrivate || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -41,13 +42,14 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
   customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
-   consentText: d.consentText ?? undefined,
+  consentText: d.consentText ?? undefined,
   consentStyle: d.consentStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
+  accessCodes: d.accessCodes ?? [],
 });
 
 export const useOrganizerEvents = () => {
@@ -102,6 +104,20 @@ export const useOrganizerEvents = () => {
     await batch.commit();
   };
 
+  /// NEW — generates a fresh access code for a private event and ADDS it to the
+  // existing list (old codes stay valid too). Called every time the organizer
+  // clicks "Share Link" for a private event.
+  const regenerateAccessCode = async (id: string): Promise<string> => {
+    if (!profile?.companyId) throw new Error('No company context');
+    const code = generateAccessCode(); // single source of truth — same generator used everywhere
+
+    // NOTE: serverTimestamp() can't be used INSIDE an array element, so we use
+    // a plain client-side ISO timestamp for entries pushed via arrayUnion.
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      accessCodes: arrayUnion({ code, createdAt: new Date().toISOString() }),
+    });
+    return code;
+  };
   const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
     // Soft delete — doc stays in Firestore so it can be restored; a Cloud
@@ -199,6 +215,7 @@ export const useOrganizerEvents = () => {
       time: form.time,
       venue: form.venue,
       isOnline: form.isOnline,
+      isPrivate: form.isPrivate,
       coverImageUrls: form.images,
       coverImageUrl: form.images[0] || null,
       coverImageDesktop: form.coverImageDesktop || null,
@@ -243,5 +260,5 @@ export const useOrganizerEvents = () => {
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent };
+  return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode };
 };

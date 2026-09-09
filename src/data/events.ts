@@ -13,6 +13,12 @@ export interface GalleryMediaItem {
   url: string;
   type: 'image' | 'gif' | 'video';
 }
+// NEW — one entry per generated share code; old codes are kept, not overwritten
+export interface AccessCodeEntry {
+  code: string;
+  createdAt: string;   // ISO timestamp
+  createdFor?: string; // optional label, e.g. who it was shared with (future use)
+}
 export interface PublicEvent {
   id: string;
   companyId: string;
@@ -36,6 +42,7 @@ export interface PublicEvent {
   status: 'draft' | 'published' | 'completed' | 'cancelled' | 'deleted';
   featured?: boolean;
   deletedAt?: string | null;
+  isPrivate?: boolean;
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
@@ -44,11 +51,11 @@ export interface PublicEvent {
   descriptionStyle?: TextStyleConfig;
   consentText?: string;
   consentStyle?: TextStyleConfig;
-  // NEW
-  paymentCollectionMode?: 'gateway' | 'manual_qr';
+    paymentCollectionMode?: 'gateway' | 'manual_qr';
   //qrImageUrl?: string | null;
   upiId?: string;
   payeeName?: string;
+  accessCodes?: AccessCodeEntry[]; // ALL valid share codes ever generated for this event
 }
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {
@@ -123,4 +130,21 @@ export const buildEventSlugId = (title: string, id: string) => `${generateSlug(t
 export const parseEventIdFromSlug = (slugId: string) => {
   const idx = slugId.lastIndexOf('--');
   return idx === -1 ? slugId : slugId.slice(idx + 2);
+};
+
+// NEW — generates a random access code (used by "Share Link" action)
+export const generateAccessCode = (length: number = 6): string => {
+  const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+};
+
+// NEW — builds the shareable URL, optionally embedding the code as a query param
+// so a single tap can auto-fill the gate (still re-verified server-side)
+export const buildShareUrl = (title: string, id: string, code?: string): string => {
+  const base = `${window.location.origin}/e/${buildEventSlugId(title, id)}`;
+  return code ? `${base}?code=${code}` : base;
 };
