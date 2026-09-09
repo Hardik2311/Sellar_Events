@@ -73,7 +73,6 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     ticketsSold: 0,
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
     revenue: 0,
-    salesTrend: [],
     description: data.description,
     tiers,
     customFields: data.customFields ?? [],

@@ -8,6 +8,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Real super-admin accounts — keep this in sync with SUPER_ADMIN_UIDS in
+    // SuperAdminPlanLeads.tsx / SupportAdminSupportTickets.tsx.
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.uid in ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
+    }
+
     function isCompanyMember(companyId) {
       return isAuthenticated() && (request.auth.token.companyId == companyId || request.auth.uid == companyId);
     }
@@ -46,11 +52,12 @@ service cloud.firestore {
     // which bypasses these rules entirely.
     function isValidEventCreditsUpdate(companyId) {
       let affected = request.resource.data.diff(resource.data).affectedKeys();
+      let currentCredits = ('eventCredits' in resource.data) ? resource.data.eventCredits : 0;
       return !affected.hasAny(['eventCredits']) ||
         (
           affected.hasOnly(['eventCredits']) &&
-          resource.data.eventCredits > 0 &&
-          request.resource.data.eventCredits == resource.data.eventCredits - 1 &&
+          currentCredits > 0 &&
+          request.resource.data.eventCredits == currentCredits - 1 &&
           (hasPermission(companyId, 'publishEvent') || hasPermission(companyId, 'saveDraftEvent'))
         );
     }
@@ -79,9 +86,10 @@ service cloud.firestore {
 
     function isSuperAdminCreditTopUp(companyId) {
       let affected = request.resource.data.diff(resource.data).affectedKeys();
+      let currentCredits = ('eventCredits' in resource.data) ? resource.data.eventCredits : 0;
       return affected.hasOnly(['eventCredits']) &&
         request.resource.data.eventCredits is number &&
-        request.resource.data.eventCredits > (resource.data.eventCredits == null ? 0 : resource.data.eventCredits);
+        request.resource.data.eventCredits > currentCredits;
     }
 
     // --- Tenant Data (Sellar Events) ---
@@ -90,7 +98,7 @@ service cloud.firestore {
       // Company document
       allow read: if true;
       allow update: if (isCompanyMember(companyId) && isValidEventCreditsUpdate(companyId))
-        || (isAuthenticated() && isSuperAdminCreditTopUp(companyId)); // TODO: tighten to SUPER_ADMIN_UIDS
+        || (isSuperAdmin() && isSuperAdminCreditTopUp(companyId));
 
       // Business Info (Organization name, website, branding)
       match /business_info/{docId} {
@@ -104,7 +112,7 @@ service cloud.firestore {
 
       // Users / Organizer Profiles
       match /users/{userId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId) || isSuperAdmin();
         allow create, update: if isCompanyMember(companyId) || isSelf(companyId, userId);
         allow delete: if false;
       }

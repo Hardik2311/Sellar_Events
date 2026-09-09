@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, updateDoc, increment, collectionGroup } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Search, Zap, ArrowLeft, Plus } from 'lucide-react';
 
@@ -14,7 +14,7 @@ interface CompanyData {
   eventCredits?: number;
 }
 
-const SUPER_ADMIN_UIDS: string[] = [];
+const SUPER_ADMIN_UIDS: string[] = ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
 
 const SuperAdminPlanLeads: React.FC = () => {
   const navigate = useNavigate();
@@ -62,20 +62,32 @@ const SuperAdminPlanLeads: React.FC = () => {
           });
         });
 
-        const usersQuery = await getDocs(collectionGroup(db, 'users'));
-        usersQuery.forEach((userDoc) => {
-          const userData = userDoc.data();
-          const parentCompany = userDoc.ref.parent.parent;
-          const compId = userData.companyId || (parentCompany ? parentCompany.id : null);
-
-          if (compId && companyMap.has(compId) && (userData.role === 'Owner' || userData.role === 'owner' || userData.role === 'admin')) {
-            const existing = companyMap.get(compId)!;
-            if (userData.name) existing.ownerName = userData.name;
-            if (userData.email) existing.email = userData.email;
-            if (userData.phoneNumber) existing.phone = userData.phoneNumber;
-            companyMap.set(compId, existing);
-          }
-        });
+        // Fetch each company's users subcollection individually rather than
+        // a single collectionGroup('users') scan — a collection-group query
+        // fails outright if it matches even one unreadable document anywhere
+        // in the database, so it's fragile against any "users" subcollection
+        // outside companies/{id}/users. Per-company reads are scoped by the
+        // same security rule but can't be broken by unrelated data, and one
+        // company's failure doesn't take down the whole page.
+        await Promise.all(
+          Array.from(companyMap.keys()).map(async (compId) => {
+            try {
+              const usersSnap = await getDocs(collection(db, 'companies', compId, 'users'));
+              usersSnap.forEach((userDoc) => {
+                const userData = userDoc.data();
+                if (userData.role === 'Owner' || userData.role === 'owner' || userData.role === 'admin') {
+                  const existing = companyMap.get(compId)!;
+                  if (userData.name) existing.ownerName = userData.name;
+                  if (userData.email) existing.email = userData.email;
+                  if (userData.phoneNumber) existing.phone = userData.phoneNumber;
+                  companyMap.set(compId, existing);
+                }
+              });
+            } catch (err) {
+              console.error(`Failed to load users for company ${compId}:`, err);
+            }
+          })
+        );
 
         setCompanies(Array.from(companyMap.values()));
       } catch (err) {

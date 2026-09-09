@@ -38,7 +38,7 @@ interface SupportTicket {
 }
 
 // TODO: Diksha — paste your Super Admin UIDs here
-const SUPER_ADMIN_UIDS: string[] = [];
+const SUPER_ADMIN_UIDS: string[] = ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
 
 const SuperAdminSupportTickets: React.FC = () => {
 
