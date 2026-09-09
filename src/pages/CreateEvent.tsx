@@ -264,14 +264,34 @@ const CreateEvent: React.FC = () => {
         createdAt: serverTimestamp(),
       };
 
+      // NEW — event credit check + decrement, ek hi atomic transaction me
+      // (dono operations ya to saath ho jayenge ya bilkul nahi — koi partial state nahi banega)
+      const companyRef = doc(db, 'companies', profile.companyId);
       const newEventRef = doc(eventsRef); // id pehle hi generate kar liya, navigate ke liye chahiye
-      await setDoc(newEventRef, eventPayload);
+
+      await runTransaction(db, async (transaction) => {
+        const companySnap = await transaction.get(companyRef);
+        const currentCredits = companySnap.data()?.eventCredits ?? 0;
+
+        if (currentCredits < 1) {
+          throw new Error('NO_CREDITS');
+        }
+
+        transaction.set(newEventRef, eventPayload);
+        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
+        // Delete ke waqt ye field kabhi wapas nahi badhta — credit permanently consume ho jata hai
+      });
 
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       navigate(`/events/e/${newEventRef.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save event:', err);
-      setSaveError('Failed to save event. Please try again.');
+      if (err?.message === 'NO_CREDITS') {
+        setSaveError('You have no event credits left. Redirecting you to the recharge page…');
+        setTimeout(() => navigate('/events/account/recharge'), 1200);
+      } else {
+        setSaveError('Failed to save event. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }
