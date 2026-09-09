@@ -110,16 +110,8 @@ const EventsLayout = () => {
     <div className="h-dvh w-screen flex flex-col md:flex-row overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-[#1E293B] border-r border-slate-200 dark:border-slate-800 h-full shrink-0 z-20">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />
-            <div>
-              <p className="font-extrabold text-base text-slate-900 dark:text-white">Outsold</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 tracking-widest font-bold">
-                by sellar.in
-              </p>
-            </div>
-          </div>
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800">
+          <img src="/Outsold.png" alt="Outsold" className="w-full h-auto" />
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3.5 space-y-1.5">
