@@ -33,12 +33,13 @@ const TextStyleControls: React.FC<TextStyleControlsProps> = ({
     setIsItalicActive(Boolean(node?.closest('i')));
   };
 
-  // Poore document ki selection track karte hain — editor ke bahar click hone par
-  // bhi selection change/collapse hoti hai, isliye document-level listener
   useEffect(() => {
-    document.addEventListener('selectionchange', updateActiveFormats);
-    return () => document.removeEventListener('selectionchange', updateActiveFormats);
-  }, []);
+  // selectionchange se turant selection settle nahi hota — ek microtask/frame
+  // defer karke check karo taaki final selection state mile
+  const handler = () => requestAnimationFrame(updateActiveFormats);
+  document.addEventListener('selectionchange', handler);
+  return () => document.removeEventListener('selectionchange', handler);
+}, []);
 
   // Dialog khulne / button click hone se PEHLE (mousedown pe) selection save kar lete hain
   const saveSelection = () => {

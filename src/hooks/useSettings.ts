@@ -67,7 +67,7 @@ const DEFAULT_SETTINGS: CompanySettings = {
   gstScheme: 'none',
   taxType: 'inclusive',
   defaultTaxRate: 0,
-  enableRounding: false,
+  enableRounding: true,
   roundingInterval: 1,
   ticketDisplay: DEFAULT_TICKET_DISPLAY,
   eventFieldRequirements: DEFAULT_FIELD_REQUIREMENTS,

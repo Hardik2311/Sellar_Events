@@ -312,7 +312,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
   const { settings } = useCompanySettings();
 
-    // Share = open ShareOptionsModal, which already knows how to bake the
+  // Share = open ShareOptionsModal, which already knows how to bake the
   // access code into the shared message when the event is private.
   const [shareModalEvent, setShareModalEvent] = useState<PublicEvent | null>(null);
   const [shareUrl, setShareUrl] = useState('');
@@ -391,6 +391,25 @@ const OrganizerEventDiscover: React.FC = () => {
     return () => clearTimeout(t);
   }, [showSaveConfirmation]);
 
+  const [toggleLiveError, setToggleLiveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toggleLiveError) return;
+    const t = setTimeout(() => setToggleLiveError(null), 3000);
+    return () => clearTimeout(t);
+  }, [toggleLiveError]);
+
+  const handleToggleLive = async (id: string, currentStatus: string) => {
+    try {
+      await toggleLive(id, currentStatus);
+    } catch (err: any) {
+      if (err?.message === 'NO_CREDITS') {
+        setToggleLiveError("You don't have enough credits to publish this event.");
+      } else {
+        console.error('Failed to toggle live status:', err);
+      }
+    }
+  };
+
   const handleSaveEdit = async (updated: EventFormState) => {
     if (!editingEvent) return;
     await updateEvent(editingEvent.id, updated);
@@ -431,7 +450,7 @@ const OrganizerEventDiscover: React.FC = () => {
                 onClick={() => setIsSubdomainModalOpen(true)}
                 className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
-                <LinkIcon size={14} /> <span className="hidden sm:inline">Store Link</span>
+                <LinkIcon size={14} /> <span className="hidden sm:inline">Event Link</span>
               </button>
             </div>
           </div>
@@ -574,7 +593,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     key={event.id}
                     event={event}
                     onOpen={() => openEvent(event)}
-                    onToggleLive={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => toggleLive(evId, event.status) : undefined}
+                    onToggleLive={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => handleToggleLive(evId, event.status) : undefined}
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
                     onRestore={can(Permission.DELETE_EVENT) ? (ev) => restoreEvent(ev.id) : undefined}
@@ -592,7 +611,7 @@ const OrganizerEventDiscover: React.FC = () => {
         </div>
       </main>
 
-            {profile?.companyId && (
+      {profile?.companyId && (
         <EventSubdomainModal
           companyId={profile.companyId}
           forceOpen={isSubdomainModalOpen}
@@ -600,7 +619,7 @@ const OrganizerEventDiscover: React.FC = () => {
         />
       )}
 
-            {shareModalEvent && (
+      {shareModalEvent && (
         <ShareOptionsModal
           isOpen={!!shareModalEvent}
           onClose={() => setShareModalEvent(null)}
@@ -718,6 +737,13 @@ const OrganizerEventDiscover: React.FC = () => {
             <CheckCircle size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
             <p className="text-sm font-semibold text-slate-800 dark:text-white">Event updated successfully</p>
           </div>
+        </div>
+      )}
+      {toggleLiveError && (
+        <div className="fixed bottom-20 left-0 right-0 flex justify-center z-40 px-3">
+          <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-sm px-4 py-2 shadow-lg">
+            {toggleLiveError}
+          </p>
         </div>
       )}
 

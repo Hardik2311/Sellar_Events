@@ -110,9 +110,9 @@ const EventsLayout = () => {
     <div className="h-dvh w-screen flex flex-col md:flex-row overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-[#1E293B] border-r border-slate-200 dark:border-slate-800 h-full shrink-0 z-20">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800">
-          <img src="/Outsold.png" alt="Outsold" className="w-full h-auto" />
-        </div>
+        <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800">
+  <img src="/Outsold.png" alt="Outsold" className="w-full h-auto" />
+</div>
 
         <nav className="flex-1 overflow-y-auto p-3.5 space-y-1.5">
           {visibleNavItems.map(({ to, icon, label }) => (

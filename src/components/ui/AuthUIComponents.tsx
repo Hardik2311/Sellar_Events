@@ -284,10 +284,11 @@ export const AuthHeroPanel: React.FC<{
       <div className="absolute -bottom-20 -right-10 w-72 h-72 rounded-full bg-blue-500/20 blur-3xl" />
 
       <div className="relative z-10 flex flex-col items-center text-center px-8">
-        <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4">
-          <FiCalendar className="text-white" size={28} />
-        </div>
-        <h2 className="text-white text-2xl font-bold tracking-tight">{title}</h2>
+                <img
+          src="/Outsold.png"
+          alt={title}
+          className="h-16 w-auto mb-4"
+        />
         <p className="text-white/90 text-sm mt-2 max-w-55">{subtitle}</p>
       </div>
     </div>

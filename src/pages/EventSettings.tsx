@@ -303,7 +303,7 @@ const EventFieldSettings: React.FC = () => {
             type="button"
             onClick={handleSaveSettings}
             disabled={isSaving}
-            className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
+            className={`w-full py-3.5 rounded-sm text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
               ? 'bg-emerald-600 dark:bg-emerald-400'
               : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
               }`}

@@ -57,6 +57,11 @@ const SmokeScreenLoader: React.FC<SmokeScreenLoaderProps> = ({
       <FloatingEventIcons iconClassName="text-white" />
 
       <div className="relative z-20 flex flex-col items-center">
+        <img
+          src="/Outsold.png"
+          alt="Outsold"
+          className="h-20 w-auto mb-4"
+        />
         <Loader2 className="animate-spin text-white" size={48} />
         <p className="mt-4 text-base font-semibold text-white text-center px-6">
           {messages[messageIndex]}

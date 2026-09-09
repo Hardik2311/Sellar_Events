@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Wallet } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
+import { useEventCredits } from '../hooks/useEventCredits';
 import {
   FloatingLabelInput,
   FloatingLabelSelect,
@@ -87,12 +88,14 @@ const CreateEvent: React.FC = () => {
   const { settings: companySettings } = useCompanySettings();
   const { user, profile } = useAuth();
   const { can } = usePermissions();
+  const { credits, loading: creditsLoading } = useEventCredits();
   const [form, setForm] = useState<EventFormState>(
     () => loadDraftFromStorage() ?? INITIAL_STATE
   );
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<'draft' | 'published' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showPastEventConfirm, setShowPastEventConfirm] = useState(false);
+const [showCreditConfirm, setShowCreditConfirm] = useState(false);
   const titleEditorRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement>(null);
   const consentEditorRef = useRef<HTMLDivElement>(null);
@@ -166,7 +169,7 @@ const CreateEvent: React.FC = () => {
       return;
     }
 
-    setIsSaving(true);
+    setSavingAction(status);
     setSaveError(null);
     try {
       // Dashboard queries/sorts on `startDate` as a Firestore Timestamp,
@@ -226,7 +229,7 @@ const CreateEvent: React.FC = () => {
         ...tier,
         dummyRemaining: tier.dummyRemaining ?? null,
         tierEndDate: tier.tierEndDate ?? null,
-        tierEndTime: tier.tierEndTime ?? null,
+        tierEndTime: tier.tierEndTime ?? (tier.tierEndDate ? '00:00' : null),
       }));
 
       const eventPayload = {
@@ -264,23 +267,28 @@ const CreateEvent: React.FC = () => {
         createdAt: serverTimestamp(),
       };
 
-      // NEW — event credit check + decrement, ek hi atomic transaction me
-      // (dono operations ya to saath ho jayenge ya bilkul nahi — koi partial state nahi banega)
-      const companyRef = doc(db, 'companies', profile.companyId);
+            // NEW — draft free hai, sirf publish credit consume karta hai
+      // (atomic check + decrement — bina valid debit ke publish nahi hoga)
       const newEventRef = doc(eventsRef); // id pehle hi generate kar liya, navigate ke liye chahiye
 
-      await runTransaction(db, async (transaction) => {
-        const companySnap = await transaction.get(companyRef);
-        const currentCredits = companySnap.data()?.eventCredits ?? 0;
+      if (status === 'published') {
+        const companyRef = doc(db, 'companies', profile.companyId);
+        await runTransaction(db, async (transaction) => {
+          const companySnap = await transaction.get(companyRef);
+          const currentCredits = companySnap.data()?.eventCredits ?? 0;
 
-        if (currentCredits < 1) {
-          throw new Error('NO_CREDITS');
-        }
+          if (currentCredits < 1) {
+            throw new Error('NO_CREDITS');
+          }
 
-        transaction.set(newEventRef, eventPayload);
-        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
-        // Delete ke waqt ye field kabhi wapas nahi badhta — credit permanently consume ho jata hai
-      });
+          transaction.set(newEventRef, eventPayload);
+          transaction.update(companyRef, { eventCredits: currentCredits - 1 });
+          // Delete ke waqt ye field kabhi wapas nahi badhta — credit permanently consume ho jata hai
+        });
+      } else {
+        // Draft free — no credit check, no decrement
+        await setDoc(newEventRef, eventPayload);
+      }
 
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       navigate(`/events/e/${newEventRef.id}`);
@@ -292,8 +300,8 @@ const CreateEvent: React.FC = () => {
       } else {
         setSaveError('Failed to save event. Please try again.');
       }
-    } finally {
-      setIsSaving(false);
+        } finally {
+      setSavingAction(null);
     }
   };
   const handleSaveDraft = () => {
@@ -301,13 +309,23 @@ const CreateEvent: React.FC = () => {
     saveEvent('draft');
   };
   const handlePublish = () => {
-    if (!isPublishable || !can(Permission.PUBLISH_EVENT)) return;
-    if (isPastEventDateTime()) {
-      setShowPastEventConfirm(true);
-      return;
-    }
-    saveEvent('published');
-  };
+  if (!isPublishable || !can(Permission.PUBLISH_EVENT)) return;
+  if (isPastEventDateTime()) {
+    setShowPastEventConfirm(true);
+    return;
+  }
+  if (!creditsLoading && credits < 1) {
+    setSaveError('You have no event credits left. Redirecting you to the recharge page…');
+    setTimeout(() => navigate('/events/account/recharge'), 1200);
+    return;
+  }
+  setShowCreditConfirm(true);
+};
+
+const confirmPublishWithCredit = () => {
+  setShowCreditConfirm(false);
+  saveEvent('published');
+};
 
   const confirmSavePastEventAsDraft = () => {
     setShowPastEventConfirm(false);
@@ -324,6 +342,16 @@ const CreateEvent: React.FC = () => {
         <div className="text-center">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
+        </div>
+        <div className="absolute right-6 top-1/2 -translate-y-1/2">
+          <button
+            onClick={() => navigate('/events/account/recharge')}
+            className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            title="Event credits — click to recharge"
+          >
+            <Wallet size={16} />
+            {creditsLoading ? '…' : credits}
+          </button>
         </div>
       </header>
 
@@ -803,36 +831,68 @@ const CreateEvent: React.FC = () => {
               >
                 Edit date
               </button>
-              <button
-                onClick={confirmSavePastEventAsDraft}
-                disabled={isSaving}
+              <button onClick={confirmSavePastEventAsDraft} disabled={savingAction !== null}
                 className="rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-4 py-2 text-sm font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-40"
               >
-                {isSaving ? 'Saving…' : 'Save as draft'}
+                {savingAction === 'draft' ? 'Saving…' : 'Save as draft'}
               </button>
             </div>
           </div>
         </div>
       )}
+      {showCreditConfirm && (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+    onClick={() => setShowCreditConfirm(false)}
+  >
+    <div
+      className="w-full max-w-sm rounded-sm bg-white dark:bg-[#1E293B] shadow-xl p-5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">
+        Use 1 event credit to publish?
+      </h3>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
+        Publishing this event will use <span className="font-semibold">1 event credit</span> from your balance
+        ({credits} remaining).
+      </p>
+      <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-4">
+        Credit usage is final — credits are non-refundable even if the event is later edited,
+        unpublished, or deleted.
+      </p>
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={() => setShowCreditConfirm(false)}
+          className="rounded-sm border border-gray-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={confirmPublishWithCredit}
+          disabled={savingAction !== null}
+          className="rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-4 py-2 text-sm font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-40"
+        >
+          {savingAction === 'published' ? 'Publishing…' : 'Use credit & Publish'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
         <div className="w-full max-w-3xl flex gap-3">
           {can(Permission.SAVE_DRAFT_EVENT) && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={isSaving}
+            <button onClick={handleSaveDraft} disabled={savingAction !== null}
               className="flex-1 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
             >
-              {isSaving ? 'Saving…' : 'Save as Draft'}
+              {savingAction === 'draft' ? 'Saving…' : 'Save as Draft'}
             </button>
           )}
           {can(Permission.PUBLISH_EVENT) && (
-            <button
-              onClick={handlePublish}
-              disabled={!isPublishable || isSaving}
+            <button onClick={handlePublish} disabled={!isPublishable || savingAction !== null}
               className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
             >
-              {isSaving ? 'Publishing…' : 'Publish Event'}
+              {savingAction === 'published' ? 'Publishing…' : 'Publish Event'}
             </button>
           )}
         </div>

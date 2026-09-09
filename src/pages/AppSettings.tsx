@@ -60,9 +60,12 @@ const AppSettings: React.FC = () => {
                     </div>
 
                     {/* NEW — WhatsApp share message template */}
-                    <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm">
+                    <div className="rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-4 shadow-sm opacity-70 cursor-not-allowed">
                         <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                             <MessageCircle size={13} /> WhatsApp Share Message
+                            <span className="ml-auto text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-1 rounded-full">
+                                Coming Soon
+                            </span>
                         </h3>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
                             This text will be used when sharing the event link on WhatsApp.c
@@ -71,13 +74,15 @@ const AppSettings: React.FC = () => {
                             value={whatsappTemplate}
                             onChange={(e) => setWhatsappTemplate(e.target.value)}
                             rows={3}
+                            disabled
                             placeholder="Check out {{eventTitle}} on Outsold! {{link}}"
-                            className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+                            className="w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-2.5 text-sm text-slate-400 dark:text-slate-500 outline-none cursor-not-allowed"
                         />
                         <div className="mt-2 flex items-center gap-3">
                             <button
                                 onClick={handleSaveTemplate}
-                                className="rounded-sm bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-950 text-white text-xs font-bold py-2 px-4 transition-colors"
+                                disabled
+                                className="rounded-sm bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold py-2 px-4 cursor-not-allowed"
                             >
                                 Save
                             </button>
