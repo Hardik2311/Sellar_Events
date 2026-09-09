@@ -111,7 +111,7 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
-    const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
   const [walkInTicket, setWalkInTicket] = useState<{ ticketId: string; tierName: string; attendeeName: string } | null>(null);
   const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
@@ -432,8 +432,8 @@ const Attendees: React.FC = () => {
               <Card className="shadow-sm border-gray-200">
                 <CardContent className="pt-6 grid grid-cols-4 gap-2 sm:gap-3">
                   <div className="text-center min-w-0">
-                    <p className="text-[10px] sm:text-xs text-gray-500 mb-1 truncate">Total</p>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.total}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mb-1 truncate">Total</p>
+                    <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
                   </div>
                   <div className="text-center min-w-0">
                     <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 truncate">Checked In</p>
@@ -462,8 +462,6 @@ const Attendees: React.FC = () => {
                 </Card>
               )}
 
-              {/* 4a. Add Walk-in — its own full-width row */}
-                           {/* 4a. Add Walk-in + Import Excel — same row */}
               <div className="flex gap-2">
                 {can(Permission.ADD_WALK_IN_ATTENDEE) && (
                   <button

@@ -4,6 +4,7 @@ import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronD
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
+import { ShareOptionsModal } from '../components/ShareOptionsModal';
 import type { EventFormState } from '../types/event.types';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -308,25 +309,20 @@ const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { can } = usePermissions();
-  const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent } = useOrganizerEvents();
+  const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
   const { settings } = useCompanySettings();
 
-  // Direct share — native share sheet when available, else copy the link.
-  // No WhatsApp/Copy-link picker popup here anymore.
+    // Share = open ShareOptionsModal, which already knows how to bake the
+  // access code into the shared message when the event is private.
+  const [shareModalEvent, setShareModalEvent] = useState<PublicEvent | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+
   const handleShareRequest = async (event: PublicEvent) => {
     const baseUrl = profile?.companyId
       ? await getShareBaseUrl(profile.companyId)
       : window.location.origin;
-    const shareUrl = `${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: event.title, url: shareUrl });
-      } catch {
-        // user cancelled share sheet, no-op
-      }
-    } else {
-      await navigator.clipboard.writeText(shareUrl);
-    }
+    setShareUrl(`${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`);
+    setShareModalEvent(event);
   };
   // OFF => auto-feature nearest (toggle hidden); ON => organizer feature manually karega
   const showFeaturedToggle = settings.autoFeatureNearest;
@@ -596,13 +592,24 @@ const OrganizerEventDiscover: React.FC = () => {
         </div>
       </main>
 
-      {profile?.companyId && (
+            {profile?.companyId && (
         <EventSubdomainModal
           companyId={profile.companyId}
           forceOpen={isSubdomainModalOpen}
           onClose={() => setIsSubdomainModalOpen(false)}
         />
       )}
+
+            {shareModalEvent && (
+        <ShareOptionsModal
+          isOpen={!!shareModalEvent}
+          onClose={() => setShareModalEvent(null)}
+          shareUrl={shareUrl}
+          eventId={shareModalEvent.id}
+          isPrivate={shareModalEvent.isPrivate}
+          onRegenerateCode={regenerateAccessCode}
+        />
+      )}d
 
       {editingEvent && (
         <EditEventModal

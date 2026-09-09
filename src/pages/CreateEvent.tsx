@@ -14,10 +14,11 @@ import TicketTierEditor from '../components/TicketTierEditor';
 import CustomFieldsEditor from '../components/CustomFieldsEditor';
 import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
-import { collection, doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
+import { generateAccessCode } from '../data/events';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
@@ -64,6 +65,7 @@ const INITIAL_STATE: EventFormState = {
   //qrImage: null,
   upiId: '',
   payeeName: '',
+  isPrivate: false,
 };
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
 
@@ -239,6 +241,7 @@ const CreateEvent: React.FC = () => {
         time: form.time,
         venue: form.isOnline ? null : form.venue,
         isOnline: form.isOnline,
+        isPrivate: form.isPrivate,
         coverImageUrl: coverImageUrls[0] ?? null,
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
@@ -261,34 +264,14 @@ const CreateEvent: React.FC = () => {
         createdAt: serverTimestamp(),
       };
 
-      // NEW — event credit check + decrement, ek hi atomic transaction me
-      // (dono operations ya to saath ho jayenge ya bilkul nahi — koi partial state nahi banega)
-      const companyRef = doc(db, 'companies', profile.companyId);
       const newEventRef = doc(eventsRef); // id pehle hi generate kar liya, navigate ke liye chahiye
-
-      await runTransaction(db, async (transaction) => {
-        const companySnap = await transaction.get(companyRef);
-        const currentCredits = companySnap.data()?.eventCredits ?? 0;
-
-        if (currentCredits < 1) {
-          throw new Error('NO_CREDITS');
-        }
-
-        transaction.set(newEventRef, eventPayload);
-        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
-        // Delete ke waqt ye field kabhi wapas nahi badhta — credit permanently consume ho jata hai
-      });
+      await setDoc(newEventRef, eventPayload);
 
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       navigate(`/events/e/${newEventRef.id}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save event:', err);
-      if (err?.message === 'NO_CREDITS') {
-        setSaveError('You have no event credits left. Redirecting you to the recharge page…');
-        setTimeout(() => navigate('/events/account/recharge'), 1200);
-      } else {
-        setSaveError('Failed to save event. Please try again.');
-      }
+      setSaveError('Failed to save event. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -328,10 +311,11 @@ const CreateEvent: React.FC = () => {
         <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* ── Left column ────────────────────────────────────── */}
           <div className="lg:col-span-2 flex flex-col gap-4">
-            {/* Cover photo — desktop + mobile */}
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
               <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Cover Photo</CardTitle>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                  Cover Photo{req.images && ' *'}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <CoverPhotoUpload
@@ -340,6 +324,14 @@ const CreateEvent: React.FC = () => {
                   onChangeDesktop={(src) => update('coverImageDesktop', src)}
                   onChangeMobile={(src) => update('coverImageMobile', src)}
                 />
+                {req.images &&
+                  form.images.length === 0 &&
+                  !form.coverImageDesktop &&
+                  !form.coverImageMobile && (
+                    <p className="text-xs text-red-500 dark:text-red-400 mt-2">
+                      At least one cover image (desktop or mobile) is required to publish.
+                    </p>
+                  )}
               </CardContent>
             </Card>
 
@@ -414,6 +406,31 @@ const CreateEvent: React.FC = () => {
                         }`}
                     >
                       Online
+                    </button>
+                  </div>
+                </FormField>
+
+                {/* NEW — private toggle: ON generates an access code automatically on publish */}
+                <FormField label="Visibility" htmlFor="is-private">
+                  <div className="flex items-center justify-between rounded-sm border border-gray-300 dark:border-slate-700 p-3 bg-white dark:bg-slate-800">
+                    <div className="pr-3">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Make this event private</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500">
+                        Hidden from Discover. Attendees need an access code to view and register.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.isPrivate}
+                      onClick={() => update('isPrivate', !form.isPrivate)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.isPrivate ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                        }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isPrivate ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                      />
                     </button>
                   </div>
                 </FormField>
@@ -777,6 +794,7 @@ const CreateEvent: React.FC = () => {
           </div>
         </div>
       )}
+
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
         <div className="w-full max-w-3xl flex gap-3">
           {can(Permission.SAVE_DRAFT_EVENT) && (

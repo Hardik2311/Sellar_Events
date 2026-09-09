@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2,Ticket, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
@@ -11,19 +11,23 @@ import {
   formatTime,
   isTierExpired,
 } from '../data/events';
-import { usePublicEvent } from '../hooks/usePublicEvents';
+import { usePublicEvent, verifyAccessCode } from '../hooks/usePublicEvents';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
+import { useAuth } from '../context/AuthContext';
 import { stripHtmlTags } from '../lib/utils';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 import { DEFAULT_TEXT_STYLE } from '../types/event.types';
+import { useSearchParams } from 'react-router-dom'; // NEW — reads ?code= from the shared link
 
 const CustomerEventDetail: React.FC = () => {
   const { slug, companyId } = useParams<{ slug: string; companyId?: string }>();
   const id = slug ? parseEventIdFromSlug(slug) : undefined;
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
@@ -36,7 +40,38 @@ const CustomerEventDetail: React.FC = () => {
   const [, setShareToast] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
-  const [showManualQR, setShowManualQR] = useState(false); // NEW
+  const [showManualQR, setShowManualQR] = useState(false);
+
+  // NEW — access-code gate state
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+
+    useEffect(() => {
+    if (!event?.id) return;
+
+    const isOrganizerLivePreview =
+      searchParams.get('preview') === '1' &&
+      !!profile?.companyId &&
+      profile.companyId === event.companyId;
+
+    if (isOrganizerLivePreview) {
+      setIsVerified(true);
+      return;
+    }
+
+    // Gate driven by `isPrivate` — `activeAccessCode` was never populated by
+    // the mapper, so this check was always false and every private event
+    // unlocked itself instantly without asking for a code.
+    if (!event.isPrivate) {
+      setIsVerified(true);
+      return;
+    }
+    const savedVerified = sessionStorage.getItem(`eventAccessVerified:${event.id}`);
+    if (savedVerified === 'true') {
+      setIsVerified(true);
+    }
+  }, [event?.id, event?.isPrivate, event?.companyId, profile?.companyId, searchParams]);
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
@@ -89,8 +124,50 @@ const CustomerEventDetail: React.FC = () => {
       </div>
     );
   }
+if (!event) {
+    // Unreachable in practice (handled above) — this just lets
+    // TypeScript treat `event` as defined for the rest of the component.
+    return null;
+  }
+  // NEW — code gate: block everything below until verified
+  if (!isVerified) {
+        const handleVerify = () => {
+      if (verifyAccessCode(event, codeInput)) {
+        sessionStorage.setItem(`eventAccessVerified:${event.id}`, 'true');
+        setIsVerified(true);
+        setCodeError(false);
+      } else {
+        setCodeError(true);
+      }
+    };
 
-  if (!event) return null;
+    return (
+      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
+        <Ticket size={28} className="text-[#007A78] dark:text-[#2DD4BF]" />
+        <div>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Enter access code</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">This event link is code-protected. Enter the code shared with you.</p>
+        </div>
+        <input
+          type="text"
+          value={codeInput}
+          onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
+          placeholder="Enter code"
+          maxLength={6}
+          className="w-full max-w-xs rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 dark:text-slate-100 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+        />
+        {codeError && <p className="text-xs text-red-500 dark:text-red-400">Incorrect code. Please try again.</p>}
+        <button
+          onClick={handleVerify}
+          disabled={!codeInput.trim()}
+          className="w-full max-w-xs rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
+        >
+          Unlock event
+        </button>
+      </div>
+    );
+  }
 
   const label = getCategoryLabel(event);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
@@ -228,12 +305,6 @@ const CustomerEventDetail: React.FC = () => {
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
           <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
-          <button
-            onClick={handleShare}
-            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
-          >
-            <Share2 size={18} />
-          </button>
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-4">
@@ -301,8 +372,8 @@ const CustomerEventDetail: React.FC = () => {
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
               <p
                 className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
-                    ? 'text-slate-800 dark:text-slate-100'
-                    : ''
+                  ? 'text-slate-800 dark:text-slate-100'
+                  : ''
                   }`}
                 style={
                   event.descriptionStyle
@@ -407,8 +478,8 @@ const CustomerEventDetail: React.FC = () => {
                 <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Important Information &amp; Consent</h2>
                 <p
                   className={`whitespace-pre-line leading-relaxed mb-3 ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                      ? 'text-slate-800 dark:text-slate-100'
-                      : ''
+                    ? 'text-slate-800 dark:text-slate-100'
+                    : ''
                     }`}
                   style={
                     event.consentStyle

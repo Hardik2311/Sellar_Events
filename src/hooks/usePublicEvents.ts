@@ -25,6 +25,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   pastEventsGallery: d.pastEventsGallery ?? [],
   status: d.status,
   featured: d.featured || false,
+  isPrivate: d.isPrivate || false,
+  accessCodes: d.accessCodes ?? [],
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -53,7 +55,9 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
 
 export function usePublicEvents(targetCompanyId?: string | null) {
   const { profile } = useAuth();
-  const [events, setEvents] = useState<PublicEvent[]>([]);
+  // allEvents = published events including private ones (needed so a direct
+  // shared link + code can still resolve to the event).
+  const [allEvents, setAllEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,7 +69,7 @@ export function usePublicEvents(targetCompanyId?: string | null) {
 
     setLoading(true);
 
-    let unsubscribe = () => {};
+    let unsubscribe = () => { };
 
     const setup = async () => {
       let organizerName = profile?.organizationName || '';
@@ -91,7 +95,7 @@ export function usePublicEvents(targetCompanyId?: string | null) {
         const mapped = snapshot.docs.map((docSnap) =>
           mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId)
         );
-        setEvents(mapped);
+        setAllEvents(mapped);
         setLoading(false);
       });
     };
@@ -101,11 +105,24 @@ export function usePublicEvents(targetCompanyId?: string | null) {
     return () => unsubscribe();
   }, [targetCompanyId, profile?.companyId, profile?.organizationName]);
 
-  return { events, loading };
+  // Customer-facing listing must never show private events — they should
+  // only be reachable via a direct shared link + access code.
+  const events = allEvents.filter((e) => !e.isPrivate);
+
+  return { events, loading, allEvents };
 }
 
 export function usePublicEvent(id?: string, targetCompanyId?: string | null) {
-  const { events, loading } = usePublicEvents(targetCompanyId);
-  const event = id ? events.find((e) => e.id === id) : undefined;
+  // Use allEvents (not the filtered list) — a private event's direct link
+  // must still resolve; verifyAccessCode() is what gates access to it.
+  const { allEvents, loading } = usePublicEvents(targetCompanyId);
+  const event = id ? allEvents.find((e) => e.id === id) : undefined;
   return { event, loading };
+}
+
+export function verifyAccessCode(event: PublicEvent, enteredCode: string): boolean {
+  if (!event.isPrivate) return true; // public events don't need a code at all
+  if (!event.accessCodes || event.accessCodes.length === 0) return false; // private, but organizer hasn't generated any code yet — deny by default
+  const cleaned = enteredCode.trim().toUpperCase();
+  return event.accessCodes.some((entry) => entry.code.trim().toUpperCase() === cleaned);
 }

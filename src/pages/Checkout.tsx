@@ -326,7 +326,7 @@ const CheckoutPage: React.FC = () => {
           slotIndex += 1;
         }
       }
-      const initials = getEventInitials(event.title);
+      const initials = getEventInitials(stripHtmlTags(event.title));
       const created: PurchasedTicket[] = [];
 
       await runTransaction(db, async (transaction) => {
