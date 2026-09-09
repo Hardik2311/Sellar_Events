@@ -152,7 +152,7 @@ const PermissionsSettings: React.FC = () => {
                 return (
                   <div
                     key={group.title}
-                    className="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-3"
+                    className="rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-3"
                   >
                     <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-slate-200 dark:border-slate-800">
                       <div className="flex items-center gap-2">

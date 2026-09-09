@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { addDoc, arrayUnion, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { generateAccessCode, type PublicEvent } from '../data/events'; // NEW — import generateAccessCode alongside existing type import
@@ -77,10 +77,30 @@ export const useOrganizerEvents = () => {
     return () => unsubscribe();
   }, [profile?.companyId, profile?.organizationName]);
 
-  const toggleLive = async (id: string, currentStatus: string) => {
+    const toggleLive = async (id: string, currentStatus: string) => {
     if (!profile?.companyId) return;
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
-    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), { status: newStatus });
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+
+    if (newStatus === 'published') {
+      // Discover page se live karne par bhi credit cut hoga — same atomic
+      // check+decrement jo saveEvent mein hai, taaki koi bypass na ho
+      const companyRef = doc(db, 'companies', profile.companyId);
+      await runTransaction(db, async (transaction) => {
+        const companySnap = await transaction.get(companyRef);
+        const currentCredits = companySnap.data()?.eventCredits ?? 0;
+
+        if (currentCredits < 1) {
+          throw new Error('NO_CREDITS');
+        }
+
+        transaction.update(eventRef, { status: newStatus });
+        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
+      });
+    } else {
+      // Draft par wapas laana free hai — koi refund bhi nahi
+      await updateDoc(eventRef, { status: newStatus });
+    }
   };
 
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {

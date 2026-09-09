@@ -151,7 +151,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
             <span className="text-2xl">🔗</span>
           </div>
           <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-            {existingSubdomain ? 'Update Store Link' : 'Claim Link'}
+            {existingSubdomain ? 'Update Event Link' : 'Claim Link'}
           </h2>
           <p className="text-sm text-gray-500 mt-2">
             This is the unique link you&apos;ll share with attendees for your events.
@@ -182,7 +182,7 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
                     );
                   }}
                   className="p-1 text-gray-500 hover:text-[#007A78]"
-                  title="View Live Store"
+                  title="View Live Event Page"
                 >
                   <ExternalLink size={16} />
                 </button>
@@ -233,8 +233,8 @@ export default function EventSubdomainModal({ companyId, forceOpen, onClose }: E
           onClick={handleClaimSubdomain}
           disabled={availability !== 'available' || isSaving || subdomain === existingSubdomain}
           className={`w-full py-3.5 rounded-md font-black text-[12px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${availability === 'available' && !isSaving && subdomain !== existingSubdomain
-              ? 'bg-[#007A78] text-white shadow-lg active:scale-95'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            ? 'bg-[#007A78] text-white shadow-lg active:scale-95'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
         >
           {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}

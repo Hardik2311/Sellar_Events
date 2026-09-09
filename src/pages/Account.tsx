@@ -2,14 +2,17 @@ import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { FiEdit2, FiLogOut, FiCreditCard, FiHelpCircle, FiSettings, FiBarChart2, FiGrid } from 'react-icons/fi';
+import { Wallet } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { ROUTES } from '../constants/routes.constants';
+import { useEventCredits } from '../hooks/useEventCredits';
 
 const Account: React.FC = () => {
     const navigate = useNavigate();
     const { profile } = useAuth();
+    const { credits, loading: creditsLoading } = useEventCredits();
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -28,7 +31,14 @@ const Account: React.FC = () => {
                 <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[65%]">
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Organizer Account</h1>
                 </div>
-                <div className="w-10" />
+                <Link
+                   to="/events/account/recharge"
+                    className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+                  title="Event credits — click to recharge"
+                >
+                    <Wallet size={16} />
+                    {creditsLoading ? '…' : credits}
+                </Link>
             </header>
 
             {/* ── Profile section ── */}
@@ -114,17 +124,15 @@ const Account: React.FC = () => {
                             <span className="text-slate-400 font-bold">→</span>
                         </Link>
 
-                        <div
-                            className="col-span-2 flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70"
+                        <Link to="/events/account/recharge"
+                            className="col-span-2 flex items-center gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                         >
-                            <div className="p-2.5 rounded-sm bg-slate-500/10 text-slate-400 dark:text-slate-500">
+                            <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]">
                                 <FiCreditCard className="w-5 h-5" />
                             </div>
-                            <span className="text-sm font-bold flex-1">Subscription & Plans</span>
-                            <span className="text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-1 rounded-full">
-                                Coming Soon
-                            </span>
-                        </div>
+                            <span className="text-sm font-bold flex-1">Event Credits & Recharge</span>
+                            <span className="text-slate-400 font-bold">→</span>
+                        </Link>
                     </div>
 
                     <div className="mt-8 flex flex-col items-center">

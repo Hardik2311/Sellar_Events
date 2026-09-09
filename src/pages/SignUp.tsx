@@ -718,7 +718,7 @@ const Signup: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleContinue}
-                  className="w-full py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs"
+                  className="w-full py-3.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs"
                 >
                   Continue to Organization Setup
                 </button>
@@ -727,7 +727,7 @@ const Signup: React.FC = () => {
                   type="button"
                   onClick={handleFinishSetup}
                   disabled={isSubmitting}
-                  className="w-full py-3.5 rounded-xl bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
+                  className="w-full py-3.5 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 font-bold transition-all text-base shadow-xs disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <div className="flex items-center justify-center gap-2">

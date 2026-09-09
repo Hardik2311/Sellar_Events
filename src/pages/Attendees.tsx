@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
 import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
 import TicketConfirmation from '../components/TicketConfirmation';
@@ -34,6 +35,7 @@ import ShowWrapper from '../components/ShowWrapper';
 import ConfirmCancelModal from '../components/ConfirmCancelModal';
 import ConfirmReviveModal from '../components/ConfirmReviveModal';
 import EditAttendeeModal from '../components/EditAttendeeModal';
+import { useEventCredits } from '../hooks/useEventCredits';
 
 type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
 
@@ -99,6 +101,7 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
   const { can } = usePermissions(); // MOVED — hooks must run inside the component, not at module scope
+  const { credits, loading: creditsLoading } = useEventCredits();
   const [events, setEvents] = useState<EventSummary[]>([]);
 
   const [selectedEventId, setSelectedEventId] = useState('');
@@ -391,7 +394,14 @@ const Attendees: React.FC = () => {
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Attendees</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Guest list & real-time check-in manager</p>
         </div>
-        <div className="w-9" />
+        <Link
+          to="/events/account/recharge"
+          className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+          title="Event credits — click to recharge"
+        >
+          <Wallet size={16} />
+          {creditsLoading ? '…' : credits}
+       </Link>
       </header>
 
       <main className="grow overflow-y-auto p-2">

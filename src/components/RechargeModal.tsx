@@ -50,6 +50,7 @@ const RechargePage: React.FC = () => {
   const navigate = useNavigate();
   const { credits, loading } = useEventCredits();
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
+  const [showContactPopup, setShowContactPopup] = useState(false);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -157,7 +158,7 @@ const RechargePage: React.FC = () => {
                       <ArrowLeft size={13} /> Back
                     </button>
                     <button
-                      onClick={() => navigate('/events/support')}
+                      onClick={() => setShowContactPopup(true)}
                       className="flex-1 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] py-2 text-xs font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5]"
                     >
                       Contact Admin
@@ -169,6 +170,41 @@ const RechargePage: React.FC = () => {
           </Card>
         </div>
       </main>
+
+      {/* ── Contact Admin Popup ─────────────────────────────────────── */}
+      {showContactPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShowContactPopup(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-md bg-white dark:bg-[#1E293B] p-5 flex flex-col items-center gap-3 text-center shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-3 rounded-full bg-[#007A78]/10 dark:bg-[#2DD4BF]/15 text-[#007A78] dark:text-[#2DD4BF]">
+              <PhoneCall size={22} />
+            </div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              Contact Admin
+            </p>
+            <a
+              href="tel:9818815838"
+              className="text-lg font-bold text-[#007A78] dark:text-[#2DD4BF]"
+            >
+              98188 15838
+            </a>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Call or WhatsApp us to activate your plan.
+            </p>
+            <button
+              onClick={() => setShowContactPopup(false)}
+              className="mt-1 w-full rounded-sm border border-slate-300 dark:border-slate-700 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

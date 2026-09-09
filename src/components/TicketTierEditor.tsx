@@ -126,7 +126,14 @@ export const TicketTierEditor: React.FC<TicketTierEditorProps> = ({
                     <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
                     <DatePicker
                       selected={toDate(tier.tierEndDate)}
-                      onChange={(d: Date | null) => updateTier(tier.id, { tierEndDate: toDateStr(d) || undefined })}
+                      onChange={(d: Date | null) => {
+                        const value = toDateStr(d);
+                        updateTier(tier.id, {
+                          tierEndDate: value || undefined,
+                          // Seed 00:00 the moment a date is picked, if no time is set yet.
+                          tierEndTime: value && !tier.tierEndTime ? '00:00' : tier.tierEndTime,
+                        });
+                      }}
                       minDate={new Date()}
                       dateFormat="dd/MM/yyyy"
                       placeholderText="Select date"

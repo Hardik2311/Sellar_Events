@@ -208,7 +208,7 @@ const Settings: React.FC = () => {
                       setGstinDraftError(null);
                     }}
                     placeholder="15-character GSTIN"
-                    className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm uppercase text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+                    className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm uppercase text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
                   />
                   {gstinDraftError && (
                     <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstinDraftError}</p>
@@ -232,7 +232,7 @@ const Settings: React.FC = () => {
                         type="button"
                         disabled={loading}
                         onClick={() => handleSchemeSelect(opt.value)}
-                        className={`min-h-[42px] px-2 py-2 rounded-md text-xs sm:text-sm font-semibold border transition-colors ${draft.gstScheme === opt.value
+                        className={`min-h-[42px] px-2 py-2 rounded-sm text-xs sm:text-sm font-semibold border transition-colors ${draft.gstScheme === opt.value
                           ? 'bg-[#007A78] text-white border-[#007A78]'
                           : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                           }`}
@@ -253,7 +253,7 @@ const Settings: React.FC = () => {
                         onChange={(e) =>
                           setDraft((prev) => ({ ...prev, taxType: e.target.value as 'inclusive' | 'exclusive' }))
                         }
-                        className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+                        className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
                       >
                         <option value="exclusive">Tax exclusive (ticket price excludes GST)</option>
                         <option value="inclusive">Tax inclusive (ticket price includes GST)</option>
@@ -272,7 +272,7 @@ const Settings: React.FC = () => {
                         onChange={(e) =>
                           setDraft((prev) => ({ ...prev, defaultTaxRate: parseFloat(e.target.value) || 0 }))
                         }
-                        className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+                        className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
                       />
                     </div>
                   </>
@@ -300,7 +300,7 @@ const Settings: React.FC = () => {
                           type="button"
                           disabled={loading}
                           onClick={() => setDraft((prev) => ({ ...prev, roundingInterval: value }))}
-                          className={`px-2 py-1.5 rounded-md border text-xs font-semibold ${Number(draft.roundingInterval) === value
+                          className={`px-2 py-1.5 rounded-sm border text-xs font-semibold ${Number(draft.roundingInterval) === value
                             ? 'bg-[#007A78] text-white border-[#007A78]'
                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
                             }`}
@@ -314,21 +314,21 @@ const Settings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Public Storefront</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Event Link</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Storefront Link</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Claim a unique URL for your public events storefront.</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Event Link</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Claim a unique URL for your public event page.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSubdomainModal(true)}
-                  className="px-4 py-2 text-sm font-semibold rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="px-4 py-2 text-sm font-semibold rounded-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Manage Link
                 </button>
@@ -349,7 +349,7 @@ const Settings: React.FC = () => {
             type="button"
             onClick={handleSaveSettings}
             disabled={isSaving}
-            className={`w-full py-3.5 rounded-xl text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
+            className={`w-full py-3.5 rounded-sm text-white dark:text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 ${saveSuccess
               ? 'bg-emerald-600 dark:bg-emerald-400'
               : 'bg-[#007A78] hover:bg-[#006361] dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5]'
               }`}
@@ -361,7 +361,7 @@ const Settings: React.FC = () => {
 
       {showGstModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-xl p-5">
+          <div className="w-full max-w-sm rounded-sm bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-slate-900 dark:text-white">Enter GST Number</h2>
               <button
@@ -382,7 +382,7 @@ const Settings: React.FC = () => {
               disabled={savingGst}
               onChange={(e) => setGstInput(e.target.value.toUpperCase())}
               placeholder="15-character GSTIN"
-              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm uppercase text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
+              className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm uppercase text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
             />
             {gstError && <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstError}</p>}
             <div className="flex gap-2 mt-4">
@@ -390,7 +390,7 @@ const Settings: React.FC = () => {
                 type="button"
                 onClick={handleGstCancel}
                 disabled={savingGst}
-                className="flex-1 py-2.5 rounded-md text-sm font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-sm text-sm font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -398,7 +398,7 @@ const Settings: React.FC = () => {
                 type="button"
                 onClick={handleGstSave}
                 disabled={savingGst}
-                className="flex-1 py-2.5 rounded-md text-sm font-semibold text-white bg-[#007A78] hover:bg-[#006361] disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-sm text-sm font-semibold text-white bg-[#007A78] hover:bg-[#006361] disabled:opacity-50"
               >
                 {savingGst ? 'Saving…' : 'Save & Continue'}
               </button>

@@ -1,15 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCog, Landmark, Settings2, Users } from 'lucide-react'; // + ShieldCheck
+import { CalendarCog, Landmark, Settings2, Users, Wallet } from 'lucide-react'; // + ShieldCheck
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { canManageUsers, ROLES } from '../enum/enum';
+import { useEventCredits } from '../hooks/useEventCredits';
 
 const SettingsHub: React.FC = () => {
     const { profile } = useAuth();
     const showManageUsers = canManageUsers(profile?.role);
     const isOwner = profile?.role === ROLES.ORGANIZER; // only owner sets permissions
+    const { credits, loading: creditsLoading } = useEventCredits();
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -19,8 +21,14 @@ const SettingsHub: React.FC = () => {
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Settings</h1>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Choose what you want to configure</p>
                 </div>
-                <div className="w-[38px]"></div>
-                {/* <ThemeToggle /> */}
+                <Link
+                    to="/events/account/recharge"
+                    className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+                    title="Event credits — click to recharge"
+                >
+                    <Wallet size={16} />
+                    {creditsLoading ? '…' : credits}
+                </Link>
             </header>
 
             <main className="grow overflow-y-auto p-4 sm:p-6">
