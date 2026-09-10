@@ -65,6 +65,7 @@ const PnlReportPageInner: React.FC = () => {
         ]),
         foot: [
           ['', '', 'Total Sales', `+${summary.totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
+          ['', '', 'Total Income', `+${summary.totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
           ['', '', 'Total Expenses', `-${summary.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
           ['', '', 'NET PROFIT/LOSS', `${summary.netProfit >= 0 ? '+' : '-'}${Math.abs(summary.netProfit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
         ],
@@ -76,11 +77,11 @@ const PnlReportPageInner: React.FC = () => {
         columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { halign: 'right', cellWidth: 40 } },
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 1) {
-            const isExpense = data.cell.raw === 'Expense';
-            data.cell.styles.textColor = isExpense ? [220, 38, 38] : [22, 163, 74];
+            const raw = data.cell.raw;
+            data.cell.styles.textColor = raw === 'Expense' ? [220, 38, 38] : raw === 'Income' ? [37, 99, 235] : [22, 163, 74];
             data.cell.styles.fontStyle = 'bold';
           }
-          if (data.section === 'foot' && data.row.index === 2) {
+          if (data.section === 'foot' && data.row.index === 3) {
             data.cell.styles.textColor = summary.netProfit >= 0 ? [22, 163, 74] : [220, 38, 38];
           }
         },
@@ -113,7 +114,7 @@ const PnlReportPageInner: React.FC = () => {
       const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Type', width: 14 }, { header: 'Description', width: 34 }, { header: 'Amount (₹)', width: 18 }];
       const colCount = COLS.length;
       const dataStartRow = 7;
-      const totalRows = dataStartRow + filtered.length + 3; // +3 footer summary rows
+       const totalRows = dataStartRow + filtered.length + 4; 
       const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
       aoa[0][0] = profile?.organizationName
@@ -127,16 +128,18 @@ const PnlReportPageInner: React.FC = () => {
         const row = dataStartRow + idx;
         aoa[row] = [idx + 1, formatDate(r.date), r.type, r.description, r.type === 'Expense' ? -r.amount : r.amount];
       });
-      const salesRow = dataStartRow + filtered.length;
-      const expRow = salesRow + 1;
+       const salesRow = dataStartRow + filtered.length;
+      const incomeRow = salesRow + 1;
+      const expRow = incomeRow + 1;
       const netRow = expRow + 1;
       aoa[salesRow] = ['', '', '', 'Total Sales', summary.totalSales];
+      aoa[incomeRow] = ['', '', '', 'Total Income', summary.totalIncome];
       aoa[expRow] = ['', '', '', 'Total Expenses', -summary.totalExpenses];
       aoa[netRow] = ['', '', '', 'NET PROFIT/LOSS', summary.netProfit];
 
       const ws: any = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = COLS.map(c => ({ wch: c.width }));
-      ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 22 }, { hpt: 22 }, { hpt: 26 }];
+      ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 22 }, { hpt: 22 }, { hpt: 22 }, { hpt: 26 }];
       ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }];
 
       const styleCell = (addr: string, st: any) => { if (!ws[addr]) ws[addr] = { t: 's', v: '' }; ws[addr].s = st; };
@@ -151,14 +154,14 @@ const PnlReportPageInner: React.FC = () => {
       filtered.forEach((r, idx) => {
         const row = dataStartRow + idx;
         const isAlt = idx % 2 === 1;
+        const amountColor = r.type === 'Expense' ? 'DC2626' : r.type === 'Income' ? '2563EB' : '16A34A';
         for (let ci = 0; ci < colCount; ci++) {
           const addr = XLSX.utils.encode_cell({ r: row, c: ci });
-          const isExpense = r.type === 'Expense';
-          styleCell(addr, s({ sz: 9, color: { rgb: ci === 4 ? (isExpense ? 'DC2626' : '16A34A') : '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, bblr));
+          styleCell(addr, s({ sz: 9, color: { rgb: ci === 4 ? amountColor : '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, bblr));
           if (ci === 4 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00;[Red]-₹#,##0.00'; }
         }
       });
-      [salesRow, expRow].forEach((row) => {
+      [salesRow, incomeRow, expRow].forEach((row) => {
         for (let ci = 0; ci < colCount; ci++) {
           const addr = XLSX.utils.encode_cell({ r: row, c: ci });
           styleCell(addr, s({ sz: 10, bold: true, color: { rgb: '1E293B' } }, solidFill('F1F5F9'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, bblr));
@@ -261,10 +264,14 @@ const PnlReportPageInner: React.FC = () => {
 
           <EventDateFilter />
 
-          <div className="grid grid-cols-3 gap-3">
+         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Sales</p>
               <p className="text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">₹{Math.round(summary.totalSales).toLocaleString('en-IN')}</p>
+            </div>
+            <div className="bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Income</p>
+              <p className="text-lg sm:text-xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">₹{Math.round(summary.totalIncome).toLocaleString('en-IN')}</p>
             </div>
             <div className="bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Expenses</p>
@@ -384,12 +391,18 @@ const PnlReportPageInner: React.FC = () => {
                   ) : filtered.map((r, i) => (
                     <tr key={r.id} className={i % 2 === 0 ? 'bg-white dark:bg-[#1E293B]' : 'bg-slate-50 dark:bg-[#182234]'}>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatDate(r.date)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                       <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
                           {r.type}
                         </span>
                       </td>
-                      <td className={`px-4 py-3 font-semibold ${r.type === 'Expense' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      <td className={`px-4 py-3 font-semibold ${
+                        r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
+                        : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-emerald-600 dark:text-emerald-400'}`}>
                         {r.type === 'Expense' ? '-' : '+'}₹{r.amount.toLocaleString('en-IN')}
                       </td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.description}</td>

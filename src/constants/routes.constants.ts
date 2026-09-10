@@ -29,6 +29,7 @@ export const ROUTES = {
   EVENTS_REPORTS_SALES: 'reports/sales/:eventId',
   EVENTS_REPORTS_CUSTOMER: 'reports/customer/:eventId',
   EVENTS_REPORTS_PNL: 'reports/pnl/:eventId',
+  EVENTS_REPORTS_INCOME: 'reports/income/:eventId',
   EVENTS_SETTINGS_PERMISSIONS: 'settings/permissions',
 
   // Super Admin (protected inside the pages themselves via SUPER_ADMIN_UIDS check)

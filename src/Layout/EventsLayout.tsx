@@ -1,11 +1,12 @@
 import { Suspense, useRef, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2 } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2, Landmark } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import { ExpenseModal } from '../components/ExpenseModal';
+import { IncomeModal } from '../components/IncomeModal';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import type { EventSummary } from '../types/event.types';
 import { UserAddModal } from '../pages/UserAdd';
@@ -13,6 +14,7 @@ import { ShareLinkPickerModal } from '../components/ShareLinkPickerModal';
 import { canManageUsers } from '../enum/enum';
 import type { JSX } from 'react';
 import ShowWrapper from '../components/ShowWrapper';
+import { useIncomes } from '../hooks/useIncomes';
 
 const NAV_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} />, permission: Permission.VIEW_DASHBOARD },
@@ -65,6 +67,12 @@ const EventsLayout = () => {
       onClick: () => setIsExpenseModalOpen(true),
     },
     {
+      key: 'add-income',
+      label: 'Add Income',
+      icon: <Landmark size={18} />,
+      onClick: () => setIsIncomeModalOpen(true),
+    },
+    {
       key: 'share',
       label: 'Share',
       icon: <Share2 size={18} />,
@@ -72,12 +80,14 @@ const EventsLayout = () => {
     },
   ].filter(Boolean) as { key: string; label: string; icon: JSX.Element; onClick: () => void }[];
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false);
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const [isShareLinkModalOpen, setIsShareLinkModalOpen] = useState(false); // Combined Share popup (View Store / WhatsApp / Copy Link)
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const { addExpense } = useExpenses(profile?.companyId, undefined);
+  const { addIncome } = useIncomes(profile?.companyId, undefined);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
@@ -86,18 +96,29 @@ const EventsLayout = () => {
 
   useEffect(() => {
     if (!profile?.companyId) {
-      setEventsLoading(false);
+      // profile is still resolving (e.g. right after login) — stay in
+      // loading state instead of falsely reporting "loaded with 0 events".
+      // Effect re-runs automatically once companyId arrives.
       return;
     }
+    let cancelled = false;
+    setEventsLoading(true);
     fetchEventDashboardData({
       companyId: profile.companyId,
       startDate: '2000-01-01',
       endDate: '2100-01-01',
       cacheKey: `event_list_cache_v2_${profile.companyId}`,
     })
-      .then((result) => setEvents(result.events))
+      .then((result) => {
+        if (!cancelled) setEvents(result.events);
+      })
       .catch((e) => console.error('Failed to load events for expense modal:', e))
-      .finally(() => setEventsLoading(false));
+      .finally(() => {
+        if (!cancelled) setEventsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.companyId]);
 
   const sidebarLinkClass = (isActive: boolean) =>
@@ -111,8 +132,8 @@ const EventsLayout = () => {
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-[#1E293B] border-r border-slate-200 dark:border-slate-800 h-full shrink-0 z-20">
         <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800">
-  <img src="/Outsold.png" alt="Outsold" className="w-full h-auto" />
-</div>
+          <img src="/Outsold.png" alt="Outsold" className="w-full h-auto" />
+        </div>
 
         <nav className="flex-1 overflow-y-auto p-3.5 space-y-1.5">
           {visibleNavItems.map(({ to, icon, label }) => (
@@ -152,6 +173,12 @@ const EventsLayout = () => {
               <span>Add Expense</span>
             </button>
           </ShowWrapper>
+          <ShowWrapper permission={Permission.ADD_INCOME}>
+            <button onClick={() => setIsIncomeModalOpen(true)} className={sidebarLinkClass(false)}>
+              <span><Landmark size={18} /></span>
+              <span>Add Income</span>
+            </button>
+          </ShowWrapper>
 
           {/* Share — opens combined popup directly (View Store / WhatsApp / Share Link) */}
           <button onClick={() => setIsShareLinkModalOpen(true)} className={sidebarLinkClass(false)}>
@@ -166,7 +193,7 @@ const EventsLayout = () => {
         <div ref={scrollRef} className="flex-1 overflow-y-auto pb-20 md:pb-4 scroll-smooth">
           <Suspense fallback={
             <div className="flex h-64 w-full items-center justify-center">
-              <div className="flex items-center gap-3 rounded-2xl bg-[#F9FAFB] dark:bg-[#1E293B] px-5 py-3 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center gap-3 rounded-sm bg-[#F9FAFB] dark:bg-[#1E293B] px-5 py-3 border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#007A78] dark:border-[#2DD4BF] border-t-transparent" />
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading...</span>
               </div>
@@ -272,6 +299,16 @@ const EventsLayout = () => {
           // Save under whichever real event the user picked inside the
           // modal's own EventListCard — not a hardcoded placeholder.
           await addExpense(profile.companyId, data.eventId, data);
+        }}
+      />
+      <IncomeModal
+        isOpen={isIncomeModalOpen}
+        onClose={() => setIsIncomeModalOpen(false)}
+        events={events}
+        eventsLoading={eventsLoading}
+        onSave={async data => {
+          if (!profile?.companyId) return;
+          await addIncome(profile.companyId, data.eventId, data);
         }}
       />
       <UserAddModal

@@ -7,7 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 export const stripHtmlTags = (value?: string | null): string => {
   if (!value) return '';
   return value
-    .replace(/<\/?[^>]+(>|$)/g, '')       // strip HTML tags
+    // line-break wale tags ko pehle \n me convert karo, warna
+    // strip karte hi saara text ek hi line me chipak jaata hai
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<\/?[^>]+(>|$)/g, '')       // baaki saare HTML tags strip karo
     .replace(/&nbsp;/gi, ' ')             // non-breaking space
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
@@ -15,5 +19,6 @@ export const stripHtmlTags = (value?: string | null): string => {
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/\u00A0/g, ' ')              // literal NBSP char, just in case
+    .replace(/\n{3,}/g, '\n\n')           // extra khaali lines collapse karo
     .trim();
 };

@@ -30,6 +30,7 @@ export interface EventSummary {
   accentColor?: string;
   tiers: TicketTier[];
   customFields?: CustomField[];
+  registrationMode?: RegistrationMode;
   salesTrend: SalesTrendPoint[]; // per-event daily revenue, scoped to the selected date range
 }
 
@@ -107,7 +108,7 @@ export interface EventFormState {
   rsvpLink: string;
   rsvpButtonLabel: string;
   consentText: string;
-isPrivate: boolean;
+  isPrivate: boolean;
   // NEW — only relevant when registrationMode === 'tickets'
   paymentCollectionMode: PaymentCollectionMode;
   //qrImage: string | null;   // base64 preview until uploaded, then https URL after save

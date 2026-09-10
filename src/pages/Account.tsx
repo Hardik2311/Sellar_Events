@@ -32,9 +32,9 @@ const Account: React.FC = () => {
                     <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Organizer Account</h1>
                 </div>
                 <Link
-                   to="/events/account/recharge"
+                    to="/events/account/recharge"
                     className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
-                  title="Event credits — click to recharge"
+                    title="Event credits — click to recharge"
                 >
                     <Wallet size={16} />
                     {creditsLoading ? '…' : credits}

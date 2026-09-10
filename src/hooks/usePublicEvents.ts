@@ -27,6 +27,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   featured: d.featured || false,
   isPrivate: d.isPrivate || false,
   accessCodes: d.accessCodes ?? [],
+   everPublished: d.everPublished || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,

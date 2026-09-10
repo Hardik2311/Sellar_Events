@@ -146,6 +146,12 @@ service cloud.firestore {
           allow read: if isCompanyMember(companyId);
           allow write: if hasPermission(companyId, 'addExpense');
         }
+
+        // Incomes (Event sponsorship/other income) — NEW
+        match /incomes/{incomeId} {
+          allow read: if isCompanyMember(companyId);
+          allow write: if hasPermission(companyId, 'addIncome');
+        }
       }
 
       // Catch-all for any other company subcollections
