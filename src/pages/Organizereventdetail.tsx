@@ -24,6 +24,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { Permission } from '../types/permissions.types';
 import { stripHtmlTags } from '../lib/utils';
+import { shareEventLink } from '../lib/shareEvents';
 
 // Real-time single event listener
 const useEvent = (companyId?: string, id?: string) => {
@@ -143,11 +144,16 @@ const OrganizerEventDetail: React.FC = () => {
   };
 
   const handleOpenShare = async () => {
-    if (!event) return;
-    const url = await resolveShareUrl();
-    setShareUrl(url);
-    setIsShareModalOpen(true);
-  };
+  if (!event) return;
+  const url = await resolveShareUrl();
+  const result = await shareEventLink({
+    shareUrl: url,
+    isPrivate: event.isPrivate,
+    eventId: event.id,
+    onRegenerateCode: regenerateAccessCode,
+  });
+  if (result === 'copied') setLinkCopiedToast(true);
+};
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
   const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
     if (!img) return null;
@@ -504,7 +510,7 @@ const OrganizerEventDetail: React.FC = () => {
         />
       )}
 
-      {isShareModalOpen && (
+      {/* {isShareModalOpen && (
         <ShareOptionsModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
@@ -513,7 +519,7 @@ const OrganizerEventDetail: React.FC = () => {
           isPrivate={event.isPrivate}
           onRegenerateCode={regenerateAccessCode}
         />
-      )}
+      )} */}
       {showSaveConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">

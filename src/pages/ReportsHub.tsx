@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Receipt, TrendingUp, Users, ScrollText, Wallet } from 'lucide-react';
+import { Receipt, TrendingUp, Users, ScrollText, Wallet, Landmark } from 'lucide-react';
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
 import { useEventCredits } from '../hooks/useEventCredits';
@@ -81,8 +81,23 @@ const ReportsHub: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-bold">Profit &amp; Loss Report</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                 Combined sales and expense ledger with net P&amp;L
+                            </p>
+                        </div>
+                    </Link>
+
+                    <Link
+                        to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_REPORTS_INCOME}`.replace('//', '/')}
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                    >
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                            <Landmark className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold">Income Report</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Track and download income for a specific event
                             </p>
                         </div>
                     </Link>

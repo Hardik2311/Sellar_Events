@@ -34,6 +34,7 @@ export const Permission = {
   VIEW_SALES_REPORT: 'viewSalesReport',
   VIEW_CUSTOMER_REPORT: 'viewCustomerReport',
   VIEW_PNL_REPORT: 'viewPnlReport',
+  VIEW_INCOME_REPORT: 'viewIncomeReport',
 
   // Settings
   VIEW_SETTINGS: 'viewSettings',
@@ -43,6 +44,7 @@ export const Permission = {
 
   // Expense
   ADD_EXPENSE: 'addExpense',
+  ADD_INCOME: 'addIncome',
 } as const;
 
 export type Permission = typeof Permission[keyof typeof Permission];
@@ -101,6 +103,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: Permission.VIEW_SALES_REPORT, label: 'View Sales Report' },
       { key: Permission.VIEW_CUSTOMER_REPORT, label: 'View Customer Report' },
       { key: Permission.VIEW_PNL_REPORT, label: 'View P&L Report' },
+      { key: Permission.VIEW_INCOME_REPORT, label: 'View Income Report' },
 
     ],
   },
@@ -113,9 +116,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: Permission.EDIT_APP_SETTINGS, label: 'Edit App Settings' },
     ],
   },
-  {
-    title: 'Expenses',
-    items: [{ key: Permission.ADD_EXPENSE, label: 'Add Expense' }],
+   {
+    title: 'Expenses & Income',
+    items: [
+      { key: Permission.ADD_EXPENSE, label: 'Add Expense' },
+      { key: Permission.ADD_INCOME, label: 'Add Income' },
+    ],
   },
 ];
 

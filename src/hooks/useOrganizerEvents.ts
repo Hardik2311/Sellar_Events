@@ -49,7 +49,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
-  accessCodes: d.accessCodes ?? [],
+    accessCodes: d.accessCodes ?? [],
+  everPublished: d.everPublished || false, // NEW — true once event has been published at least once; drives free re-toggle logic
 });
 
 export const useOrganizerEvents = () => {
@@ -77,16 +78,27 @@ export const useOrganizerEvents = () => {
     return () => unsubscribe();
   }, [profile?.companyId, profile?.organizationName]);
 
-    const toggleLive = async (id: string, currentStatus: string) => {
+      const toggleLive = async (id: string, currentStatus: string) => {
     if (!profile?.companyId) return;
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
 
     if (newStatus === 'published') {
-      // Discover page se live karne par bhi credit cut hoga — same atomic
-      // check+decrement jo saveEvent mein hai, taaki koi bypass na ho
       const companyRef = doc(db, 'companies', profile.companyId);
       await runTransaction(db, async (transaction) => {
+        // Read the event doc INSIDE the transaction — never trust local
+        // React state here, since that's what makes this bypass-proof.
+        const eventSnap = await transaction.get(eventRef);
+        const alreadyPublishedBefore = eventSnap.data()?.everPublished === true;
+
+        if (alreadyPublishedBefore) {
+          // Re-publishing (Live -> Draft -> Live ...) after the first time
+          // is free — no credit check, no decrement.
+          transaction.update(eventRef, { status: newStatus });
+          return;
+        }
+
+        // First-ever publish — this is the one that must cost a credit.
         const companySnap = await transaction.get(companyRef);
         const currentCredits = companySnap.data()?.eventCredits ?? 0;
 
@@ -94,7 +106,7 @@ export const useOrganizerEvents = () => {
           throw new Error('NO_CREDITS');
         }
 
-        transaction.update(eventRef, { status: newStatus });
+        transaction.update(eventRef, { status: newStatus, everPublished: true });
         transaction.update(companyRef, { eventCredits: currentCredits - 1 });
       });
     } else {

@@ -25,6 +25,7 @@ const ExpenseReportPage = lazy(() => import('../pages/Reports/ExpenseReport'));
 const SalesReportPage = lazy(() => import('../pages/Reports/SalesReport'));
 const CustomerReportPage = lazy(() => import('../pages/Reports/CustomerReport'));
 const PnlReportPage = lazy(() => import('../pages/Reports/PNLReport'));
+const IncomeReportPage = lazy(() => import('../pages/Reports/IncomeReportPage'));
 
 export interface AppRoute {
   path?: string;
@@ -82,6 +83,7 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_REPORTS_SALES, component: guarded(Permission.VIEW_SALES_REPORT, SalesReportPage) },
       { path: ROUTES.EVENTS_REPORTS_CUSTOMER, component: guarded(Permission.VIEW_CUSTOMER_REPORT, CustomerReportPage) },
       { path: ROUTES.EVENTS_REPORTS_PNL, component: guarded(Permission.VIEW_PNL_REPORT, PnlReportPage) },
+      { path: ROUTES.EVENTS_REPORTS_INCOME, component: guarded(Permission.VIEW_INCOME_REPORT, IncomeReportPage) },
     ],
   },
 ];

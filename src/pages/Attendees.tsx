@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
 import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
@@ -79,6 +79,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     tiers,
     customFields: data.customFields ?? [],
     salesTrend: data.salesTrend ?? [],
+    registrationMode: data.registrationMode,
   };
 };
 
@@ -154,6 +155,16 @@ const Attendees: React.FC = () => {
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
+  // Check-in should only be allowed on/after the event's date (date-only comparison, time ignored)
+  const isEventDateInFuture = useCallback((event: EventSummary | null): boolean => {
+    if (!event?.startDate) return false;
+    const eventDate = new Date(event.startDate);
+    const today = new Date();
+    eventDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return eventDate.getTime() > today.getTime();
+  }, []);
+
   const handleEventChange = (eventId: string) => {
     setSelectedEventId(eventId);
     setSearchValue('');
@@ -165,6 +176,13 @@ const Attendees: React.FC = () => {
       if (!profile?.companyId || !selectedEventId) return;
       const current = attendees.find((a) => a.id === id);
       const isCurrentlyCheckedIn = current?.status === 'checked_in';
+
+      // Only block fresh check-ins before the event date; still allow undoing an existing check-in
+      if (!isCurrentlyCheckedIn && isEventDateInFuture(selectedEvent)) {
+        setScanFeedback({ type: 'error', message: 'Check-in is not available before the event date.' });
+        return;
+      }
+
       const nextStatus: Attendee['status'] = isCurrentlyCheckedIn ? 'valid' : 'checked_in';
 
       // Optimistic update — UI turant respond kare, snapshot listener khud bhi confirm kar dega
@@ -295,12 +313,17 @@ const Attendees: React.FC = () => {
         setScanFeedback({ type: 'error', message: `${match.name}'s ticket is cancelled.` });
         return;
       }
+      if (isEventDateInFuture(selectedEvent)) {
+        setScanFeedback({
+          type: 'error',
+          message: `Check-in opens on ${selectedEvent ? new Date(selectedEvent.startDate).toLocaleDateString('en-IN') : 'the event date'}.`,
+        });
+        return;
+      }
 
-      // Don't check in immediately — show the attendee's details and
-      // require an explicit confirmation tap first.
       setPendingAttendee(match);
     },
-    [attendees]
+    [attendees, selectedEvent, isEventDateInFuture]
   );
   const handleConfirmCancel = useCallback(() => {
     if (!pendingCancelAttendee) return;
@@ -380,10 +403,17 @@ const Attendees: React.FC = () => {
   }, [attendees]);
   const requestCheckIn = useCallback(
     (id: string) => {
+      if (isEventDateInFuture(selectedEvent)) {
+        setScanFeedback({
+          type: 'error',
+          message: `Check-in opens on ${selectedEvent ? new Date(selectedEvent.startDate).toLocaleDateString('en-IN') : 'the event date'}.`,
+        });
+        return;
+      }
       const target = attendees.find((a) => a.id === id);
       if (target) setPendingAttendee(target);
     },
-    [attendees]
+    [attendees, selectedEvent, isEventDateInFuture]
   );
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -396,12 +426,12 @@ const Attendees: React.FC = () => {
         </div>
         <Link
           to="/events/account/recharge"
-          className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+          className="flex items-center gap-1 sm:gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 sm:px-2.5 py-1 sm:py-2 text-[10px] sm:text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs shrink-0"
           title="Event credits — click to recharge"
         >
-          <Wallet size={16} />
+          <Wallet className="w-3.5 h-6 sm:w-4 sm:h-4 shrink-0" />
           {creditsLoading ? '…' : credits}
-       </Link>
+        </Link>
       </header>
 
       <main className="grow overflow-y-auto p-2">
@@ -475,18 +505,32 @@ const Attendees: React.FC = () => {
               <div className="flex gap-2">
                 {can(Permission.ADD_WALK_IN_ATTENDEE) && (
                   <button
-                    onClick={() => setIsWalkInModalOpen(true)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-[#007A78] hover:bg-[#006361] px-3 py-2.5 text-xs font-bold text-white transition-colors whitespace-nowrap dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950"
-                    title="Add a walk-in / on-the-spot attendee"
+                    onClick={() => {
+                      if (selectedEvent.status !== 'published') {
+                        setScanFeedback({ type: 'error', message: 'Publish the event before adding walk-in attendees.' });
+                        return;
+                      }
+                      setIsWalkInModalOpen(true);
+                    }}
+                    disabled={selectedEvent.status !== 'published'}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-[#007A78] hover:bg-[#006361] px-3 py-2.5 text-xs font-bold text-white transition-colors whitespace-nowrap dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#007A78] dark:disabled:hover:bg-[#2DD4BF]"
+                    title={selectedEvent.status !== 'published' ? 'Publish the event first to add walk-in attendees' : 'Add a walk-in / on-the-spot attendee'}
                   >
                     <UserPlus size={14} /> Add Walk-in
                   </button>
                 )}
-                {can(Permission.IMPORT_ATTENDEES) && (
+                {can(Permission.IMPORT_ATTENDEES) && selectedEvent.registrationMode === 'rsvp' && (
                   <button
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
-                    title="Bulk import attendees from Excel/CSV (e.g. RSVP form responses)"
+                    onClick={() => {
+                      if (selectedEvent.status !== 'published') {
+                        setScanFeedback({ type: 'error', message: 'Publish the event before importing attendees.' });
+                        return;
+                      }
+                      setIsImportModalOpen(true);
+                    }}
+                    disabled={selectedEvent.status !== 'published'}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800"
+                    title={selectedEvent.status !== 'published' ? 'Publish the event first to import attendees' : 'Bulk import attendees from Excel/CSV (e.g. RSVP form responses)'}
                   >
                     <UploadCloud size={14} /> Import Excel
                   </button>
@@ -611,13 +655,22 @@ const Attendees: React.FC = () => {
         onSuccess={(count) => setScanFeedback({ type: 'success', message: `${count} attendee(s) imported.` })}
       />
       {walkInTicket && selectedEvent && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-slate-900">
-          <TicketConfirmation
-            eventTitle={selectedEvent.title}
-            eventDate={selectedEvent.startDate}
-            tickets={[walkInTicket]}
-            onDone={() => setWalkInTicket(null)}
-          />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div className="relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-sm sm:rounded-sm bg-white dark:bg-slate-900 shadow-xl">
+            <button
+              onClick={() => setWalkInTicket(null)}
+              className="absolute right-3 top-3 z-10 rounded-sm bg-black/5 p-1.5 text-slate-500 hover:bg-black/10 hover:text-slate-700 dark:bg-white/10 dark:text-slate-300"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+            <TicketConfirmation
+              eventTitle={selectedEvent.title}
+              eventDate={selectedEvent.startDate}
+              tickets={[walkInTicket]}
+              onDone={() => setWalkInTicket(null)}
+            />
+          </div>
         </div>
       )}
     </div>

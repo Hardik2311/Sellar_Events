@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw, Lock, Wallet } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -20,9 +20,11 @@ import {
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { useCompanySettings } from '../hooks/useSettings';
+import { useEventCredits } from '../hooks/useEventCredits';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import { stripHtmlTags } from '../lib/utils';
+import { shareEventLink } from '../lib/shareEvents';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -99,11 +101,18 @@ const OrganizerEventCard: React.FC<{
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
-        <span className="absolute bottom-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
-          {label}
-        </span>
+        <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+          <span className="rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+            {label}
+          </span>
+          {event.isPrivate && (
+            <span className="flex items-center gap-1 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
+              <Lock size={12} /> Private
+            </span>
+          )}
+        </div>
         {event.isOnline && (
-          <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-2 py-1.5 text-xs font-medium text-slate-700">
+          <span className="absolute top-2 right-9 flex items-center gap-1 rounded-sm bg-white/90 px-1.5 py-1 text-xs font-medium text-slate-700">
             <Wifi size={12} /> Online
           </span>
         )}
@@ -114,7 +123,7 @@ const OrganizerEventCard: React.FC<{
               e.stopPropagation();
               onShare(event);
             }}
-            title="Share event"
+            title={event.isPrivate ? 'Share event (private — access code required)' : 'Share event'}
             className="absolute top-2 right-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
           >
             <Share2 size={14} />
@@ -311,18 +320,30 @@ const OrganizerEventDiscover: React.FC = () => {
   const { can } = usePermissions();
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
   const { settings } = useCompanySettings();
+  const { credits, loading: creditsLoading } = useEventCredits();
 
-  // Share = open ShareOptionsModal, which already knows how to bake the
-  // access code into the shared message when the event is private.
-  const [shareModalEvent, setShareModalEvent] = useState<PublicEvent | null>(null);
-  const [shareUrl, setShareUrl] = useState('');
+  const [linkCopiedToast, setLinkCopiedToast] = useState(false);
+  useEffect(() => {
+    if (!linkCopiedToast) return;
+    const t = setTimeout(() => setLinkCopiedToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [linkCopiedToast]);
 
+  // One click on the share icon: no modal, no second click.
   const handleShareRequest = async (event: PublicEvent) => {
     const baseUrl = profile?.companyId
       ? await getShareBaseUrl(profile.companyId)
       : window.location.origin;
-    setShareUrl(`${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`);
-    setShareModalEvent(event);
+    const url = `${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
+
+    const result = await shareEventLink({
+      shareUrl: url,
+      isPrivate: event.isPrivate,
+      eventId: event.id,
+      onRegenerateCode: regenerateAccessCode,
+    });
+
+    if (result === 'copied') setLinkCopiedToast(true);
   };
   // OFF => auto-feature nearest (toggle hidden); ON => organizer feature manually karega
   const showFeaturedToggle = settings.autoFeatureNearest;
@@ -392,6 +413,7 @@ const OrganizerEventDiscover: React.FC = () => {
   }, [showSaveConfirmation]);
 
   const [toggleLiveError, setToggleLiveError] = useState<string | null>(null);
+  const [confirmingLiveEvent, setConfirmingLiveEvent] = useState<PublicEvent | null>(null);
   useEffect(() => {
     if (!toggleLiveError) return;
     const t = setTimeout(() => setToggleLiveError(null), 3000);
@@ -408,6 +430,13 @@ const OrganizerEventDiscover: React.FC = () => {
         console.error('Failed to toggle live status:', err);
       }
     }
+  };
+
+  // Draft -> Live par hamesha confirmation dikhega (credit consume hota hai)
+  const handleConfirmGoLive = async () => {
+    if (!confirmingLiveEvent) return;
+    await handleToggleLive(confirmingLiveEvent.id, confirmingLiveEvent.status);
+    setConfirmingLiveEvent(null);
   };
 
   const handleSaveEdit = async (updated: EventFormState) => {
@@ -445,6 +474,14 @@ const OrganizerEventDiscover: React.FC = () => {
               <span className="text-[#007A78] dark:text-[#2DD4BF]">Out</span>sold
             </h1>
             <div className="flex items-center gap-3">
+              <Link
+                to="/events/account/recharge"
+                className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+                title="Event credits — click to recharge"
+              >
+                <Wallet size={16} />
+                {creditsLoading ? '…' : credits}
+              </Link>
               <button
                 type="button"
                 onClick={() => setIsSubdomainModalOpen(true)}
@@ -593,7 +630,14 @@ const OrganizerEventDiscover: React.FC = () => {
                     key={event.id}
                     event={event}
                     onOpen={() => openEvent(event)}
-                    onToggleLive={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => handleToggleLive(evId, event.status) : undefined}
+                    onToggleLive={
+                      can(Permission.TOGGLE_EVENT_LIVE)
+                        ? (evId) =>
+                          event.status === 'published'
+                            ? handleToggleLive(evId, event.status) // Live -> Draft: credit nahi lagta, direct
+                            : setConfirmingLiveEvent(event)         // Draft -> Live: pehle confirm lo
+                        : undefined
+                    }
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
                     onRestore={can(Permission.DELETE_EVENT) ? (ev) => restoreEvent(ev.id) : undefined}
@@ -619,16 +663,11 @@ const OrganizerEventDiscover: React.FC = () => {
         />
       )}
 
-      {shareModalEvent && (
-        <ShareOptionsModal
-          isOpen={!!shareModalEvent}
-          onClose={() => setShareModalEvent(null)}
-          shareUrl={shareUrl}
-          eventId={shareModalEvent.id}
-          isPrivate={shareModalEvent.isPrivate}
-          onRegenerateCode={regenerateAccessCode}
-        />
-      )}d
+      {linkCopiedToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 dark:bg-slate-700 px-4 py-2 text-xs font-semibold text-white shadow-lg">
+          Link copied to clipboard!
+        </div>
+      )}
 
       {editingEvent && (
         <EditEventModal
@@ -739,6 +778,42 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
         </div>
       )}
+     {confirmingLiveEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Publish this event?
+            </h2>
+            {confirmingLiveEvent.everPublished ? (
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                This event has been live before, so re-publishing "{stripHtmlTags(confirmingLiveEvent.title)}" won't use another credit.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Making "{stripHtmlTags(confirmingLiveEvent.title)}" live will use 1 event credit. You currently have{' '}
+                <span className="font-semibold text-[#007A78]">{creditsLoading ? '…' : credits}</span> credit{credits === 1 ? '' : 's'}.
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingLiveEvent(null)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmGoLive}
+                className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
+              >
+                Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toggleLiveError && (
         <div className="fixed bottom-20 left-0 right-0 flex justify-center z-40 px-3">
           <p className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-sm px-4 py-2 shadow-lg">

@@ -43,6 +43,7 @@ export interface PublicEvent {
   featured?: boolean;
   deletedAt?: string | null;
   isPrivate?: boolean;
+  everPublished?: boolean;
   registrationMode?: 'tickets' | 'rsvp';
   rsvpLink?: string;
   rsvpButtonLabel?: string;
@@ -51,7 +52,7 @@ export interface PublicEvent {
   descriptionStyle?: TextStyleConfig;
   consentText?: string;
   consentStyle?: TextStyleConfig;
-    paymentCollectionMode?: 'gateway' | 'manual_qr';
+  paymentCollectionMode?: 'gateway' | 'manual_qr';
   //qrImageUrl?: string | null;
   upiId?: string;
   payeeName?: string;

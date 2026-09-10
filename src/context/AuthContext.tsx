@@ -46,10 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Extracted so both the onAuthStateChanged listener AND a manual call
-  // (refreshProfile) can re-read the profile. Needed because forcing a
-  // token refresh via getIdToken(true) does NOT re-trigger onAuthStateChanged.
-  const loadProfile = async (firebaseUser: User | null) => {
+  const loadProfile = async (firebaseUser: User | null, retryCount = 0) => {
     if (!firebaseUser) {
       setProfile(null);
       return;
@@ -76,7 +73,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (!companyId) {
-      // Koi real company nahi bani abhi tak (e.g. user ne sirf Step 1 complete kiya hai).
+      // Claim propagation ya ownerUID query dono transient ho sakte hain
+      // (fresh signup / newly created company). Turant permanent fallback
+      // set karne se pehle 2 baar thoda ruk ke retry karo.
+      if (retryCount < 2) {
+        await new Promise((res) => setTimeout(res, 1200));
+        return loadProfile(firebaseUser, retryCount + 1);
+      }
+      // Retries ke baad bhi company nahi mili — ab genuinely "no company yet".
       setProfile({
         fullName: firebaseUser.displayName || 'Organizer User',
         email: firebaseUser.email || '',

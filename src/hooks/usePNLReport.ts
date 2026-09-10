@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useEventFilter } from '../components/ui/EventdateFilter';
 import { useAttendees } from './useAttendees';
+import { useIncomes } from './useIncomes';
 import { useExpenses } from './useExpenses';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import { CONFIRMED_TICKET_STATUSES } from '../types/attendee.types';
@@ -11,7 +12,7 @@ const formatDateForInput = (d: Date) => d.toISOString().split('T')[0];
 export interface LedgerRow {
   id: string;
   date: number;
-  type: 'Sale' | 'Expense';
+  type: 'Sale' | 'Income' | 'Expense';
   description: string;
   amount: number;
 }
@@ -51,7 +52,8 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
 
   const { attendees, loading: attendeesLoading } = useAttendees(companyId, selectedEventId ?? undefined);
   const { expenses, loading: expensesLoading } = useExpenses(companyId, selectedEventId ?? undefined);
-  const loading = attendeesLoading || expensesLoading;
+  const { incomes, loading: incomesLoading } = useIncomes(companyId, selectedEventId ?? undefined);
+  const loading = attendeesLoading || expensesLoading || incomesLoading;
 
   const { filters } = useEventFilter();
   const { startDate, endDate } = filters;
@@ -76,8 +78,8 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
   };
 
   const { filtered, summary } = useMemo(() => {
-    if (!appliedFilters) {
-      return { filtered: [] as LedgerRow[], summary: { totalSales: 0, totalExpenses: 0, netProfit: 0, ticketsSold: 0 } };
+     if (!appliedFilters) {
+      return { filtered: [] as LedgerRow[], summary: { totalSales: 0, totalIncome: 0, totalExpenses: 0, netProfit: 0, ticketsSold: 0 } };
     }
 
     const saleRows: LedgerRow[] = attendees
@@ -95,6 +97,16 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
         amount: a.amountPaid || 0,
       }));
 
+    const incomeRows: LedgerRow[] = incomes
+      .filter(inc => inc.date >= appliedFilters.start && inc.date <= appliedFilters.end)
+      .map(inc => ({
+        id: `inc-${inc.id}`,
+        date: inc.date,
+        type: 'Income' as const,
+        description: inc.source ? `${inc.source} — ${inc.description || ''}`.trim().replace(/—\s*$/, '—') : (inc.description || 'Income'),
+        amount: inc.amount || 0,
+      }));
+
     const expenseRows: LedgerRow[] = expenses
       .filter(e => e.date >= appliedFilters.start && e.date <= appliedFilters.end)
       .map(e => ({
@@ -105,7 +117,7 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
         amount: e.amount || 0,
       }));
 
-    let list = [...saleRows, ...expenseRows];
+    let list = [...saleRows, ...incomeRows, ...expenseRows];
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -121,12 +133,19 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
     });
 
     const totalSales = saleRows.reduce((s, r) => s + r.amount, 0);
+    const totalIncome = incomeRows.reduce((s, r) => s + r.amount, 0);
     const totalExpenses = expenseRows.reduce((s, r) => s + r.amount, 0);
     return {
       filtered: list,
-      summary: { totalSales, totalExpenses, netProfit: totalSales - totalExpenses, ticketsSold: saleRows.length },
+      summary: {
+        totalSales,
+        totalIncome,
+        totalExpenses,
+        netProfit: totalSales + totalIncome - totalExpenses,
+        ticketsSold: saleRows.length,
+      },
     };
-  }, [attendees, expenses, appliedFilters, searchQuery, sortConfig]);
+  }, [attendees, expenses, incomes, appliedFilters, searchQuery, sortConfig]);
 
   return {
     events, eventsLoading, eventSearch, setEventSearch,

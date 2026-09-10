@@ -141,30 +141,43 @@ if (!event) {
       }
     };
 
+        const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
+
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
-        <Ticket size={28} className="text-[#007A78] dark:text-[#2DD4BF]" />
-        <div>
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Enter access code</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">This event link is code-protected. Enter the code shared with you.</p>
+      <div className="relative flex h-dvh w-full flex-col items-center justify-center gap-4 overflow-hidden bg-slate-100 p-6 text-center dark:bg-[#0F172A]">
+        {bgImage && (
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center blur-xl"
+            style={{ backgroundImage: `url(${bgImage})` }}
+            aria-hidden="true"
+          />
+        )}
+        <div className="absolute inset-0 bg-black/55" aria-hidden="true" />
+
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <Ticket size={28} className="text-[#2DD4BF]" />
+          <div>
+            <h2 className="text-base font-semibold text-white">Enter access code</h2>
+            <p className="mt-1 text-sm text-slate-200">This event link is code-protected. Enter the code shared with you.</p>
+          </div>
+                  <input
+            type="text"
+            value={codeInput}
+            onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
+            placeholder="Enter code"
+            maxLength={6}
+            className="w-full max-w-xs rounded-sm border border-white/30 bg-white/95 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 outline-none backdrop-blur-sm focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+          />
+          {codeError && <p className="text-xs text-red-300">Incorrect code. Please try again.</p>}
+          <button
+            onClick={handleVerify}
+            disabled={!codeInput.trim()}
+            className="w-full max-w-xs rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
+          >
+            Unlock event
+          </button>
         </div>
-        <input
-          type="text"
-          value={codeInput}
-          onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
-          placeholder="Enter code"
-          maxLength={6}
-          className="w-full max-w-xs rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 dark:text-slate-100 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
-        />
-        {codeError && <p className="text-xs text-red-500 dark:text-red-400">Incorrect code. Please try again.</p>}
-        <button
-          onClick={handleVerify}
-          disabled={!codeInput.trim()}
-          className="w-full max-w-xs rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
-        >
-          Unlock event
-        </button>
       </div>
     );
   }
