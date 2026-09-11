@@ -1,12 +1,31 @@
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Same logic jo CheckoutPage.tsx me hai — "Party Popper" -> "PP" etc.
 export const getEventInitials = (title: string): string => {
   const words = title.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'EV';
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
+};
+
+// Server-side mirror of the frontend's isEventDateInFuture check.
+// Never trust the client's markCheckedIn flag alone — a direct API/console
+// call could bypass the UI guard entirely.
+const isEventDateInFuture = (eventDateValue: unknown): boolean => {
+  if (!eventDateValue) return false;
+  const eventDate =
+    eventDateValue instanceof Date
+      ? eventDateValue
+      : typeof (eventDateValue as any)?.toDate === 'function'
+        ? (eventDateValue as any).toDate() // Firestore Timestamp
+        : new Date(eventDateValue as string);
+
+  if (isNaN(eventDate.getTime())) return false;
+
+  const today = new Date();
+  eventDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return eventDate.getTime() > today.getTime();
 };
 
 export interface WalkInAttendeeInput {
@@ -48,7 +67,13 @@ export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<
     const eventSnap = await transaction.get(eventRef);
     if (!eventSnap.exists()) throw new Error('Event no longer exists.');
 
-    const currentTiers = (eventSnap.data().tiers || []) as {
+    const eventData = eventSnap.data();
+
+    // Hard block: check-in can never happen before the event's date,
+    // no matter what the caller passed in markCheckedIn.
+    const effectiveMarkCheckedIn = markCheckedIn && !isEventDateInFuture(eventData.date);
+
+    const currentTiers = (eventData.tiers || []) as {
       id: string; name: string; price: number; quantity: number; sold: number;
     }[];
 
@@ -84,8 +109,8 @@ export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<
       paymentMode,
       isWalkIn: true, // reporting ke liye — open question #3 ka jawab
       ticketId,
-      status: markCheckedIn ? 'checked_in' : 'valid',
-      checkedInAt: markCheckedIn ? serverTimestamp() : null,
+      status: effectiveMarkCheckedIn ? 'checked_in' : 'valid',
+      checkedInAt: effectiveMarkCheckedIn ? serverTimestamp() : null,
       createdAt: serverTimestamp(),
       purchasedAt: serverTimestamp(),
     });

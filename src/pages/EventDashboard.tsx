@@ -72,7 +72,7 @@ const EventDashboardContent: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="relative flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
+      <header className="relative flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-5 sticky top-0 z-10 shadow-xs">
         {/* Left: logo — mobile only, desktop already has it in the sidebar */}
         <div className="md:hidden w-fit">
           <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />

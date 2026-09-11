@@ -48,6 +48,7 @@ export interface CompanySettings {
   facebook?: string;
   twitter?: string;
   whatsappNumber?: string;
+  gstinNumber?: string;
 }
 
 const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
@@ -135,6 +136,7 @@ export function useCompanySettings(targetCompanyId?: string | null) {
         facebook: latestBusinessInfo.facebook ?? DEFAULT_SETTINGS.facebook,
         twitter: latestBusinessInfo.twitter ?? DEFAULT_SETTINGS.twitter,
         whatsappNumber: latestBusinessInfo.whatsappNumber ?? DEFAULT_SETTINGS.whatsappNumber,
+        gstinNumber: latestBusinessInfo.gstinNumber ?? DEFAULT_SETTINGS.gstinNumber, // NEW
       });
       setLoading(false);
     };
