@@ -279,9 +279,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
         {submitted ? (
           <div className="flex flex-col items-center gap-3 p-8 text-center">
             <Check size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
-            <p className="text-sm font-semibold text-slate-800 dark:text-white">You're on the list! 🎉</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">Request submitted! 🎉</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Your entry is confirmed. Carry the payment screenshot — it'll be checked against our records at the door.
+              Your ticket request has been received and is pending the organizer's approval. Carry the payment screenshot it'll be checked against our records at the door.
             </p>
             <button
               onClick={onClose}
