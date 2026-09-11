@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2, Ticket, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Minus, Plus, User, Loader2, Ticket, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
@@ -12,6 +12,7 @@ import {
   isTierExpired,
 } from '../data/events';
 import { usePublicEvent, verifyAccessCode } from '../hooks/usePublicEvents';
+import { DEFAULT_MAX_TICKETS_PER_ORDER } from '../data/events';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
@@ -20,7 +21,6 @@ import { useAuth } from '../context/AuthContext';
 import RichTextDisplay from '../components/ui/RichTextDisplay';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 import { DEFAULT_TEXT_STYLE } from '../types/event.types';
-import { stripHtmlTags } from '../lib/utils';
 import { useSearchParams } from 'react-router-dom'; // NEW — reads ?code= from the shared link
 
 const CustomerEventDetail: React.FC = () => {
@@ -38,7 +38,6 @@ const CustomerEventDetail: React.FC = () => {
 
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [, setShareToast] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showManualQR, setShowManualQR] = useState(false);
@@ -135,6 +134,9 @@ const CustomerEventDetail: React.FC = () => {
     const handleVerify = () => {
       if (verifyAccessCode(event, codeInput)) {
         sessionStorage.setItem(`eventAccessVerified:${event.id}`, 'true');
+        // Saved alongside the verified flag so it can be attached to the
+        // ticket at booking time and shown back to the attendee.
+        sessionStorage.setItem(`eventAccessCode:${event.id}`, codeInput.trim().toUpperCase());
         setIsVerified(true);
         setCodeError(false);
       } else {
@@ -145,7 +147,7 @@ const CustomerEventDetail: React.FC = () => {
     const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
 
     return (
-      <div className="relative flex h-dvh w-full flex-col items-center justify-center gap-4 overflow-hidden bg-slate-100 p-6 text-center dark:bg-[#0F172A]">
+      <div className="fixed inset-0 z-50 h-dvh w-full overflow-hidden bg-slate-100 dark:bg-[#0F172A]">
         {bgImage && (
           <div
             className="absolute inset-0 scale-110 bg-cover bg-center blur-xl"
@@ -155,29 +157,32 @@ const CustomerEventDetail: React.FC = () => {
         )}
         <div className="absolute inset-0 bg-black/55" aria-hidden="true" />
 
-        <div className="relative z-10 flex flex-col items-center gap-4">
-          <Ticket size={28} className="text-[#2DD4BF]" />
-          <div>
-            <h2 className="text-base font-semibold text-white">Enter access code</h2>
-            <p className="mt-1 text-sm text-slate-200">This event link is code-protected. Enter the code shared with you.</p>
+        {/* Popup card — frosted/translucent, floats over the dimmed backdrop */}
+        <div className="relative z-10 flex h-full w-full items-center justify-center p-6">
+          <div className="flex w-full max-w-xs flex-col items-center gap-4 rounded-lg border border-white/15 bg-white/10 p-6 text-center shadow-2xl backdrop-blur-xl">
+            <Ticket size={28} className="text-[#2DD4BF]" />
+            <div>
+              <h2 className="text-base font-semibold text-white">Enter access code</h2>
+              <p className="mt-1 text-sm text-slate-200">This event link is code-protected. Enter the code shared with you.</p>
+            </div>
+            <input
+              type="text"
+              value={codeInput}
+              onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
+              placeholder="Enter code"
+              maxLength={6}
+              className="w-full rounded-sm border border-white/30 bg-white/95 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 outline-none backdrop-blur-sm focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
+            />
+            {codeError && <p className="text-xs text-red-300">Incorrect code. Please try again.</p>}
+            <button
+              onClick={handleVerify}
+              disabled={!codeInput.trim()}
+              className="w-full rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
+            >
+              Unlock event
+            </button>
           </div>
-          <input
-            type="text"
-            value={codeInput}
-            onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
-            placeholder="Enter code"
-            maxLength={6}
-            className="w-full max-w-xs rounded-sm border border-white/30 bg-white/95 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 outline-none backdrop-blur-sm focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
-          />
-          {codeError && <p className="text-xs text-red-300">Incorrect code. Please try again.</p>}
-          <button
-            onClick={handleVerify}
-            disabled={!codeInput.trim()}
-            className="w-full max-w-xs rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
-          >
-            Unlock event
-          </button>
         </div>
       </div>
     );
@@ -202,9 +207,20 @@ const CustomerEventDetail: React.FC = () => {
     return tier.quantity - tier.sold;
   };
 
+  // Organizer-configured cap on tickets per order (falls back to the
+  // platform default when unset), enforced across all tiers combined.
+  const maxPerOrder =
+    typeof event.maxTicketsPerOrder === 'number' && event.maxTicketsPerOrder > 0
+      ? event.maxTicketsPerOrder
+      : DEFAULT_MAX_TICKETS_PER_ORDER;
+
   const setQty = (tierId: string, next: number) => {
     const max = remainingFor(tierId);
-    const clamped = Math.max(0, Math.min(next, max, 10)); // 10-per-order cap, same as most ticketing flows
+    const totalOtherTiers = Object.entries(quantities)
+      .filter(([id]) => id !== tierId)
+      .reduce((s, [, n]) => s + n, 0);
+    const orderCap = Math.max(0, maxPerOrder - totalOtherTiers);
+    const clamped = Math.max(0, Math.min(next, max, orderCap));
     setQuantities((q) => ({ ...q, [tierId]: clamped }));
   };
 
@@ -240,25 +256,10 @@ const CustomerEventDetail: React.FC = () => {
     const checkoutPath = getSubdomain()
       ? `/checkout/${event.id}`
       : `/public/${resolvedCompanyId}/checkout/${event.id}`;
-    navigate(checkoutPath, { state: { quantities } });
-  };
-  const handleShare = async () => {
-    if (!event) return;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: stripHtmlTags(event.title), url: window.location.href });
-        return;
-      } catch {
-        return; // user cancelled share sheet, no-op
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setShareToast('Link copied to clipboard!');
-    } catch {
-      setShareToast('Could not copy link. Please copy it manually.');
-    }
-    setTimeout(() => setShareToast(null), 2000);
+    const accessCode = event.isPrivate
+      ? sessionStorage.getItem(`eventAccessCode:${event.id}`) ?? undefined
+      : undefined;
+    navigate(checkoutPath, { state: { quantities, accessCode } });
   };
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
@@ -591,7 +592,7 @@ const CustomerEventDetail: React.FC = () => {
                                 <span className="w-5 text-center text-sm font-medium text-slate-800 dark:text-slate-100">{qty}</span>
                                 <button
                                   onClick={() => setQty(tier.id, qty + 1)}
-                                  disabled={qty >= Math.min(remaining, 10)}
+                                  disabled={qty >= remaining || totalTickets >= maxPerOrder}
                                   className="rounded-sm border border-gray-300 dark:border-slate-600 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-30"
                                 >
                                   <Plus size={14} />
@@ -637,6 +638,7 @@ const CustomerEventDetail: React.FC = () => {
           totalAmount={totalAmount}
           breakdown={selectedTiersBreakdown}
           quantities={quantities}
+          accessCode={event.isPrivate ? sessionStorage.getItem(`eventAccessCode:${event.id}`) ?? undefined : undefined}
           onClose={() => setShowManualQR(false)}
           onSuccess={() => {
             // clear cart after a successful submission, same as a normal checkout would

@@ -272,6 +272,11 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
               {attendee.tierName} · <span className="font-mono text-slate-600 dark:text-slate-300">{attendee.ticketId}</span>
             </p>
+            {attendee.accessCode && (
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">
+                Access code: <span className="font-mono text-slate-500 dark:text-slate-400">{attendee.accessCode}</span>
+              </p>
+            )}
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0">

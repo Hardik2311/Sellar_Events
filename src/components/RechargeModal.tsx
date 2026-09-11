@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Wallet, Zap, PhoneCall, ArrowLeft, Check } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -56,7 +55,6 @@ const PLANS = [
 ];
 
 const RechargePage: React.FC = () => {
-  const navigate = useNavigate();
   const { credits, loading } = useEventCredits();
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
   const [showContactPopup, setShowContactPopup] = useState(false);

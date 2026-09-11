@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { ShareOptionsModal } from './ShareOptionsModal';
 import type { EventSummary } from '../types/event.types';
@@ -15,7 +14,6 @@ interface ShareLinkPickerModalProps {
 export const ShareLinkPickerModal: React.FC<ShareLinkPickerModalProps> = ({
   isOpen,
   onClose,
-  events, // kept for future use (e.g. showing event count)
   eventsLoading,
   companyId,
 }) => {

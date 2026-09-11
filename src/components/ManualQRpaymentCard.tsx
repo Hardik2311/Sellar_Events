@@ -4,7 +4,7 @@ import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'fireba
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
-import type { PublicEvent } from '../data/events';
+import type { AccessCodeEntry, PublicEvent } from '../data/events';
 import QRCode from 'qrcode';
 
 interface Breakdown {
@@ -20,6 +20,7 @@ interface Props {
   totalAmount: number;
   breakdown: Breakdown[];
   quantities: Record<string, number>;
+  accessCode?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -51,7 +52,7 @@ const getEventInitials = (title: string): string => {
     .toUpperCase();
 };
 
-const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, quantities, onClose, onSuccess }) => {
+const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, accessCode, onClose, onSuccess }) => {
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
@@ -80,17 +81,6 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
     };
     fetchTaxSettings();
   }, [event.companyId]);
-  useEffect(() => {
-    if (!event.upiId) {
-      setQrDataUrl(null);
-      return;
-    }
-    const upiString = `upi://pay?pa=${event.upiId}&pn=${encodeURIComponent(event.payeeName || event.title)}&cu=INR`;
-    QRCode.toDataURL(upiString, { width: 240, margin: 1, errorCorrectionLevel: 'L' })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
-  }, [event.upiId, event.payeeName, event.title]);
-
   const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
   const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
   const taxRate = taxSettings?.defaultTaxRate || 0;
@@ -129,6 +119,20 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
       roundOffAmt: Number((rounded - rawTotal).toFixed(2)),
     };
   }, [breakdown, scheme, taxType, taxRate, taxSettings?.enableRounding, taxSettings?.roundingInterval]);
+
+  // QR encodes the actual amount owed — regenerated whenever the computed
+  // total changes (tax settings finish loading, etc.) so the buyer's UPI app
+  // pre-fills the right amount instead of a blank/zero one.
+  useEffect(() => {
+    if (!event.upiId || finalTotal <= 0) {
+      setQrDataUrl(null);
+      return;
+    }
+    const upiString = `upi://pay?pa=${event.upiId}&pn=${encodeURIComponent(event.payeeName || event.title)}&am=${finalTotal.toFixed(2)}&cu=INR`;
+    QRCode.toDataURL(upiString, { width: 240, margin: 1, errorCorrectionLevel: 'L' })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [event.upiId, event.payeeName, event.title, finalTotal]);
 
   const MAX_UPLOAD_BYTES = 1 * 1024 * 1024; // 1 MB hard cap
 
@@ -217,7 +221,33 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
           0
         );
 
-        tx.update(eventRef, { tiers: updatedTiers });
+        // Same atomic check-and-consume as the gateway checkout flow — a code
+        // is single-use, so once it's bought tickets once it's dead for any
+        // further purchase, via manual QR too.
+        let updatedAccessCodes: AccessCodeEntry[] | undefined;
+        if (accessCode) {
+          const currentAccessCodes = (data.accessCodes || []) as AccessCodeEntry[];
+          const cleaned = accessCode.trim().toUpperCase();
+          const entryIndex = currentAccessCodes.findIndex((e) => e.code.trim().toUpperCase() === cleaned);
+          if (entryIndex !== -1) {
+            const entry = currentAccessCodes[entryIndex];
+            const totalQty = breakdown.reduce((sum, b) => sum + b.qty, 0);
+            if (entry.usedAt) {
+              throw new Error('CODE_ALREADY_USED');
+            }
+            if (entry.maxTickets && totalQty > entry.maxTickets) {
+              throw new Error('CODE_LIMIT_REACHED');
+            }
+            updatedAccessCodes = currentAccessCodes.map((e, i) =>
+              i === entryIndex ? { ...e, usedCount: totalQty, usedAt: new Date().toISOString() } : e
+            );
+          }
+        }
+
+        tx.update(eventRef, {
+          tiers: updatedTiers,
+          ...(updatedAccessCodes ? { accessCodes: updatedAccessCodes } : {}),
+        });
 
         let index = 0;
         taxedBreakdown.forEach((tier) => {
@@ -247,6 +277,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
               checkedInAt: null,
               paymentMethod: 'manual_qr',
               screenshotUrl,
+              accessCode: accessCode || null,
             });
             index += 1;
           }
@@ -257,7 +288,13 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
       onSuccess();
     } catch (e: any) {
       console.error('Manual QR payment submission failed:', e);
-      setError(e?.message || 'Something went wrong while submitting. Please try again.');
+      setError(
+        e?.message === 'CODE_ALREADY_USED'
+          ? "This access code has already been used to book tickets and can't be used again."
+          : e?.message === 'CODE_LIMIT_REACHED'
+            ? 'This access code allows fewer tickets than you selected. Try a smaller quantity.'
+            : e?.message || 'Something went wrong while submitting. Please try again.'
+      );
     } finally {
       setSubmitting(false);
     }

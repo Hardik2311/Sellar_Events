@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, ChevronDown, Loader2, Share2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
-import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
 import {
     type PublicEvent,
     CATEGORY_GRADIENTS,
@@ -412,7 +411,7 @@ const CustomerEventDiscover: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
-                                                </>
+                        </>
                     )}
                 </div>
             </main>

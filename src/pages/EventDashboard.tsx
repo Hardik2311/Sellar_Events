@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { RefreshCw, Loader2, Eye, EyeOff, LayoutDashboard, Wallet } from 'lucide-react';
+import { RefreshCw, Loader2, Eye, EyeOff, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEventCredits } from '../hooks/useEventCredits';

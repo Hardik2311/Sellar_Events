@@ -146,6 +146,11 @@ const OrganizerEventDetail: React.FC = () => {
   const handleOpenShare = async () => {
     if (!event) return;
     const url = await resolveShareUrl();
+    if (event.isPrivate) {
+      setShareUrl(url);
+      setIsShareModalOpen(true);
+      return;
+    }
     const result = await shareEventLink({
       shareUrl: url,
       isPrivate: event.isPrivate,
@@ -521,7 +526,7 @@ const OrganizerEventDetail: React.FC = () => {
         />
       )}
 
-      {/* {isShareModalOpen && (
+      {isShareModalOpen && (
         <ShareOptionsModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
@@ -530,7 +535,7 @@ const OrganizerEventDetail: React.FC = () => {
           isPrivate={event.isPrivate}
           onRegenerateCode={regenerateAccessCode}
         />
-      )} */}
+      )}
       {showSaveConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-lg bg-white dark:bg-slate-800 p-6 text-center shadow-xl">

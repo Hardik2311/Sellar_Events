@@ -5,5 +5,15 @@ service firebase.storage {
       allow read, write: if request.auth != null &&
         (request.auth.uid == companyId || request.auth.token.companyId == companyId);
     }
+
+    // Manual-QR payment screenshots (ManualQRPaymentCard.tsx) are uploaded by
+    // the buyer on the public storefront, before any auth exists — same
+    // public-write need as the attendee doc it accompanies. Read is public
+    // too since the organizer's screenshot viewer just needs the download URL.
+    match /companies/{companyId}/events/{eventId}/manual-payments/{fileName} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
   }
 }

@@ -50,7 +50,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
-    accessCodes: d.accessCodes ?? [],
+  accessCodes: d.accessCodes ?? [],
+  maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
   everPublished: d.everPublished || false, // NEW — true once event has been published at least once; drives free re-toggle logic
 });
 
@@ -92,7 +93,7 @@ export const useOrganizerEvents = () => {
     return () => unsubscribe();
   }, [profile?.companyId, profile?.organizationName]);
 
-      const toggleLive = async (id: string, currentStatus: string) => {
+  const toggleLive = async (id: string, currentStatus: string) => {
     if (!profile?.companyId) return;
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
@@ -163,14 +164,21 @@ export const useOrganizerEvents = () => {
   /// NEW — generates a fresh access code for a private event and ADDS it to the
   // existing list (old codes stay valid too). Called every time the organizer
   // clicks "Share Link" for a private event.
-  const regenerateAccessCode = async (id: string): Promise<string> => {
+  const regenerateAccessCode = async (id: string, expiresInHours?: number | null): Promise<string> => {
     if (!profile?.companyId) throw new Error('No company context');
     const code = generateAccessCode(); // single source of truth — same generator used everywhere
+    const expiresAt = expiresInHours
+      ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
+      : null;
+    // Ticket cap per code just mirrors whatever the organizer already set as
+    // "Max tickets per order" on the event — no separate limit to configure
+    // when generating a code.
+    const maxTickets = events.find((e) => e.id === id)?.maxTicketsPerOrder ?? null;
 
     // NOTE: serverTimestamp() can't be used INSIDE an array element, so we use
     // a plain client-side ISO timestamp for entries pushed via arrayUnion.
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
-      accessCodes: arrayUnion({ code, createdAt: new Date().toISOString() }),
+      accessCodes: arrayUnion({ code, createdAt: new Date().toISOString(), expiresAt, maxTickets }),
     });
     return code;
   };
@@ -307,6 +315,13 @@ export const useOrganizerEvents = () => {
       payeeName: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
         ? form.payeeName.trim()
         : null,
+      // Cap on tickets a single buyer can select in one order. Firestore
+      // rejects `undefined`, so an empty/unset value is stored as null
+      // (falls back to the default cap when reading).
+      maxTicketsPerOrder:
+        typeof form.maxTicketsPerOrder === 'number' && form.maxTicketsPerOrder > 0
+          ? form.maxTicketsPerOrder
+          : null,
     };
 
     if (form.registrationMode === 'tickets') {

@@ -53,6 +53,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
+  maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
 });
 
 export function usePublicEvents(targetCompanyId?: string | null) {
@@ -129,5 +130,10 @@ export function verifyAccessCode(event: PublicEvent, enteredCode: string): boole
   if (!event.isPrivate) return true; // public events don't need a code at all
   if (!event.accessCodes || event.accessCodes.length === 0) return false; // private, but organizer hasn't generated any code yet — deny by default
   const cleaned = enteredCode.trim().toUpperCase();
-  return event.accessCodes.some((entry) => entry.code.trim().toUpperCase() === cleaned);
+  return event.accessCodes.some(
+    (entry) =>
+      entry.code.trim().toUpperCase() === cleaned &&
+      !entry.usedAt && // single-use — a code that already bought tickets is dead
+      (!entry.expiresAt || new Date(entry.expiresAt).getTime() > Date.now())
+  );
 }

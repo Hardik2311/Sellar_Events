@@ -339,12 +339,22 @@ const OrganizerEventDiscover: React.FC = () => {
     return () => clearTimeout(t);
   }, [linkCopiedToast]);
 
-  // One click on the share icon: no modal, no second click.
+  const [shareModalEvent, setShareModalEvent] = useState<PublicEvent | null>(null);
+  const [shareModalUrl, setShareModalUrl] = useState('');
+
+  // Private events open the share popup (so the organizer can also generate
+  // an access code); public events keep the one-click share, no modal.
   const handleShareRequest = async (event: PublicEvent) => {
     const baseUrl = profile?.companyId
       ? await getShareBaseUrl(profile.companyId)
       : window.location.origin;
     const url = `${baseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
+
+    if (event.isPrivate) {
+      setShareModalUrl(url);
+      setShareModalEvent(event);
+      return;
+    }
 
     const result = await shareEventLink({
       shareUrl: url,
@@ -678,6 +688,17 @@ const OrganizerEventDiscover: React.FC = () => {
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 dark:bg-slate-700 px-4 py-2 text-xs font-semibold text-white shadow-lg">
           Link copied to clipboard!
         </div>
+      )}
+
+      {shareModalEvent && (
+        <ShareOptionsModal
+          isOpen={!!shareModalEvent}
+          onClose={() => setShareModalEvent(null)}
+          shareUrl={shareModalUrl}
+          eventId={shareModalEvent.id}
+          isPrivate={shareModalEvent.isPrivate}
+          onRegenerateCode={regenerateAccessCode}
+        />
       )}
 
       {editingEvent && (
