@@ -259,7 +259,7 @@ const OrganizerEventDetail: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+      <div className={`relative h-74 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay desktopSrc={event.coverImageDesktop} mobileSrc={event.coverImageMobile} alt={event.title} />
         ) : event.images && event.images.length > 0 && (
@@ -326,17 +326,24 @@ const OrganizerEventDetail: React.FC = () => {
           </button>
         </div>
 
+        {/* category badge — back to its original spot, overlaid on the image */}
         <div className="absolute inset-x-0 bottom-0 p-4">
-          <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <RichTextDisplay as="h1" html={event.title} className="text-2xl font-bold text-white" />
         </div>
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
       <main className="grow overflow-y-auto p-2">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
+          {/* Title */}
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+            <CardContent className="pt-4">
+              <RichTextDisplay as="h1" html={event.title} className="text-2xl font-bold text-slate-900 dark:text-white" />
+            </CardContent>
+          </Card>
+
           {/* Key details */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="space-y-3 pt-4">

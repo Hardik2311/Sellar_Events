@@ -16,7 +16,7 @@ import {
   getPriceLabel,
   getAvailability,
   buildEventSlugId,
-   isCreditExpired,
+  isCreditExpired,
   formatCreditExpiry,
   EVENT_CREDIT_VALIDITY_DAYS,
 } from '../data/events';
@@ -97,15 +97,15 @@ const OrganizerEventCard: React.FC<{
     <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden flex flex-col hover:shadow-md transition-shadow">
       <div className="relative h-36 w-full cursor-pointer" onClick={onOpen}>
         <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
-        {(event.coverImageMobile || event.coverImageDesktop || event.coverImage) && (
+        {(event.coverImageDesktop || event.coverImageMobile || event.coverImage) && (
           <img
-            src={event.coverImageMobile || event.coverImageDesktop || event.coverImage || undefined}
+            src={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
             alt={event.title}
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
         <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-          <span className="rounded-sm bg-white px-2 py-0.5 text-xs font-medium text-slate-700 shadow-sm">
+          <span className="rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white shadow-sm">
             {label}
           </span>
           {event.isPrivate && (
@@ -269,7 +269,7 @@ const OrganizerEventCard: React.FC<{
         ) : (
           <>
             <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
-                            <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-1.5">
                   <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
@@ -795,7 +795,7 @@ const OrganizerEventDiscover: React.FC = () => {
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">
               Publish this event?
             </h2>
-                        {!isCreditExpired(confirmingLiveEvent) ? (
+            {!isCreditExpired(confirmingLiveEvent) ? (
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 This event is still within its 3-month credit window
                 {confirmingLiveEvent.creditExpiresAt && (
@@ -839,7 +839,7 @@ const OrganizerEventDiscover: React.FC = () => {
                 Are you sure you want to publish?
               </h2>
             </div>
-                        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
               {!isCreditExpired(confirmingLiveEvent) ? (
                 <>This event's current credit is still valid
                   {confirmingLiveEvent.creditExpiresAt && <> until <span className="font-semibold">{formatCreditExpiry(confirmingLiveEvent.creditExpiresAt)}</span></>}

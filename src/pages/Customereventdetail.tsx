@@ -263,7 +263,7 @@ const CustomerEventDetail: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
       {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+      <div className={`relative h-74 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay
             desktopSrc={event.coverImageDesktop}
@@ -321,31 +321,38 @@ const CustomerEventDetail: React.FC = () => {
           <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
         </div>
 
+        {/* category badge — back to its original spot, overlaid on the image */}
         <div className="absolute inset-x-0 bottom-0 p-4">
-          <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <RichTextDisplay
-            as="h1"
-            html={event.title}
-            className="text-2xl font-bold text-white"
-            style={
-              event.titleStyle
-                ? {
-                  fontSize: event.titleStyle.fontSize + 8,
-                  fontWeight: event.titleStyle.fontWeight,
-                  fontStyle: event.titleStyle.fontStyle,
-                  color: event.titleStyle.color,
-                }
-                : undefined
-            }
-          />
         </div>
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
       <main className="p-2 pb-24">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
+          {/* Title */}
+          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+            <CardContent className="pt-4">
+              <RichTextDisplay
+                as="h1"
+                html={event.title}
+                className="text-2xl font-bold text-slate-900 dark:text-white"
+                style={
+                  event.titleStyle
+                    ? {
+                      fontSize: event.titleStyle.fontSize + 8,
+                      fontWeight: event.titleStyle.fontWeight,
+                      fontStyle: event.titleStyle.fontStyle,
+                      color: event.titleStyle.color === '#FFFFFF' ? undefined : event.titleStyle.color,
+                    }
+                    : undefined
+                }
+              />
+            </CardContent>
+          </Card>
+
           {/* Key details */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="space-y-3 pt-4">
@@ -482,8 +489,8 @@ const CustomerEventDetail: React.FC = () => {
                   as="p"
                   html={event.consentText ?? ''}
                   className={`whitespace-pre-line leading-relaxed mb-3 ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                      ? 'text-slate-800 dark:text-slate-100'
-                      : ''
+                    ? 'text-slate-800 dark:text-slate-100'
+                    : ''
                     }`}
                   style={
                     event.consentStyle

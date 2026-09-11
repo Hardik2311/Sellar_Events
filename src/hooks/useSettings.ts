@@ -39,9 +39,15 @@ export interface CompanySettings {
   attendeeQuestionsEnabled: boolean;
   whatsappShareTemplate: string;
   organizationName: string;
- payments: PaymentSettings; // NEW
- subdomain?: string;
- domainAliases?: string[];
+  payments: PaymentSettings; // NEW
+  subdomain?: string;
+  domainAliases?: string[];
+  // NEW — organizer's public contact/social links, sourced from business_info/profile
+  website?: string;
+  instagram?: string;
+  facebook?: string;
+  twitter?: string;
+  whatsappNumber?: string;
 }
 
 const DEFAULT_FIELD_REQUIREMENTS: EventFieldRequirements = {
@@ -76,6 +82,12 @@ const DEFAULT_SETTINGS: CompanySettings = {
   autoFeatureNearest: true,
   organizationName: '',
   payments: DEFAULT_PAYMENTS, // NEW
+  // NEW
+  website: '',
+  instagram: '',
+  facebook: '',
+  twitter: '',
+  whatsappNumber: '',
 };
 
 export function useCompanySettings(targetCompanyId?: string | null) {
@@ -91,31 +103,41 @@ export function useCompanySettings(targetCompanyId?: string | null) {
     }
     const settingsRef = doc(db, 'companies', effectiveCompanyId, 'settings', 'general');
     const companyRef = doc(db, 'companies', effectiveCompanyId);
+    // NEW — website/social links live in business_info/profile (same doc
+    // EditProfile's useProfileData writes to), not settings/general
+    const businessInfoRef = doc(db, 'companies', effectiveCompanyId, 'business_info', 'profile');
 
     let latestSettingsData: Partial<CompanySettings> = {};
     let latestOrgName = '';
+    let latestBusinessInfo: Partial<CompanySettings> = {}; // NEW
 
     const applyMerged = () => {
-  setSettings({
-    ...DEFAULT_SETTINGS,
-    ...latestSettingsData,
-    organizationName: latestOrgName || DEFAULT_SETTINGS.organizationName,
-    ticketDisplay: {
-      ...DEFAULT_TICKET_DISPLAY,
-      ...(latestSettingsData.ticketDisplay ?? {}),
-    },
-    eventFieldRequirements: {
-      ...DEFAULT_FIELD_REQUIREMENTS,
-      ...(latestSettingsData.eventFieldRequirements ?? {}),
-    },
-    // NEW
-    payments: {
-      ...DEFAULT_PAYMENTS,
-      ...(latestSettingsData.payments ?? {}),
-    },
-  });
-  setLoading(false);
-};
+      setSettings({
+        ...DEFAULT_SETTINGS,
+        ...latestSettingsData,
+        organizationName: latestOrgName || DEFAULT_SETTINGS.organizationName,
+        ticketDisplay: {
+          ...DEFAULT_TICKET_DISPLAY,
+          ...(latestSettingsData.ticketDisplay ?? {}),
+        },
+        eventFieldRequirements: {
+          ...DEFAULT_FIELD_REQUIREMENTS,
+          ...(latestSettingsData.eventFieldRequirements ?? {}),
+        },
+        // NEW
+        payments: {
+          ...DEFAULT_PAYMENTS,
+          ...(latestSettingsData.payments ?? {}),
+        },
+        // NEW — website/social from business_info/profile
+        website: latestBusinessInfo.website ?? DEFAULT_SETTINGS.website,
+        instagram: latestBusinessInfo.instagram ?? DEFAULT_SETTINGS.instagram,
+        facebook: latestBusinessInfo.facebook ?? DEFAULT_SETTINGS.facebook,
+        twitter: latestBusinessInfo.twitter ?? DEFAULT_SETTINGS.twitter,
+        whatsappNumber: latestBusinessInfo.whatsappNumber ?? DEFAULT_SETTINGS.whatsappNumber,
+      });
+      setLoading(false);
+    };
 
     const unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
       latestSettingsData = snap.exists() ? (snap.data() as Partial<CompanySettings>) : {};
@@ -127,9 +149,16 @@ export function useCompanySettings(targetCompanyId?: string | null) {
       applyMerged();
     });
 
+    // NEW
+    const unsubscribeBusinessInfo = onSnapshot(businessInfoRef, (snap) => {
+      latestBusinessInfo = snap.exists() ? (snap.data() as Partial<CompanySettings>) : {};
+      applyMerged();
+    });
+
     return () => {
       unsubscribeSettings();
       unsubscribeCompany();
+      unsubscribeBusinessInfo(); // NEW
     };
   }, [targetCompanyId, profile?.companyId]);
 
