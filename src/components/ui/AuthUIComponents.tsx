@@ -1,5 +1,4 @@
 import React from 'react';
-import { FiCalendar } from 'react-icons/fi';
 
 /**
  * Shared, dependency-free UI primitives for the Events project auth flow.

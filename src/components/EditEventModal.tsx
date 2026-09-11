@@ -14,6 +14,7 @@ import CustomFieldsEditor from './CustomFieldsEditor';
 import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventCategory, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
 import type { PublicEvent } from '../data/events';
+import { DEFAULT_MAX_TICKETS_PER_ORDER } from '../data/events';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from './ui/Timeselect';
@@ -44,6 +45,7 @@ const toFormState = (event: EventItem): EventFormState => ({
   isOnline: event.isOnline,
   images: event.images ?? (event.coverImage ? [event.coverImage] : []),
   isPrivate: event.isPrivate ?? false,
+  maxTicketsPerOrder: event.maxTicketsPerOrder ?? null,
   // NEW
   coverImageDesktop: event.coverImageDesktop ?? null,
   coverImageMobile: event.coverImageMobile ?? null,
@@ -289,6 +291,22 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </div>
                 </FormField>
 
+                <FormField label="Max tickets per order" htmlFor="edit-max-tickets-per-order">
+                  <FloatingLabelInput
+                    id="edit-max-tickets-per-order"
+                    label={`Max tickets per order (default ${DEFAULT_MAX_TICKETS_PER_ORDER})`}
+                    type="number"
+                    min={1}
+                    value={form.maxTicketsPerOrder ?? ''}
+                    onChange={(e) =>
+                      update('maxTicketsPerOrder', e.target.value === '' ? null : Number(e.target.value))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">
+                    How many tickets a single buyer can select in one order — e.g. set to 1 if every buyer should only get one ticket. Leave blank for the default cap.
+                  </p>
+                </FormField>
+
                 <div className="grid grid-cols-2 gap-3">
                   <FormField label="Start date *" htmlFor="edit-date">
                     <div className="relative">
@@ -447,11 +465,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                           <button
                             type="button"
-                            onClick={() => update('paymentCollectionMode', 'gateway')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
-                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                              : 'text-gray-500 dark:text-slate-400'
-                              }`}
+                            disabled
+                            title="Coming soon — no live payment gateway is connected yet"
+                            className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-sm font-medium text-gray-400 dark:text-slate-600 opacity-50"
                           >
                             Payment gateway
                           </button>
@@ -469,7 +485,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                           {form.paymentCollectionMode === 'manual_qr'
                             ? "Attendees scan your QR, pay directly, and upload a screenshot. They're added as attendees immediately — verify payment manually at check-in."
-                            : 'Attendees pay via the integrated payment gateway at checkout.'}
+                            : 'Payment gateway isn’t live yet — switch to UPI QR (manual) to actually collect payment.'}
                         </p>
                       </FormField>
                     )}

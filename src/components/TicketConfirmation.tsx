@@ -11,6 +11,7 @@ interface PurchasedTicket {
     ticketId: string;
     tierName: string;
     attendeeName: string;
+    accessCode?: string;
 }
 
 interface TicketConfirmationProps {
@@ -331,6 +332,12 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                                 <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#0B3B3A]/40">
                                     Scan at entry · Non-transferable
                                 </p>
+
+                                {t.accessCode && (
+                                    <p className="text-[11px] font-medium text-[#0B3B3A]/60">
+                                        Access code: <span className="font-mono font-bold tracking-wide text-[#0B3B3A]">{t.accessCode}</span>
+                                    </p>
+                                )}
 
                                 <div className="flex w-full gap-2 pt-1">
                                     <button

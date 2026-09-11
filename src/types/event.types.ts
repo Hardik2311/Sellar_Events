@@ -109,6 +109,7 @@ export interface EventFormState {
   rsvpButtonLabel: string;
   consentText: string;
   isPrivate: boolean;
+  maxTicketsPerOrder: number | null; // null = default cap
   // NEW — only relevant when registrationMode === 'tickets'
   paymentCollectionMode: PaymentCollectionMode;
   //qrImage: string | null;   // base64 preview until uploaded, then https URL after save

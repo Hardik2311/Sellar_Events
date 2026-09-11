@@ -15,11 +15,12 @@ import TicketTierEditor from '../components/TicketTierEditor';
 import CustomFieldsEditor from '../components/CustomFieldsEditor';
 import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventFormState, type TicketTierDraft } from '../types/event.types';
 import { useCompanySettings } from '../hooks/useSettings';
-import { collection, doc, setDoc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, runTransaction, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
-import { generateAccessCode, EVENT_CREDIT_VALIDITY_DAYS, getNewCreditExpiry } from '../data/events';
+import { DEFAULT_MAX_TICKETS_PER_ORDER, EVENT_CREDIT_VALIDITY_DAYS, getNewCreditExpiry } from '../data/events';
+import { saveDraft, loadDraft, deleteDraft } from '../lib/draftStore';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
@@ -27,7 +28,6 @@ import TextStyleControls from '../components/ui/TextStyleControls';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import RichTextEditor from '../components/RickTextEditor';
-import { getDraft, saveDraft, clearDraft } from '../lib/draftStorage';
 //import QRCodeImageUpload from '../components/ui/QRCodeImageUpload'; // NEW
 
 const createEmptyTier = (): TicketTierDraft => ({
@@ -63,11 +63,14 @@ const INITIAL_STATE: EventFormState = {
   titleFontSize: DEFAULT_TEXT_STYLE.fontSize,
   descriptionFontSize: 14,
   consentFontSize: 14,
-  paymentCollectionMode: 'gateway',
+  // Payment gateway isn't wired up to a real processor yet — default new
+  // events to the one collection mode that actually works.
+  paymentCollectionMode: 'manual_qr',
   //qrImage: null,
   upiId: '',
   payeeName: '',
   isPrivate: false,
+  maxTicketsPerOrder: null,
 };
 const stripHtml = (html: string) =>
   html
@@ -77,9 +80,14 @@ const stripHtml = (html: string) =>
     .replace(/\u00A0/g, ' ')       // literal non-breaking space char, just in case
     .trim();
 
-const DRAFT_STORAGE_KEY = 'create-event-draft';
-// Draft is now stored in IndexedDB (see lib/draftStorage.ts) since it can
-// contain large base64 images that exceed localStorage's quota.
+// Scoped per company — otherwise a draft started while logged into one
+// company would resurface after switching to/logging into a different one.
+// Stored in IndexedDB (see lib/draftStore.ts), not localStorage — localStorage's
+// ~5MB quota gets blown past by a couple of cover/gallery images, which
+// silently dropped them from the saved draft; IndexedDB has a much larger
+// practical quota so images survive a navigate-away-and-back too.
+const getDraftKey = (companyId?: string | null): string | null =>
+  companyId ? `create-event-draft:${companyId}` : null;
 
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
@@ -88,17 +96,11 @@ const CreateEvent: React.FC = () => {
   const { can } = usePermissions();
   const { credits, loading: creditsLoading } = useEventCredits();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
-  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
-
-  // Load any previously saved draft from IndexedDB once, on mount.
-  useEffect(() => {
-    (async () => {
-      const saved = await getDraft<EventFormState>(DRAFT_STORAGE_KEY);
-      if (saved) setForm(saved);
-      setIsDraftLoaded(true); // only after this can we safely persist changes
-    })();
-  }, []);
+  // Gates the autosave effect until the async IndexedDB load below has had a
+  // chance to run — otherwise the first render's INITIAL_STATE would
+  // immediately overwrite any real saved draft before it's loaded.
+  const [draftReady, setDraftReady] = useState(false);
   const [savingAction, setSavingAction] = useState<'draft' | 'published' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showPastEventConfirm, setShowPastEventConfirm] = useState(false);
@@ -122,13 +124,33 @@ const CreateEvent: React.FC = () => {
     }
   }, [companySettings.rsvpEnabled]);
 
+  // Load any saved draft once the organizer's company is known.
   useEffect(() => {
-    if (!isDraftLoaded) return; // avoid overwriting saved draft before initial load finishes
-    saveDraft(DRAFT_STORAGE_KEY, form).catch((err) => {
-      console.warn('Failed to save event draft:', err);
-      setSaveError('Could not auto-save your draft locally (storage may be full).');
-    });
-  }, [form, isDraftLoaded]);
+    let cancelled = false;
+    const key = getDraftKey(profile?.companyId);
+    if (!key) {
+      setDraftReady(true);
+      return;
+    }
+    loadDraft<EventFormState>(key)
+      .then((draft) => {
+        if (cancelled || !draft) return;
+        // Merged over INITIAL_STATE so a draft saved before a field was added
+        // to the form doesn't come back missing that key.
+        setForm({ ...INITIAL_STATE, ...draft });
+      })
+      .catch((err) => console.warn('Failed to load saved event draft:', err))
+      .finally(() => { if (!cancelled) setDraftReady(true); });
+    return () => { cancelled = true; };
+  }, [profile?.companyId]);
+
+  // Navigate away and back without losing in-progress event details.
+  useEffect(() => {
+    if (!draftReady) return;
+    const key = getDraftKey(profile?.companyId);
+    if (!key) return;
+    saveDraft(key, form).catch((err) => console.warn('Failed to save event draft:', err));
+  }, [form, draftReady, profile?.companyId]);
   const isOtherCategory = form.category === 'Other';
 
   const isPastEventDateTime = () => {
@@ -250,6 +272,7 @@ const CreateEvent: React.FC = () => {
         venue: form.isOnline ? null : form.venue,
         isOnline: form.isOnline,
         isPrivate: form.isPrivate,
+        maxTicketsPerOrder: form.maxTicketsPerOrder && form.maxTicketsPerOrder > 0 ? form.maxTicketsPerOrder : null,
         coverImageUrl: coverImageUrls[0] ?? null,
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
@@ -298,7 +321,8 @@ const CreateEvent: React.FC = () => {
         await setDoc(newEventRef, eventPayload);
       }
 
-      await clearDraft(DRAFT_STORAGE_KEY);
+      const draftKey = getDraftKey(profile.companyId);
+      if (draftKey) await deleteDraft(draftKey);
       navigate(`/events/e/${newEventRef.id}`);
     } catch (err: any) {
       console.error('Failed to save event:', err);
@@ -313,7 +337,8 @@ const CreateEvent: React.FC = () => {
     }
   };
   const handleClearAllDraft = async () => {
-    await clearDraft(DRAFT_STORAGE_KEY);
+    const draftKey = getDraftKey(profile?.companyId);
+    if (draftKey) await deleteDraft(draftKey);
     setForm(INITIAL_STATE);
     setShowClearAllConfirm(false);
   };
@@ -487,7 +512,7 @@ const CreateEvent: React.FC = () => {
       )}
 
       <main className="grow overflow-y-auto p-4 lg:p-6">
-        {!isDraftLoaded ? (
+        {!draftReady ? (
           <div className="flex justify-center items-center py-20 text-sm text-slate-500 dark:text-slate-400">
             Loading your saved draft…
           </div>
@@ -629,6 +654,22 @@ const CreateEvent: React.FC = () => {
                     </div>
                   </FormField>
 
+                  <FormField label="Max tickets per order" htmlFor="max-tickets-per-order">
+                    <FloatingLabelInput
+                      id="max-tickets-per-order"
+                      label={`Max tickets per order (default ${DEFAULT_MAX_TICKETS_PER_ORDER})`}
+                      type="number"
+                      min={1}
+                      value={form.maxTicketsPerOrder ?? ''}
+                      onChange={(e) =>
+                        update('maxTicketsPerOrder', e.target.value === '' ? null : Number(e.target.value))
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">
+                      How many tickets a single buyer can select in one order — e.g. set to 1 if every buyer should only get one ticket. Leave blank for the default cap.
+                    </p>
+                  </FormField>
+
                   <div>
                     <TextStyleControls
                       fontSize={form.descriptionFontSize}
@@ -696,11 +737,9 @@ const CreateEvent: React.FC = () => {
                           <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                             <button
                               type="button"
-                              onClick={() => update('paymentCollectionMode', 'gateway')}
-                              className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
-                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                                : 'text-gray-500 dark:text-slate-400'
-                                }`}
+                              disabled
+                              title="Coming soon — no live payment gateway is connected yet"
+                              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-sm font-medium text-gray-400 dark:text-slate-600 opacity-50"
                             >
                               Payment gateway
                             </button>
@@ -718,7 +757,7 @@ const CreateEvent: React.FC = () => {
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                             {form.paymentCollectionMode === 'manual_qr'
                               ? 'Attendees scan your QR, pay directly, and upload a screenshot. They\u2019re added as attendees immediately — verify payment manually at check-in.'
-                              : 'Attendees pay via the integrated payment gateway at checkout.'}
+                              : 'Payment gateway isn’t live yet — switch to UPI QR (manual) to actually collect payment.'}
                           </p>
                         </FormField>
                       )}

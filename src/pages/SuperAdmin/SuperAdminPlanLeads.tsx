@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, increment, runTransaction } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { Search, Zap, ArrowLeft, Plus } from 'lucide-react';
+import { Search, Zap, ArrowLeft, Plus, Minus } from 'lucide-react';
 
 interface CompanyData {
   id: string;
@@ -132,6 +132,36 @@ const SuperAdminPlanLeads: React.FC = () => {
     }
   };
 
+  const handleRemoveCredits = async (companyId: string) => {
+    const amount = parseInt(creditInputs[companyId] || '0', 10);
+    if (!amount || amount <= 0) {
+      alert('Enter a valid number of credits to remove.');
+      return;
+    }
+    setSavingId(companyId);
+    try {
+      // Transaction (not a plain increment(-amount)) so the balance can
+      // never be driven negative by a stale read or two admins acting at once.
+      const companyRef = doc(db, 'companies', companyId);
+      const newBalance = await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(companyRef);
+        const current = typeof snap.data()?.eventCredits === 'number' ? snap.data()!.eventCredits : 0;
+        const next = Math.max(0, current - amount);
+        transaction.update(companyRef, { eventCredits: next });
+        return next;
+      });
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === companyId ? { ...c, eventCredits: newBalance } : c))
+      );
+      setCreditInputs((prev) => ({ ...prev, [companyId]: '' }));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to remove credits. Check Firestore rules / your Super Admin access.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   if (!authChecked || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
@@ -165,7 +195,7 @@ const SuperAdminPlanLeads: React.FC = () => {
         </div>
         <div className="text-center">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">Manage Credits</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Allot event credits to any company directly</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Add or remove event credits for any company directly</p>
         </div>
       </header>
 
@@ -221,7 +251,15 @@ const SuperAdminPlanLeads: React.FC = () => {
                       className="flex items-center gap-1 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-3 py-2 text-xs font-bold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-60"
                     >
                       <Plus size={13} />
-                      {savingId === company.id ? 'Adding...' : 'Add Credits'}
+                      {savingId === company.id ? 'Saving...' : 'Add'}
+                    </button>
+                    <button
+                      onClick={() => handleRemoveCredits(company.id)}
+                      disabled={savingId === company.id}
+                      className="flex items-center gap-1 rounded-sm bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                      <Minus size={13} />
+                      {savingId === company.id ? 'Saving...' : 'Remove'}
                     </button>
                   </div>
                 </div>

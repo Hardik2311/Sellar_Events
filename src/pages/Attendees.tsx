@@ -98,6 +98,7 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   paymentMode: data.paymentMode ?? undefined,
   paymentMethod: data.paymentMethod ?? undefined,
   screenshotUrl: data.screenshotUrl ?? undefined,
+  accessCode: data.accessCode ?? undefined,
 });
 const Attendees: React.FC = () => {
   const { profile } = useAuth();

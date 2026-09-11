@@ -84,12 +84,13 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
-    function isSuperAdminCreditTopUp(companyId) {
+    // Lets a super admin add OR remove credits (Manage Credits page) — only
+    // the eventCredits field may change, and it can never go negative.
+    function isSuperAdminCreditChange(companyId) {
       let affected = request.resource.data.diff(resource.data).affectedKeys();
-      let currentCredits = ('eventCredits' in resource.data) ? resource.data.eventCredits : 0;
       return affected.hasOnly(['eventCredits']) &&
         request.resource.data.eventCredits is number &&
-        request.resource.data.eventCredits > currentCredits;
+        request.resource.data.eventCredits >= 0;
     }
 
     // --- Tenant Data (Sellar Events) ---
@@ -98,7 +99,7 @@ service cloud.firestore {
       // Company document
       allow read: if true;
       allow update: if (isCompanyMember(companyId) && isValidEventCreditsUpdate(companyId))
-        || (isSuperAdmin() && isSuperAdminCreditTopUp(companyId));
+        || (isSuperAdmin() && isSuperAdminCreditChange(companyId));
 
       // Business Info (Organization name, website, branding)
       match /business_info/{docId} {
@@ -122,23 +123,62 @@ service cloud.firestore {
         allow read: if isCompanyMember(companyId);
         allow write: if isOwner(companyId);
       }
+      // General settings (ticket display, tax, branding, etc.) — read
+      // publicly, since useCompanySettings() is used on the public storefront
+      // (subdomain) to render event cards, not just inside the organizer app.
+      match /settings/general {
+        allow read: if true;
+        allow write: if isCompanyMember(companyId);
+      }
       // Events Collection — CHANGED: split write into create/update/delete,
       // each gated by its matching permission flag
       match /events/{eventId} {
         // Public can discover & view events
         allow read: if true;
         allow create: if hasPermission(companyId, 'publishEvent') || hasPermission(companyId, 'saveDraftEvent');
+        // Public ticket purchase (Checkout.tsx / ManualQRPaymentCard.tsx) also
+        // updates tiers[].sold and, for a private-event access code, marks
+        // that code consumed in accessCodes[] — same transaction, same write.
+        // Best-effort validation only: Firestore rules can't loop over either
+        // array to check each element (tier price/quantity/sold, or a code's
+        // usedAt/usedCount) individually, so this only blocks resizing the
+        // arrays (adding/removing tiers or codes). A determined client could
+        // still tamper with values inside existing elements. Move this
+        // server-side (Cloud Function) before real payments go live.
         allow update: if hasPermission(companyId, 'editEvent')
           || hasPermission(companyId, 'toggleEventLive')
           || hasPermission(companyId, 'toggleEventFeatured')
-          || hasPermission(companyId, 'duplicateEvent');
+          || hasPermission(companyId, 'duplicateEvent')
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tiers', 'accessCodes']) &&
+            request.resource.data.tiers.size() == resource.data.tiers.size() &&
+            (
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accessCodes']) ||
+              request.resource.data.accessCodes.size() == resource.data.accessCodes.size()
+            )
+          );
         allow delete: if hasPermission(companyId, 'deleteEvent');
 
         // Attendees (Guest List & Real-time Check-ins) — CHANGED
         match /attendees/{attendeeId} {
           allow read: if isCompanyMember(companyId);
           allow update: if hasPermission(companyId, 'checkInAttendee') || hasPermission(companyId, 'cancelAttendee');
-          allow create, delete: if isOwner(companyId);
+          allow delete: if isOwner(companyId);
+          // Public ticket purchase (Checkout.tsx / ManualQRPaymentCard.tsx)
+          // creates the attendee/ticket record directly — Firestore Rules
+          // has no way to loop over the parent event's tiers array to check
+          // ticketTierId/price against a real tier (no list comprehension
+          // support), so this only does basic type/status checks on the new
+          // doc itself. It cannot catch a fabricated tierId or wrong amount.
+          // Move this server-side (Cloud Function) before real payments go
+          // live — see update-rule comment above re: the same limitation.
+          allow create: if isOwner(companyId) || (
+            request.resource.data.status == 'valid' &&
+            request.resource.data.checkedInAt == null &&
+            request.resource.data.amountPaid is number && request.resource.data.amountPaid >= 0 &&
+            request.resource.data.ticketId is string &&
+            request.resource.data.ticketTierId is string
+          );
         }
 
         // Expenses (Event budgeting/expenses) — CHANGED

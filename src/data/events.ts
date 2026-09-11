@@ -17,8 +17,12 @@ export interface GalleryMediaItem {
 // NEW — one entry per generated share code; old codes are kept, not overwritten
 export interface AccessCodeEntry {
   code: string;
-  createdAt: string;   // ISO timestamp
-  createdFor?: string; // optional label, e.g. who it was shared with (future use)
+  createdAt: string;    // ISO timestamp
+  createdFor?: string;  // optional label, e.g. who it was shared with (future use)
+  expiresAt?: string | null; // ISO timestamp; null/undefined = never expires
+  maxTickets?: number | null; // cap on tickets bought in the one order this code is used for
+  usedCount?: number; // total tickets booked with this code so far
+  usedAt?: string | null; // ISO timestamp of the successful purchase that consumed this code — once set, the code is single-use and dead for any further purchase
 }
 export interface PublicEvent {
   id: string;
@@ -59,6 +63,7 @@ export interface PublicEvent {
   payeeName?: string;
   creditExpiresAt?: string | null;
   accessCodes?: AccessCodeEntry[]; // ALL valid share codes ever generated for this event
+  maxTicketsPerOrder?: number; // cap on tickets a single buyer can select in one order; undefined = default cap (10)
 }
 // NEW — how long a single event credit keeps an event published for
 export const EVENT_CREDIT_VALIDITY_DAYS = 90; // ~3 months
@@ -79,6 +84,9 @@ export const isCreditExpired = (event: Pick<PublicEvent, 'creditExpiresAt'>): bo
 
 export const formatCreditExpiry = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+// Default per-order cap when the organizer hasn't set one.
+export const DEFAULT_MAX_TICKETS_PER_ORDER = 10;
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {
   Comedy: 'from-orange-200 to-amber-100',

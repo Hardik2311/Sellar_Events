@@ -6,6 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
+import type { AccessCodeEntry } from '../data/events';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
 import TicketConfirmation from '../components/TicketConfirmation';
@@ -55,7 +56,9 @@ const CheckoutPage: React.FC = () => {
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
   const loading = domainLoading || eventLoading;
-  const quantities: Record<string, number> = (location.state as { quantities?: Record<string, number> })?.quantities ?? {};
+  const locationState = location.state as { quantities?: Record<string, number>; accessCode?: string } | null;
+  const quantities: Record<string, number> = locationState?.quantities ?? {};
+  const accessCode = locationState?.accessCode;
 
   interface AttendeeFormEntry {
     name: string;
@@ -76,12 +79,15 @@ const CheckoutPage: React.FC = () => {
   }, [event, quantities]);
 
   const [attendeeDetails, setAttendeeDetails] = useState<AttendeeFormEntry[]>([]);
+  const [sameForAll, setSameForAll] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
   const [showPGPopup, setShowPGPopup] = useState(false);
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
     attendeeName: string;
+    accessCode?: string;
   }
 
   const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
@@ -96,16 +102,30 @@ const CheckoutPage: React.FC = () => {
     });
   }, [ticketSlots.length]);
 
+  // When "same for all" is on, editing ticket 1 mirrors the change to every
+  // other slot so a single set of details covers the whole bulk booking.
   const updateAttendee = (index: number, field: keyof AttendeeFormEntry, value: string) => {
-    setAttendeeDetails((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+    setAttendeeDetails((prev) =>
+      prev.map((a, i) => (i === index || (sameForAll && index === 0) ? { ...a, [field]: value } : a))
+    );
   };
 
   const updateCustomAnswer = (index: number, fieldId: string, value: string) => {
     setAttendeeDetails((prev) =>
       prev.map((a, i) =>
-        i === index ? { ...a, customAnswers: { ...a.customAnswers, [fieldId]: value } } : a
+        i === index || (sameForAll && index === 0)
+          ? { ...a, customAnswers: { ...a.customAnswers, [fieldId]: value } }
+          : a
       )
     );
+  };
+
+  // Flip the toggle on: immediately copy ticket 1's current details onto every slot.
+  const handleToggleSameForAll = (checked: boolean) => {
+    setSameForAll(checked);
+    if (checked) {
+      setAttendeeDetails((prev) => (prev.length > 0 ? prev.map(() => ({ ...prev[0] })) : prev));
+    }
   };
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
@@ -271,6 +291,7 @@ const CheckoutPage: React.FC = () => {
     }
 
     setStep('processing');
+    setCheckoutError(null);
     try {
       const eventRef = doc(db, 'companies', companyId, 'events', event.id);
 
@@ -358,7 +379,33 @@ const CheckoutPage: React.FC = () => {
           0
         );
 
-        transaction.update(eventRef, { tiers: updatedTiers });
+        // Atomically enforce + consume the access code inside the same
+        // transaction that sells the tickets, so two simultaneous checkouts
+        // sharing one code can't both slip through. A code is single-use —
+        // once it's bought tickets once, it's dead for any further purchase.
+        let updatedAccessCodes: AccessCodeEntry[] | undefined;
+        if (accessCode) {
+          const currentAccessCodes = (eventSnap.data().accessCodes || []) as AccessCodeEntry[];
+          const cleaned = accessCode.trim().toUpperCase();
+          const entryIndex = currentAccessCodes.findIndex((e) => e.code.trim().toUpperCase() === cleaned);
+          if (entryIndex !== -1) {
+            const entry = currentAccessCodes[entryIndex];
+            if (entry.usedAt) {
+              throw new Error('CODE_ALREADY_USED');
+            }
+            if (entry.maxTickets && totalQty > entry.maxTickets) {
+              throw new Error('CODE_LIMIT_REACHED');
+            }
+            updatedAccessCodes = currentAccessCodes.map((e, i) =>
+              i === entryIndex ? { ...e, usedCount: totalQty, usedAt: new Date().toISOString() } : e
+            );
+          }
+        }
+
+        transaction.update(eventRef, {
+          tiers: updatedTiers,
+          ...(updatedAccessCodes ? { accessCodes: updatedAccessCodes } : {}),
+        });
 
         attendeeWrites.forEach(
           (
@@ -400,9 +447,10 @@ const CheckoutPage: React.FC = () => {
               purchasedAt: serverTimestamp(),
               paymentMode: PAYMENT_MODE_LABELS[method],
               paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
+              accessCode: accessCode || null,
             });
 
-            created.push({ ticketId, tierName, attendeeName });
+            created.push({ ticketId, tierName, attendeeName, accessCode });
           }
         );
       });
@@ -411,6 +459,14 @@ const CheckoutPage: React.FC = () => {
       setStep('success');
     } catch (err) {
       console.error('Payment/ticket creation failed:', err);
+      const code = (err as Error)?.message;
+      setCheckoutError(
+        code === 'CODE_ALREADY_USED'
+          ? 'This access code has already been used to book tickets and can\'t be used again.'
+          : code === 'CODE_LIMIT_REACHED'
+            ? 'This access code allows fewer tickets than you selected. Try a smaller quantity.'
+            : 'Something went wrong while booking your tickets. Please try again.'
+      );
       setStep('details'); // let them retry
     }
   };
@@ -490,10 +546,25 @@ const CheckoutPage: React.FC = () => {
               <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">
                 Attendee details{totalQty > 1 ? ` · ${totalQty} tickets` : ''}
               </h2>
+
+              {totalQty > 1 && (
+                <label className="mb-4 flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={sameForAll}
+                    onChange={(e) => handleToggleSameForAll(e.target.checked)}
+                    className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-[#007A78] focus:ring-[#007A78]"
+                  />
+                  Use the same details for all {totalQty} tickets
+                </label>
+              )}
+
               <div className="flex flex-col gap-5">
-                {attendeeDetails.map((entry, index) => (
+                {attendeeDetails.map((entry, index) => {
+                  if (sameForAll && index > 0) return null;
+                  return (
                   <div key={index} className="flex flex-col gap-3">
-                    {totalQty > 1 && (
+                    {totalQty > 1 && !sameForAll && (
                       <p className="text-xs font-bold text-[#007A78]">
                         Ticket {index + 1} · {ticketSlots[index]?.tierName}
                       </p>
@@ -610,9 +681,10 @@ const CheckoutPage: React.FC = () => {
                       );
                     })}
 
-                    {index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
+                    {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -620,7 +692,10 @@ const CheckoutPage: React.FC = () => {
       </main>
 
       {/* ── Sticky pay bar ───────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex justify-center z-30 dark:border-slate-700 dark:bg-slate-900">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex flex-col items-center gap-2 z-30 dark:border-slate-700 dark:bg-slate-900">
+        {checkoutError && (
+          <p className="w-full max-w-xl text-center text-xs font-medium text-red-500">{checkoutError}</p>
+        )}
         <div className="flex w-full max-w-xl items-center gap-3">
           <div className="flex-1">
             <p className="text-xs text-slate-500 dark:text-slate-400">{totalQty} ticket{totalQty === 1 ? '' : 's'}</p>
