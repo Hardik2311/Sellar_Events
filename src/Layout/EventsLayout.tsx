@@ -1,4 +1,4 @@
-import { Suspense, useRef, useEffect, useState } from 'react';
+import { Suspense, useRef, useEffect, useState, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2, Landmark } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -64,13 +64,19 @@ const EventsLayout = () => {
       key: 'add-expense',
       label: 'Add Expense',
       icon: <IndianRupee size={18} />,
-      onClick: () => setIsExpenseModalOpen(true),
+      onClick: () => {
+        setIsExpenseModalOpen(true);
+        loadEvents(true); // fresh fetch — naya event turant list me dikhe
+      },
     },
     {
       key: 'add-income',
       label: 'Add Income',
       icon: <Landmark size={18} />,
-      onClick: () => setIsIncomeModalOpen(true),
+      onClick: () => {
+        setIsIncomeModalOpen(true);
+        loadEvents(true);
+      },
     },
     {
       key: 'share',
@@ -94,32 +100,29 @@ const EventsLayout = () => {
     setIsQuickActionsOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (!profile?.companyId) {
-      // profile is still resolving (e.g. right after login) — stay in
-      // loading state instead of falsely reporting "loaded with 0 events".
-      // Effect re-runs automatically once companyId arrives.
-      return;
-    }
-    let cancelled = false;
-    setEventsLoading(true);
-    fetchEventDashboardData({
-      companyId: profile.companyId,
-      startDate: '2000-01-01',
-      endDate: '2100-01-01',
-      cacheKey: `event_list_cache_v2_${profile.companyId}`,
-    })
-      .then((result) => {
-        if (!cancelled) setEvents(result.events);
+  // Extracted so it can be re-run on demand (e.g. right before opening the
+  // Expense/Income modal) — not just once on mount/companyId change.
+  const loadEvents = useCallback(
+    (forceRefresh = false) => {
+      if (!profile?.companyId) return;
+      setEventsLoading(true);
+      return fetchEventDashboardData({
+        companyId: profile.companyId,
+        startDate: '2000-01-01',
+        endDate: '2100-01-01',
+        cacheKey: `event_list_cache_v2_${profile.companyId}`,
+        forceRefresh,
       })
-      .catch((e) => console.error('Failed to load events for expense modal:', e))
-      .finally(() => {
-        if (!cancelled) setEventsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [profile?.companyId]);
+        .then((result) => setEvents(result.events))
+        .catch((e) => console.error('Failed to load events for expense modal:', e))
+        .finally(() => setEventsLoading(false));
+    },
+    [profile?.companyId]
+  );
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   const sidebarLinkClass = (isActive: boolean) =>
     `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${isActive
@@ -168,13 +171,25 @@ const EventsLayout = () => {
             </button>
           )}
           <ShowWrapper permission={Permission.ADD_EXPENSE}>
-            <button onClick={() => setIsExpenseModalOpen(true)} className={sidebarLinkClass(false)}>
+            <button
+              onClick={() => {
+                setIsExpenseModalOpen(true);
+                loadEvents(true);
+              }}
+              className={sidebarLinkClass(false)}
+            >
               <span><IndianRupee size={18} /></span>
               <span>Add Expense</span>
             </button>
           </ShowWrapper>
           <ShowWrapper permission={Permission.ADD_INCOME}>
-            <button onClick={() => setIsIncomeModalOpen(true)} className={sidebarLinkClass(false)}>
+            <button
+              onClick={() => {
+                setIsIncomeModalOpen(true);
+                loadEvents(true);
+              }}
+              className={sidebarLinkClass(false)}
+            >
               <span><Landmark size={18} /></span>
               <span>Add Income</span>
             </button>
