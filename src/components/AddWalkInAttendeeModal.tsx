@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
 import type { EventSummary } from '../types/event.types';
 import { createWalkInAttendee } from '../lib/ticketing';
@@ -12,6 +12,16 @@ interface AddWalkInAttendeeModalProps {
 }
 
 const PAYMENT_MODES = ['Cash', 'UPI', 'Card', 'Other'] as const;
+
+// Same rule as the Attendees page: date-only comparison, time ignored.
+const isEventDateInFuture = (event: EventSummary | null): boolean => {
+  if (!event?.startDate) return false;
+  const eventDate = new Date(event.startDate);
+  const today = new Date();
+  eventDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return eventDate.getTime() > today.getTime();
+};
 
 const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
   isOpen,
@@ -37,11 +47,16 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
     [event, tierId]
   );
 
-  // NOTE: `sold` reflected here comes from the parent's EventSummary mapping,
-  // which currently always reports 0 — so this is a soft hint only. The
-  // Firestore transaction (lib/ticketing.ts) is the real source of truth
-  // and will still block overselling correctly.
   const remaining = selectedTier ? selectedTier.total - selectedTier.sold : null;
+  const isFutureEvent = isEventDateInFuture(event);
+
+  // Force the checkbox off whenever the modal opens for an event whose date
+  // hasn't arrived yet — prevents a stale "true" from a previous open.
+  useEffect(() => {
+    if (isOpen && isFutureEvent) {
+      setMarkCheckedIn(false);
+    }
+  }, [isOpen, isFutureEvent]);
 
   if (!isOpen || !event) return null;
 
@@ -88,7 +103,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
         phone: phone.trim(),
         amountPaid,
         paymentMode,
-        markCheckedIn,
+        markCheckedIn: markCheckedIn && !isFutureEvent,
         allowOverbook,
         customFieldAnswers: customAnswers,
       });
@@ -254,15 +269,24 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
             );
           })}
 
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+          <label
+            className={`flex items-center gap-2 text-xs font-medium ${isFutureEvent ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed' : 'text-slate-700 dark:text-slate-300'
+              }`}
+          >
             <input
               type="checkbox"
-              checked={markCheckedIn}
+              checked={markCheckedIn && !isFutureEvent}
+              disabled={isFutureEvent}
               onChange={(e) => setMarkCheckedIn(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
+              className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light] disabled:cursor-not-allowed disabled:opacity-50"
             />
             Mark as checked-in immediately
           </label>
+          {isFutureEvent && (
+            <p className="-mt-2 text-xs text-amber-600">
+              Check-in opens on the event date. This attendee will be added as "not arrived".
+            </p>
+          )}
         </div>
 
         <div className="sticky bottom-0 flex gap-2 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">

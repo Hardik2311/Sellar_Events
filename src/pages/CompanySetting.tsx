@@ -37,15 +37,10 @@ const Settings: React.FC = () => {
   const { profile } = useAuth();
   const { settings, loading } = useCompanySettings();
 
-  const [showGstModal, setShowGstModal] = useState(false);
-  const [showSubdomainModal, setShowSubdomainModal] = useState(false);
-  const [pendingScheme, setPendingScheme] = useState<'regular' | 'composition' | null>(null);
-  const [gstInput, setGstInput] = useState('');
-  const [gstError, setGstError] = useState<string | null>(null);
-  const [savingGst, setSavingGst] = useState(false);
+ const [showSubdomainModal, setShowSubdomainModal] = useState(false);
 
-  // GSTIN shown/edited directly on this page, linked to profile.gstinNumber
-  const [gstinDraft, setGstinDraft] = useState(profile?.gstinNumber ?? '');
+// GSTIN shown/edited directly on this page, linked to live business_info/profile via settings
+const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
   const [gstinDraftError, setGstinDraftError] = useState<string | null>(null);
   const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
 
@@ -81,27 +76,18 @@ const Settings: React.FC = () => {
     }
   }, [loading, initialized, settings]);
 
-  // Keep this page's GSTIN field in sync with Edit Profile.
-  // Only auto-overwrite while the user hasn't started typing here,
-  // so an in-progress edit on this page isn't clobbered by a live update.
   React.useEffect(() => {
-    if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
-      setGstinDraft(profile?.gstinNumber ?? '');
-      setGstinDraftInitialized(true);
-    }
-  }, [profile?.gstinNumber, gstinDraftInitialized]);
+  if (loading) return;
+  if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
+    setGstinDraft(settings.gstinNumber ?? '');
+    setGstinDraftInitialized(true);
+  }
+}, [settings.gstinNumber, loading, gstinDraftInitialized]);
 
   const handleSchemeSelect = (value: 'none' | 'regular' | 'composition') => {
-    const needsGstin = (value === 'regular' || value === 'composition') && !profile?.gstinNumber;
-    if (needsGstin) {
-      setPendingScheme(value);
-      setGstInput('');
-      setGstError(null);
-      setShowGstModal(true);
-      return;
-    }
-    setDraft((prev) => ({ ...prev, gstScheme: value }));
-  };
+  // No modal — user fills GSTIN in the field above, validated at Save time.
+  setDraft((prev) => ({ ...prev, gstScheme: value }));
+};
 
   const handleSaveSettings = async () => {
     if (!profile?.companyId) {
@@ -142,43 +128,6 @@ const Settings: React.FC = () => {
       setSaveError('Failed to save settings. Please try again.');
     } finally {
       setIsSaving(false);
-    }
-  };
-  const handleGstCancel = () => {
-    setShowGstModal(false);
-    setPendingScheme(null);
-    setGstError(null);
-  };
-
-  const handleGstSave = async () => {
-    const value = gstInput.trim().toUpperCase();
-    if (!GSTIN_REGEX.test(value)) {
-      setGstError('Please enter a valid 15-character GSTIN.');
-      return;
-    }
-    if (!profile?.companyId) {
-      setGstError('Company not found. Please try again.');
-      return;
-    }
-    setSavingGst(true);
-    setGstError(null);
-    try {
-      const businessRef = doc(db, 'companies', profile.companyId, 'business_info', 'profile');
-      await setDoc(businessRef, { gstinNumber: value }, { merge: true });
-      if (pendingScheme) {
-        setDraft((prev) => ({ ...prev, gstScheme: pendingScheme }));
-      }
-      // NEW: sync the page-level GSTIN field so a later "Save Settings"
-      // click doesn't think GSTIN is still missing.
-      setGstinDraft(value);
-      setGstinDraftError(null);
-      setShowGstModal(false);
-      setPendingScheme(null);
-    } catch (err) {
-      console.error('Failed to save GSTIN:', err);
-      setGstError('Failed to save GST number. Please try again.');
-    } finally {
-      setSavingGst(false);
     }
   };
 
@@ -385,54 +334,6 @@ const Settings: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {showGstModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-sm bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Enter GST Number</h2>
-              <button
-                type="button"
-                onClick={handleGstCancel}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-              A GSTIN is required to enable this GST scheme. Please enter your 15-character GSTIN to continue.
-            </p>
-            <input
-              type="text"
-              value={gstInput}
-              maxLength={15}
-              disabled={savingGst}
-              onChange={(e) => setGstInput(e.target.value.toUpperCase())}
-              placeholder="15-character GSTIN"
-              className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm uppercase text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
-            />
-            {gstError && <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstError}</p>}
-            <div className="flex gap-2 mt-4">
-              <button
-                type="button"
-                onClick={handleGstCancel}
-                disabled={savingGst}
-                className="flex-1 py-2.5 rounded-sm text-sm font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleGstSave}
-                disabled={savingGst}
-                className="flex-1 py-2.5 rounded-sm text-sm font-semibold text-white bg-[#007A78] hover:bg-[#006361] disabled:opacity-50"
-              >
-                {savingGst ? 'Saving…' : 'Save & Continue'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {profile?.companyId && (
         <EventSubdomainModal

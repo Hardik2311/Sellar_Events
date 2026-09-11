@@ -118,9 +118,11 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         eventCategory: companyData.eventCategory || '',
         website: companyData.website || '',
         gstinNumber: companyData.gstinNumber || '',
-        // business_info's explicit gstType (if EditProfile ever saved one) wins;
-        // otherwise derive it from settings/general — the doc signup actually writes to.
-        gstType: companyData.gstType || reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
+// settings/general is the single source of truth for GST scheme — both
+// EditProfile and the Company Settings page write here, so always derive
+// gstType from it. business_info/profile.gstType is legacy/unused for reads
+// now, since it goes stale whenever the scheme is changed from the other page.
+gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
         streetAddress: companyAddress.street || '',
         landmark: companyAddress.landmark || '',
         city: companyAddress.city || '',
@@ -208,7 +210,6 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
       ...(gstinNumber !== undefined && { gstinNumber }),
-      ...(gstType !== undefined && { gstType }),
       ...(panNumber !== undefined && { panNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),
       // NEW — mirror social handles into business_info/profile too, since
