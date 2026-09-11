@@ -19,6 +19,7 @@ import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { stripHtmlTags } from '../lib/utils';
+import CustomerFooter from '../components/CustomerFooter';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
 
@@ -36,16 +37,14 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void; shareBaseUrl
             onClick={onOpen}
         >
             <div className={`relative h-36 w-full bg-gradient-to-br ${gradient}`}>
-                {(event.coverImageDesktop || event.coverImageMobile) ? (
-                    <CoverImageDisplay
-                        desktopSrc={event.coverImageDesktop}
-                        mobileSrc={event.coverImageMobile}
+                {(event.coverImageDesktop || event.coverImageMobile || event.coverImage) && (
+                    <img
+                        src={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
                         alt={event.title}
+                        className="absolute inset-0 h-full w-full object-cover"
                     />
-                ) : event.coverImage && (
-                    <img src={event.coverImage} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
                 )}
-                <span className="absolute top-2 left-2 rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+                <span className="rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white shadow-sm">
                     {label}
                 </span>
                 {event.isOnline && (
@@ -372,14 +371,12 @@ const CustomerEventDiscover: React.FC = () => {
                                     <div
                                         className={`relative flex h-52 w-full flex-col justify-end bg-gradient-to-br ${CATEGORY_GRADIENTS[featured.category] ?? CATEGORY_GRADIENTS.Other} p-4`}
                                     >
-                                        {(featured.coverImageDesktop || featured.coverImageMobile) ? (
-                                            <CoverImageDisplay
-                                                desktopSrc={featured.coverImageDesktop}
-                                                mobileSrc={featured.coverImageMobile}
+                                        {(featured.coverImageDesktop || featured.coverImageMobile || featured.coverImage) && (
+                                            <img
+                                                src={featured.coverImageDesktop || featured.coverImageMobile || featured.coverImage || undefined}
                                                 alt={featured.title}
+                                                className="absolute inset-0 h-full w-full object-cover"
                                             />
-                                        ) : featured.coverImage && (
-                                            <img src={featured.coverImage} alt={featured.title} className="absolute inset-0 h-full w-full object-cover" />
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                                         <span className="relative mb-1 w-fit rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-semibold text-white">
@@ -415,10 +412,19 @@ const CustomerEventDiscover: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
-                        </>
+                                                </>
                     )}
                 </div>
             </main>
+
+            <CustomerFooter
+                organizationName={settings.organizationName}
+                website={settings.website}
+                instagram={settings.instagram}
+                facebook={settings.facebook}
+                twitter={settings.twitter}
+                whatsappNumber={settings.whatsappNumber}
+            />
         </div>
     );
 };

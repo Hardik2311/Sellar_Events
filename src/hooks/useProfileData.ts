@@ -203,7 +203,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       promises.push(setDoc(userDocRef, userUpdateData, { merge: true }));
     }
 
-    const companyUpdateData: Record<string, any> = {
+        const companyUpdateData: Record<string, any> = {
       ...(organizationName !== undefined && { organizationName, name: organizationName }),
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
@@ -211,6 +211,12 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       ...(gstType !== undefined && { gstType }),
       ...(panNumber !== undefined && { panNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),
+      // NEW — mirror social handles into business_info/profile too, since
+      // customer-facing pages (useCompanySettings) read only from here,
+      // not from the user doc where these were previously saved alone
+      ...(userFields.instagram !== undefined && { instagram: userFields.instagram }),
+      ...(userFields.facebook !== undefined && { facebook: userFields.facebook }),
+      ...(userFields.twitter !== undefined && { twitter: userFields.twitter }),
       ...(userFields.phone !== undefined && { ownerPhoneNumber: userFields.phone }),
       updatedAt: serverTimestamp(),
     };
