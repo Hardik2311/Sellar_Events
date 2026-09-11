@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw, Lock, Wallet } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw, Lock, Wallet, AlertTriangle } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -16,6 +16,9 @@ import {
   getPriceLabel,
   getAvailability,
   buildEventSlugId,
+   isCreditExpired,
+  formatCreditExpiry,
+  EVENT_CREDIT_VALIDITY_DAYS,
 } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
@@ -102,7 +105,7 @@ const OrganizerEventCard: React.FC<{
           />
         )}
         <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-          <span className="rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="rounded-sm bg-white px-2 py-0.5 text-xs font-medium text-slate-700 shadow-sm">
             {label}
           </span>
           {event.isPrivate && (
@@ -266,14 +269,21 @@ const OrganizerEventCard: React.FC<{
         ) : (
           <>
             <div className="mt-1 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
-              <div className="flex items-center gap-1.5">
-                <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
-                <ToggleSwitch
-                  checked={isLive}
-                  disabled={isCompleted || !onToggleLive}
-                  onChange={() => onToggleLive?.(event.id)}
-                />
+                            <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <Radio size={13} className={isLive ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live</span>
+                  <ToggleSwitch
+                    checked={isLive}
+                    disabled={isCompleted || !onToggleLive}
+                    onChange={() => onToggleLive?.(event.id)}
+                  />
+                </div>
+                {isLive && event.creditExpiresAt && (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                    Credit valid till {formatCreditExpiry(event.creditExpiresAt)}
+                  </span>
+                )}
               </div>
 
               {showFeaturedToggle && onToggleFeatured ? (
@@ -414,6 +424,7 @@ const OrganizerEventDiscover: React.FC = () => {
 
   const [toggleLiveError, setToggleLiveError] = useState<string | null>(null);
   const [confirmingLiveEvent, setConfirmingLiveEvent] = useState<PublicEvent | null>(null);
+  const [showPublishCaution, setShowPublishCaution] = useState(false); // 2nd-step credit caution
   useEffect(() => {
     if (!toggleLiveError) return;
     const t = setTimeout(() => setToggleLiveError(null), 3000);
@@ -467,12 +478,12 @@ const OrganizerEventDiscover: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3.5 shadow-xs">
+      <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 shadow-xs">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-              <span className="text-[#007A78] dark:text-[#2DD4BF]">Out</span>sold
-            </h1>
+            <div className="flex items-center gap-2">
+              <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />
+            </div>
             <div className="flex items-center gap-3">
               <Link
                 to="/events/account/recharge"
@@ -487,7 +498,7 @@ const OrganizerEventDiscover: React.FC = () => {
                 onClick={() => setIsSubdomainModalOpen(true)}
                 className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
-                <LinkIcon size={14} /> <span className="hidden sm:inline">Event Link</span>
+                <LinkIcon size={16} /> <span className="hidden sm:inline">Event Link</span>
               </button>
             </div>
           </div>
@@ -778,19 +789,24 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
         </div>
       )}
-     {confirmingLiveEvent && (
+      {confirmingLiveEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">
               Publish this event?
             </h2>
-            {confirmingLiveEvent.everPublished ? (
+                        {!isCreditExpired(confirmingLiveEvent) ? (
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                This event has been live before, so re-publishing "{stripHtmlTags(confirmingLiveEvent.title)}" won't use another credit.
+                This event is still within its 3-month credit window
+                {confirmingLiveEvent.creditExpiresAt && (
+                  <> (valid till <span className="font-semibold">{formatCreditExpiry(confirmingLiveEvent.creditExpiresAt)}</span>)</>
+                )}
+                , so re-publishing "{stripHtmlTags(confirmingLiveEvent.title)}" won't use another credit.
               </p>
             ) : (
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Making "{stripHtmlTags(confirmingLiveEvent.title)}" live will use 1 event credit. You currently have{' '}
+                Making "{stripHtmlTags(confirmingLiveEvent.title)}" live will use 1 event credit, keeping it live for{' '}
+                {EVENT_CREDIT_VALIDITY_DAYS} days (3 months). You currently have{' '}
                 <span className="font-semibold text-[#007A78]">{creditsLoading ? '…' : credits}</span> credit{credits === 1 ? '' : 's'}.
               </p>
             )}
@@ -804,10 +820,59 @@ const OrganizerEventDiscover: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleConfirmGoLive}
+                onClick={() => setShowPublishCaution(true)}   // hamesha caution modal pehle dikhao
                 className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
               >
                 Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPublishCaution && confirmingLiveEvent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800 border-2 border-amber-400">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={20} className="text-amber-500 shrink-0" />
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                Are you sure you want to publish?
+              </h2>
+            </div>
+                        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              {!isCreditExpired(confirmingLiveEvent) ? (
+                <>This event's current credit is still valid
+                  {confirmingLiveEvent.creditExpiresAt && <> until <span className="font-semibold">{formatCreditExpiry(confirmingLiveEvent.creditExpiresAt)}</span></>}
+                  , so re-publishing <span className="font-semibold">won't use another credit</span>. Please confirm you want to make it live again.</>
+              ) : (
+                <>Once you click <span className="font-semibold">Publish</span>, 1 event credit will be{' '}
+                  <span className="font-semibold">utilised immediately</span> and{' '}
+                  <span className="font-semibold text-red-600">will not be refunded</span> even if the event
+                  is not used, cancelled, or taken down later. This credit will keep the event live for{' '}
+                  <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> — after that
+                  it will automatically move back to Draft and republishing will use a fresh credit.</>
+              )}
+            </p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Please make sure you are certain before proceeding.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPublishCaution(false)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowPublishCaution(false);
+                  await handleConfirmGoLive();
+                }}
+                className="rounded-sm bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+              >
+                Yes, Publish
               </button>
             </div>
           </div>

@@ -73,15 +73,16 @@ const EventDashboardContent: React.FC = () => {
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-3 sticky top-0 z-10 shadow-xs">
-        {/* Left: icon */}
-        <div className="p-2 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] w-fit">
-          <LayoutDashboard size={20} />
+        {/* Left: logo — mobile only, desktop already has it in the sidebar */}
+        <div className="md:hidden w-fit">
+          <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />
         </div>
 
-        {/* Center: title + org name */}
+        {/* Center: title + org name + tagline */}
         <div className="text-center">
-          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Organizer Dashboard</h1>
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Dashboard</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{profile?.organizationName ?? ''}</p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Real-time ticketing & sales analytics</p>
         </div>
 
         {/* Right: credits badge + eye toggle button */}
@@ -108,11 +109,8 @@ const EventDashboardContent: React.FC = () => {
       </header>
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
-      <main className="grow overflow-y-auto p-3 sm:p-5">
-        <div className="max-w-7xl mx-auto mb-4">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 text-center">
-            Real-time ticketing & sales analytics
-          </p>
+      <main className="grow overflow-y-auto p-1.5 sm:p-5">
+        <div className="max-w-7xl mx-auto mb-1">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <div />
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
@@ -137,7 +135,7 @@ const EventDashboardContent: React.FC = () => {
         </div>
 
         <div className="mx-auto max-w-7xl relative">
-          <div className="mb-2">
+          <div className="mb-1">
             <EventListCard
               events={data?.events ?? []}
               selectedEventId={selectedEventId}

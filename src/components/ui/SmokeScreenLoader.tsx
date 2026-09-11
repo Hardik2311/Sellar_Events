@@ -60,7 +60,7 @@ const SmokeScreenLoader: React.FC<SmokeScreenLoaderProps> = ({
         <img
           src="/Outsold.png"
           alt="Outsold"
-          className="h-20 w-auto mb-4"
+          className="h-23 w-auto mb-4"
         />
         <Loader2 className="animate-spin text-white" size={48} />
         <p className="mt-4 text-base font-semibold text-white text-center px-6">

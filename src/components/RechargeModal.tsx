@@ -8,10 +8,10 @@ import { useEventCredits } from '../hooks/useEventCredits';
 const PLANS = [
   {
     events: 1,
-    price: 500,
+    price: 1000,
     tag: null,
     features: [
-      '1 event credit',
+      '1 event credit (valid 3 months once published)',
       'Full ticketing & check-in tools',
       'Real-time sales dashboard',
       'QR-based attendee check-in',
@@ -19,14 +19,23 @@ const PLANS = [
     ],
   },
   {
-    events: 10,
-    price: 5000,
-    tag: 'Most Popular',
+    events: 5,
+    price: 3999,
+    tag: null,
     features: [
-      '10 event credits',
+      '5 event credits',
       'Everything in the 1-event plan',
       'Priority email support',
       'Bulk attendee import (Excel)',
+    ],
+  },
+  {
+    events: 10,
+    price: 5999,
+    tag: 'Most Popular',
+    features: [
+      '10 event credits',
+      'Everything in the 5-event plan',
       'Sales, Expense & P&L reports',
       'Custom attendee questions',
     ],
@@ -84,6 +93,14 @@ const RechargePage: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Refund caution — top */}
+          <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
+            <span className="text-amber-600 dark:text-amber-400 font-bold text-sm leading-none mt-0.5">⚠</span>
+            <p className="text-xs text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+              Event credits are <span className="font-bold">non-refundable</span> once an event is published and the credit is used — this applies even if you later delete, cancel, or don't use the event. Each credit keeps an event live for <span className="font-bold">3 months</span>; after that it auto-unpublishes and republishing uses another credit. Please purchase only as many credits as you actually need.
+            </p>
+          </div>
+
           {/* Plans / Contact admin */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>
@@ -94,7 +111,7 @@ const RechargePage: React.FC = () => {
             <CardContent>
               {!selectedPlan ? (
                 <div className="flex flex-col gap-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     {PLANS.map((plan) => (
                       <button
                         key={plan.events}
@@ -127,9 +144,14 @@ const RechargePage: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                    Credits never expire. Each event you create uses 1 credit; deleting an event does not refund it.
-                  </p>
+                  <div className="mt-1 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <span className="text-sm leading-none">⚠</span> Important — No Refunds &amp; 3-Month Validity
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                      Unused credits never expire, but once you <span className="font-bold">publish an event and a credit is consumed, it cannot be refunded or reversed under any circumstances</span> — deleting the event, cancelling it, low attendance, or accidental publishing included. Each consumed credit only keeps that event live for <span className="font-bold">3 months</span>; after that it auto-unpublishes and going live again uses a fresh credit. Use credits only when you are ready to run the event.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center text-center gap-3 py-4">
@@ -150,6 +172,14 @@ const RechargePage: React.FC = () => {
                   <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mt-1">
                     Online payment isn't available yet. Contact our team to activate this plan — we'll manually add credits to your account.
                   </p>
+                  <div className="w-full max-w-xs rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-2.5 text-left">
+                    <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                      <span className="text-sm leading-none">⚠</span> Final Confirmation Notice
+                    </p>
+                    <p className="text-xs text-red-700 dark:text-red-400 mt-1 leading-relaxed">
+                      By purchasing this plan you acknowledge that credits are <span className="font-bold">strictly non-refundable</span> once consumed on publishing an event, regardless of the reason (event deleted, cancelled, duplicated by mistake, or otherwise). Each credit only keeps that event live for <span className="font-bold">3 months</span> — after it expires, republishing will use another credit. Please confirm only if you are sure you need these credits.
+                    </p>
+                  </div>
                   <div className="flex gap-2 w-full max-w-xs mt-1">
                     <button
                       onClick={() => setSelectedPlan(null)}

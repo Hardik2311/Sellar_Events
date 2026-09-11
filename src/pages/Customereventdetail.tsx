@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2,Ticket, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Minus, Plus, User, Loader2, Ticket, X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
@@ -17,9 +17,10 @@ import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { parseEventIdFromSlug } from '../data/events';
 import { useAuth } from '../context/AuthContext';
-import { stripHtmlTags } from '../lib/utils';
+import RichTextDisplay from '../components/ui/RichTextDisplay';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 import { DEFAULT_TEXT_STYLE } from '../types/event.types';
+import { stripHtmlTags } from '../lib/utils';
 import { useSearchParams } from 'react-router-dom'; // NEW — reads ?code= from the shared link
 
 const CustomerEventDetail: React.FC = () => {
@@ -28,7 +29,7 @@ const CustomerEventDetail: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
-  
+
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
   const { settings } = useCompanySettings(resolvedCompanyId);
@@ -47,7 +48,7 @@ const CustomerEventDetail: React.FC = () => {
   const [codeError, setCodeError] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!event?.id) return;
 
     const isOrganizerLivePreview =
@@ -124,14 +125,14 @@ const CustomerEventDetail: React.FC = () => {
       </div>
     );
   }
-if (!event) {
+  if (!event) {
     // Unreachable in practice (handled above) — this just lets
     // TypeScript treat `event` as defined for the rest of the component.
     return null;
   }
   // NEW — code gate: block everything below until verified
   if (!isVerified) {
-        const handleVerify = () => {
+    const handleVerify = () => {
       if (verifyAccessCode(event, codeInput)) {
         sessionStorage.setItem(`eventAccessVerified:${event.id}`, 'true');
         setIsVerified(true);
@@ -141,7 +142,7 @@ if (!event) {
       }
     };
 
-        const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
+    const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
 
     return (
       <div className="relative flex h-dvh w-full flex-col items-center justify-center gap-4 overflow-hidden bg-slate-100 p-6 text-center dark:bg-[#0F172A]">
@@ -160,7 +161,7 @@ if (!event) {
             <h2 className="text-base font-semibold text-white">Enter access code</h2>
             <p className="mt-1 text-sm text-slate-200">This event link is code-protected. Enter the code shared with you.</p>
           </div>
-                  <input
+          <input
             type="text"
             value={codeInput}
             onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
@@ -245,7 +246,7 @@ if (!event) {
     if (!event) return;
     if (navigator.share) {
       try {
-        await navigator.share({ title: event.title, url: window.location.href });
+        await navigator.share({ title: stripHtmlTags(event.title), url: window.location.href });
         return;
       } catch {
         return; // user cancelled share sheet, no-op
@@ -324,21 +325,21 @@ if (!event) {
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <h1
+          <RichTextDisplay
+            as="h1"
+            html={event.title}
             className="text-2xl font-bold text-white"
             style={
               event.titleStyle
                 ? {
-                  fontSize: event.titleStyle.fontSize + 8, // hero heading is naturally larger — offset keeps proportion
+                  fontSize: event.titleStyle.fontSize + 8,
                   fontWeight: event.titleStyle.fontWeight,
                   fontStyle: event.titleStyle.fontStyle,
                   color: event.titleStyle.color,
                 }
                 : undefined
             }
-          >
-            {stripHtmlTags(event.title)}
-          </h1>
+          />
         </div>
       </div>
 
@@ -383,27 +384,15 @@ if (!event) {
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <p
+              <RichTextDisplay
+                as="p"
+                html={event.description}
                 className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
                   ? 'text-slate-800 dark:text-slate-100'
                   : ''
                   }`}
-                style={
-                  event.descriptionStyle
-                    ? {
-                      fontSize: event.descriptionStyle.fontSize,
-                      fontWeight: event.descriptionStyle.fontWeight,
-                      fontStyle: event.descriptionStyle.fontStyle,
-                      color:
-                        event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
-                          ? undefined
-                          : event.descriptionStyle.color,
-                    }
-                    : undefined
-                }
-              >
-                {stripHtmlTags(event.description)}
-              </p>
+                style={event.descriptionStyle ? { fontSize: event.descriptionStyle.fontSize, fontWeight: event.descriptionStyle.fontWeight, fontStyle: event.descriptionStyle.fontStyle, color: event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color ? undefined : event.descriptionStyle.color } : undefined}
+              />
             </CardContent>
           </Card>
 
@@ -489,10 +478,12 @@ if (!event) {
             <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
               <CardContent className="pt-4">
                 <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Important Information &amp; Consent</h2>
-                <p
+                <RichTextDisplay
+                  as="p"
+                  html={event.consentText ?? ''}
                   className={`whitespace-pre-line leading-relaxed mb-3 ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                    ? 'text-slate-800 dark:text-slate-100'
-                    : ''
+                      ? 'text-slate-800 dark:text-slate-100'
+                      : ''
                     }`}
                   style={
                     event.consentStyle
@@ -507,9 +498,7 @@ if (!event) {
                       }
                       : undefined
                   }
-                >
-                  {stripHtmlTags(event.consentText)}
-                </p>
+                />
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100 cursor-pointer">
                   <input
                     type="checkbox"

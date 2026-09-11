@@ -154,7 +154,7 @@ const EventsLayout = () => {
           {can(Permission.VIEW_CREATE_EVENT) && (
             <NavLink to="/events/create" end className={({ isActive }) => sidebarLinkClass(isActive)}>
               <span><PlusCircle size={18} /></span>
-              <span>Create Event</span>
+              <span>Add Event</span>
             </NavLink>
           )}
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { addDoc, arrayUnion, collection, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import { generateAccessCode, type PublicEvent } from '../data/events'; // NEW — import generateAccessCode alongside existing type import
+import { generateAccessCode, isCreditExpired, getNewCreditExpiry, type PublicEvent } from '../data/events';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
@@ -26,6 +26,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   featured: d.featured || false,
   deletedAt: d.deletedAt ?? null,
   isPrivate: d.isPrivate || false,
+  creditExpiresAt: d.creditExpiresAt ?? null, // NEW
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -66,13 +67,26 @@ export const useOrganizerEvents = () => {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(eventsQuery, (snapshot) => {
+        const unsubscribe = onSnapshot(eventsQuery, (snapshot) => {
       const organizerName = profile.organizationName || '';
       const mapped = snapshot.docs.map((docSnap) =>
         mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, profile.companyId)
       );
       setEvents(mapped);
       setLoading(false);
+
+      // NEW — lazy auto-unpublish: there's no server cron, so whichever
+      // organizer's dashboard loads next after a credit's 3-month window
+      // has lapsed flips that event back to Draft. Customer-facing side
+      // (usePublicEvents) also filters expired events out independently,
+      // so attendees never see a stale published event either way.
+      mapped
+        .filter((e) => e.status === 'published' && isCreditExpired(e))
+        .forEach((e) => {
+          updateDoc(doc(db, 'companies', profile.companyId, 'events', e.id), {
+            status: 'draft',
+          }).catch((err) => console.error('Failed to auto-expire event:', err));
+        });
     });
 
     return () => unsubscribe();
@@ -83,22 +97,25 @@ export const useOrganizerEvents = () => {
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
 
-    if (newStatus === 'published') {
+        if (newStatus === 'published') {
       const companyRef = doc(db, 'companies', profile.companyId);
       await runTransaction(db, async (transaction) => {
         // Read the event doc INSIDE the transaction — never trust local
         // React state here, since that's what makes this bypass-proof.
         const eventSnap = await transaction.get(eventRef);
-        const alreadyPublishedBefore = eventSnap.data()?.everPublished === true;
+        const data = eventSnap.data();
 
-        if (alreadyPublishedBefore) {
-          // Re-publishing (Live -> Draft -> Live ...) after the first time
-          // is free — no credit check, no decrement.
+        // Free re-publish ONLY while the last credit's 3-month validity
+        // window hasn't lapsed yet. Once it expires, going live again is
+        // treated exactly like a fresh publish and consumes another credit.
+        const stillWithinValidity = !isCreditExpired({ creditExpiresAt: data?.creditExpiresAt ?? null });
+
+        if (stillWithinValidity) {
           transaction.update(eventRef, { status: newStatus });
           return;
         }
 
-        // First-ever publish — this is the one that must cost a credit.
+        // Credit expired (or never published) — this publish must cost a credit.
         const companySnap = await transaction.get(companyRef);
         const currentCredits = companySnap.data()?.eventCredits ?? 0;
 
@@ -106,11 +123,18 @@ export const useOrganizerEvents = () => {
           throw new Error('NO_CREDITS');
         }
 
-        transaction.update(eventRef, { status: newStatus, everPublished: true });
+        transaction.update(eventRef, {
+          status: newStatus,
+          everPublished: true,
+          creditExpiresAt: getNewCreditExpiry(), // resets the 3-month clock
+        });
         transaction.update(companyRef, { eventCredits: currentCredits - 1 });
       });
     } else {
-      // Draft par wapas laana free hai — koi refund bhi nahi
+      // Draft par wapas laana free hai — koi refund bhi nahi.
+      // NOTE: we intentionally do NOT clear creditExpiresAt here — if the
+      // organizer manually pauses and re-publishes within the 3-month
+      // window, that should still be free.
       await updateDoc(eventRef, { status: newStatus });
     }
   };

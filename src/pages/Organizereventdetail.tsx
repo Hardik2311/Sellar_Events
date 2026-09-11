@@ -23,7 +23,7 @@ import { getShareBaseUrl } from '../lib/shareLinks';
 import { usePermissions } from '../hooks/usePermissions';
 import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
 import { Permission } from '../types/permissions.types';
-import { stripHtmlTags } from '../lib/utils';
+import RichTextDisplay from '../components/ui/RichTextDisplay';
 import { shareEventLink } from '../lib/shareEvents';
 
 // Real-time single event listener
@@ -144,16 +144,16 @@ const OrganizerEventDetail: React.FC = () => {
   };
 
   const handleOpenShare = async () => {
-  if (!event) return;
-  const url = await resolveShareUrl();
-  const result = await shareEventLink({
-    shareUrl: url,
-    isPrivate: event.isPrivate,
-    eventId: event.id,
-    onRegenerateCode: regenerateAccessCode,
-  });
-  if (result === 'copied') setLinkCopiedToast(true);
-};
+    if (!event) return;
+    const url = await resolveShareUrl();
+    const result = await shareEventLink({
+      shareUrl: url,
+      isPrivate: event.isPrivate,
+      eventId: event.id,
+      onRegenerateCode: regenerateAccessCode,
+    });
+    if (result === 'copied') setLinkCopiedToast(true);
+  };
   // Small helper — uploads a base64 data URL if needed, otherwise keeps existing https URL as-is
   const uploadIfNeeded = async (img: string | null, filename: string): Promise<string | null> => {
     if (!img) return null;
@@ -330,7 +330,7 @@ const OrganizerEventDetail: React.FC = () => {
           <span className="mb-2 inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
             {label}
           </span>
-          <h1 className="text-2xl font-bold text-white">{stripHtmlTags(event.title)}</h1>
+          <RichTextDisplay as="h1" html={event.title} className="text-2xl font-bold text-white" />
         </div>
       </div>
 
@@ -375,7 +375,11 @@ const OrganizerEventDetail: React.FC = () => {
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
               <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <p className="whitespace-pre-line leading-relaxed mb-3 break-words">{stripHtmlTags(event.description)}</p>
+              <RichTextDisplay
+                as="p"
+                html={event.description}
+                className="whitespace-pre-line leading-relaxed mb-3 break-words"
+              />
             </CardContent>
           </Card>
 

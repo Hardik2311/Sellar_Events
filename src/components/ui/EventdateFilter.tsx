@@ -10,7 +10,7 @@ const getLocalDateString = (date: Date = new Date()) => {
 export interface EventFilterState {
   startDate: string;
   endDate: string;
-  filterType: 'today' | 'yesterday' | 'last7days' | 'last30days' | 'custom';
+  filterType: 'today' | 'yesterday' | 'last7days' | 'last30days' | 'custom' | 'alltime';
 }
 
 interface EventFilterContextType {
@@ -20,12 +20,18 @@ interface EventFilterContextType {
 
 const EventFilterContext = createContext<EventFilterContextType | undefined>(undefined);
 
-export const EventFilterProvider = ({ children }: { children: ReactNode }) => {
-  const [filters, setFilters] = useState<EventFilterState>({
-    startDate: getLocalDateString(),
-    endDate: getLocalDateString(),
-    filterType: 'today',
-  });
+export const EventFilterProvider = ({
+  children,
+  defaultFilterType = 'today',
+}: {
+  children: ReactNode;
+  defaultFilterType?: EventFilterState['filterType'];
+}) => {
+  const [filters, setFilters] = useState<EventFilterState>(
+    defaultFilterType === 'alltime'
+      ? { startDate: '', endDate: '', filterType: 'alltime' }
+      : { startDate: getLocalDateString(), endDate: getLocalDateString(), filterType: 'today' }
+  );
 
   return <EventFilterContext.Provider value={{ filters, setFilters }}>{children}</EventFilterContext.Provider>;
 };
@@ -42,6 +48,7 @@ const PRESET_LABELS: Record<EventFilterState['filterType'], string> = {
   last7days: 'Last 7 Days',
   last30days: 'Last 30 Days',
   custom: 'Custom Range',
+  alltime: 'All Time',
 };
 
 // Plain date input styled to look like a picker, same visual pattern as
@@ -65,10 +72,14 @@ const FormattedDateInput: React.FC<{ value: string; onChange: (e: React.ChangeEv
   );
 };
 
-export const EventDateFilter: React.FC = () => {
+export const EventDateFilter: React.FC<{ includeAllTime?: boolean }> = ({ includeAllTime = false }) => {
   const { filters, setFilters } = useEventFilter();
   const [localFilters, setLocalFilters] = useState<EventFilterState>(filters);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const presetOrder: EventFilterState['filterType'][] = includeAllTime
+    ? ['alltime', 'today', 'yesterday', 'last7days', 'last30days', 'custom']
+    : ['today', 'yesterday', 'last7days', 'last30days', 'custom'];
 
   useEffect(() => setLocalFilters(filters), [filters]);
 
@@ -105,7 +116,11 @@ export const EventDateFilter: React.FC = () => {
         endDate = formatDate(today);
         break;
       }
-      case 'custom':
+            case 'custom':
+        break;
+      case 'alltime':
+        startDate = '';
+        endDate = '';
         break;
     }
 
@@ -137,7 +152,7 @@ export const EventDateFilter: React.FC = () => {
 
           {isMenuOpen && (
             <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-xl z-30 overflow-hidden">
-              {(Object.keys(PRESET_LABELS) as EventFilterState['filterType'][]).map((key) => (
+                            {presetOrder.map((key) => (
                 <button
                   key={key}
                   onClick={() => applyPreset(key)}

@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { PublicEvent } from '../data/events';
+import { isCreditExpired, type PublicEvent } from '../data/events';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
@@ -27,6 +27,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   featured: d.featured || false,
   isPrivate: d.isPrivate || false,
   accessCodes: d.accessCodes ?? [],
+   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
    everPublished: d.everPublished || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
@@ -92,10 +93,13 @@ export function usePublicEvents(targetCompanyId?: string | null) {
         where('status', '==', 'published')
       );
 
-      unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
-        const mapped = snapshot.docs.map((docSnap) =>
-          mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId)
-        );
+           unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
+        const mapped = snapshot.docs
+          .map((docSnap) => mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId))
+          // NEW — hide events whose credit validity has run out even if the
+          // organizer hasn't opened their dashboard yet to trigger the
+          // status flip to 'draft'. Effectively "already unpublished".
+          .filter((e) => !isCreditExpired(e));
         setAllEvents(mapped);
         setLoading(false);
       });

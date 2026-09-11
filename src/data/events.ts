@@ -1,4 +1,5 @@
 import type { CustomField, TextStyleConfig } from '../types/event.types';
+import { stripHtmlTags } from '../lib/utils';
 export interface PublicTicketTier {
   id: string;
   name: string;
@@ -56,8 +57,28 @@ export interface PublicEvent {
   //qrImageUrl?: string | null;
   upiId?: string;
   payeeName?: string;
+  creditExpiresAt?: string | null;
   accessCodes?: AccessCodeEntry[]; // ALL valid share codes ever generated for this event
 }
+// NEW — how long a single event credit keeps an event published for
+export const EVENT_CREDIT_VALIDITY_DAYS = 90; // ~3 months
+
+export const getNewCreditExpiry = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + EVENT_CREDIT_VALIDITY_DAYS);
+  return d.toISOString();
+};
+
+// True once the current credit's 3-month window has run out (or was
+// never set — e.g. an old event created before this feature existed
+// gets treated as "needs a fresh credit" the next time it's published).
+export const isCreditExpired = (event: Pick<PublicEvent, 'creditExpiresAt'>): boolean => {
+  if (!event.creditExpiresAt) return true;
+  return new Date(event.creditExpiresAt).getTime() < Date.now();
+};
+
+export const formatCreditExpiry = (iso: string): string =>
+  new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const CATEGORY_GRADIENTS: Record<string, string> = {
   Comedy: 'from-orange-200 to-amber-100',
@@ -126,7 +147,7 @@ export const generateSlug = (value: string) =>
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '');
 
-export const buildEventSlugId = (title: string, id: string) => `${generateSlug(title)}--${id}`;
+export const buildEventSlugId = (title: string, id: string) => `${generateSlug(stripHtmlTags(title))}--${id}`;
 
 export const parseEventIdFromSlug = (slugId: string) => {
   const idx = slugId.lastIndexOf('--');
