@@ -58,12 +58,11 @@ const Settings: React.FC = () => {
     roundingInterval: settings.roundingInterval,
   });
   const [initialized, setInitialized] = useState(false);
+  const [taxRateInput, setTaxRateInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Seed the draft from Firestore once loading finishes. Guarded by
-  // `initialized` so a live onSnapshot update doesn't clobber unsaved edits.
   React.useEffect(() => {
     if (!loading && !initialized) {
       setDraft({
@@ -73,6 +72,11 @@ const Settings: React.FC = () => {
         enableRounding: settings.enableRounding,
         roundingInterval: settings.roundingInterval,
       });
+      setTaxRateInput(
+        settings.defaultTaxRate === 0 || settings.defaultTaxRate === undefined
+          ? ''
+          : String(settings.defaultTaxRate)
+      );
       setInitialized(true);
     }
   }, [loading, initialized, settings]);
@@ -164,6 +168,10 @@ const Settings: React.FC = () => {
       if (pendingScheme) {
         setDraft((prev) => ({ ...prev, gstScheme: pendingScheme }));
       }
+      // NEW: sync the page-level GSTIN field so a later "Save Settings"
+      // click doesn't think GSTIN is still missing.
+      setGstinDraft(value);
+      setGstinDraftError(null);
       setShowGstModal(false);
       setPendingScheme(null);
     } catch (err) {
@@ -263,15 +271,34 @@ const Settings: React.FC = () => {
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-800 dark:text-slate-100">Tax rate (%)</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step="0.01"
-                        value={draft.defaultTaxRate}
+                        type="text"
+                        inputMode="decimal"
+                        value={taxRateInput}
                         disabled={loading}
-                        onChange={(e) =>
-                          setDraft((prev) => ({ ...prev, defaultTaxRate: parseFloat(e.target.value) || 0 }))
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          // allow empty, digits, and at most one decimal point
+                          if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                            setTaxRateInput(raw);
+                            const parsed = parseFloat(raw);
+                            setDraft((prev) => ({
+                              ...prev,
+                              defaultTaxRate: isNaN(parsed) ? 0 : Math.min(100, parsed),
+                            }));
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseFloat(taxRateInput);
+                          if (isNaN(parsed)) {
+                            setTaxRateInput('');
+                            setDraft((prev) => ({ ...prev, defaultTaxRate: 0 }));
+                          } else {
+                            const clamped = Math.min(100, Math.max(0, parsed));
+                            setTaxRateInput(String(clamped));
+                            setDraft((prev) => ({ ...prev, defaultTaxRate: clamped }));
+                          }
+                        }}
+                        placeholder="0.00"
                         className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
                       />
                     </div>

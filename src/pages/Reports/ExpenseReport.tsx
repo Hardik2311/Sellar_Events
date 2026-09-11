@@ -57,12 +57,17 @@ const ExpenseReportPageInner: React.FC = () => {
     const { filters } = useEventFilter();
     const { startDate, endDate } = filters;
 
+    const isAllTime = !startDate || !endDate;
+
     const appliedFilters = useMemo(() => {
-        if (!startDate || !endDate) return null;
+        if (isAllTime) {
+            // No date selected → default to All Time
+            return { start: 0, end: Number.MAX_SAFE_INTEGER };
+        }
         const s = new Date(startDate); s.setHours(0, 0, 0, 0);
         const e = new Date(endDate); e.setHours(23, 59, 59, 999);
         return { start: s.getTime(), end: e.getTime() };
-    }, [startDate, endDate]);
+    }, [startDate, endDate, isAllTime]);
 
     // --- ui state ---
     const [showSearch, setShowSearch] = useState(false);
@@ -127,7 +132,10 @@ const ExpenseReportPageInner: React.FC = () => {
                 : 'Event Expense Report';
             doc.text(reportTitle, 14, 24);
             doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
-            doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 31);
+            const periodLabel = isAllTime
+                ? 'All Time'
+                : `${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`;
+            doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`, 14, 31);
 
             autoTable(doc, {
                 startY: 38,
@@ -145,7 +153,8 @@ const ExpenseReportPageInner: React.FC = () => {
                     doc.text(`Page ${doc.getNumberOfPages()}`, pw - 14, ph - 10, { align: 'right' });
                 },
             });
-            doc.save(`Event_Expense_Report_${startDate}_to_${endDate}.pdf`);
+            const fileTag = isAllTime ? 'All_Time' : `${startDate}_to_${endDate}`;
+            doc.save(`Event_Expense_Report_${fileTag}.pdf`);
             setIsDownloadOpen(false);
             showToast('success', 'PDF downloaded successfully!');
         } catch (err) {
@@ -175,7 +184,10 @@ const ExpenseReportPageInner: React.FC = () => {
             aoa[0][0] = profile?.organizationName
                 ? `Event Expense Report  —  ${profile.organizationName}`
                 : 'Event Expense Report';
-            aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
+            const periodLabel = isAllTime
+                ? 'All Time'
+                : `${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
+            aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`;
             aoa[3][0] = 'SUMMARY';
             aoa[4][0] = `Total Expenses: ₹${summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Entries: ${summary.count}`;
             COLS.forEach((c, i) => { aoa[6][i] = c.header; });
@@ -215,9 +227,10 @@ const ExpenseReportPageInner: React.FC = () => {
                 if (ci === 4 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00'; }
             }
 
+            const fileTag = isAllTime ? 'All_Time' : `${startDate}_to_${endDate}`;
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Expense Report');
-            XLSX.writeFile(wb, `Event_Expense_Report_${startDate}_to_${endDate}.xlsx`);
+            XLSX.writeFile(wb, `Event_Expense_Report_${fileTag}.xlsx`);
             setIsDownloadOpen(false);
             showToast('success', 'Excel downloaded successfully!');
         } catch (err) {
@@ -306,8 +319,7 @@ const ExpenseReportPageInner: React.FC = () => {
                         loading={eventsLoading}
                     />
 
-                    {/* Date filter (shared component) */}
-                    <EventDateFilter />
+                    <EventDateFilter includeAllTime />
 
                     {/* Summary cards */}
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -498,7 +510,7 @@ const ExpenseReportPageInner: React.FC = () => {
     );
 };
 const ExpenseReportPage: React.FC = () => (
-    <EventFilterProvider>
+    <EventFilterProvider defaultFilterType="alltime">
         <ExpenseReportPageInner />
     </EventFilterProvider>
 );

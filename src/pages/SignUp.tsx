@@ -669,7 +669,7 @@ const Signup: React.FC = () => {
 
                   <FloatingLabelInput
                     id="streetAddress"
-                    label="Street Address / Venue Area (optional)"
+                    label="Street Address / Venue Area"
                     icon={<FiMapPin size={20} />}
                     value={formData.streetAddress}
                     onChange={(e) => handleChange('streetAddress', e.target.value)}
@@ -678,14 +678,14 @@ const Signup: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <FloatingLabelInput
                       id="city"
-                      label="City (optional)"
+                      label="City"
                       icon={<FiMapPin size={20} />}
                       value={formData.city}
                       onChange={(e) => handleChange('city', e.target.value)}
                     />
                     <FloatingLabelInput
                       id="postalCode"
-                      label="Pincode (optional)"
+                      label="Pincode"
                       icon={<PinIcon size={20} />}
                       inputMode="numeric"
                       value={formData.postalCode}
@@ -699,7 +699,7 @@ const Signup: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <FloatingLabelSelect
                       id="state"
-                      label="State (optional)"
+                      label="State"
                       icon={<FiMap size={20} />}
                       value={formData.state}
                       onChange={(e) => handleChange('state', e.target.value)}

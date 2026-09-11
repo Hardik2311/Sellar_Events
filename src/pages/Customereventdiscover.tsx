@@ -60,7 +60,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void; shareBaseUrl
                         const shareUrl = `${shareBaseUrl}/e/${buildEventSlugId(event.title, event.id)}`;
                         if (navigator.share) {
                             try {
-                                await navigator.share({ title: event.title, url: shareUrl });
+                                await navigator.share({ title: stripHtmlTags(event.title), url: shareUrl });
                             } catch {
                                 // user cancelled share sheet, no-op
                             }
@@ -139,7 +139,7 @@ const CustomerEventDiscover: React.FC = () => {
 
     const { events, loading: eventsLoading } = usePublicEvents(resolvedCompanyId); // organizer-published events only
     const { settings } = useCompanySettings(resolvedCompanyId);
-    
+
     const loading = domainLoading || eventsLoading;
 
     const [search, setSearch] = useState('');
@@ -148,7 +148,7 @@ const CustomerEventDiscover: React.FC = () => {
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [formatMenuOpen, setFormatMenuOpen] = useState(false);
 
-        // Private events must never show up in the public discover grid — only
+    // Private events must never show up in the public discover grid — only
     // a direct shared link + code should reach them. `isPrivate` is the
     // real source of truth (activeAccessCode was never populated by the mapper).
     const visibleEvents = useMemo(

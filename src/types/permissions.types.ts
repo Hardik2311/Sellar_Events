@@ -25,7 +25,7 @@ export const Permission = {
   EXPORT_ATTENDEES: 'exportAttendees',
   EDIT_ATTENDEE: 'editAttendee',
   SCAN_QR: 'scanQr',
-   IMPORT_ATTENDEES: 'import_attendees',
+  IMPORT_ATTENDEES: 'import_attendees',
   ADD_WALK_IN_ATTENDEE: 'addWalkInAttendee', // NEW — manually add an attendee (on-the-spot / after sale closes)
 
   // Reports
@@ -116,7 +116,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: Permission.EDIT_APP_SETTINGS, label: 'Edit App Settings' },
     ],
   },
-   {
+  {
     title: 'Expenses & Income',
     items: [
       { key: Permission.ADD_EXPENSE, label: 'Add Expense' },
@@ -169,6 +169,7 @@ export const DEFAULT_PERMISSIONS: PermissionsByRole = {
     Permission.EDIT_EVENT_SETTINGS,
     Permission.EDIT_COMPANY_SETTINGS,
     Permission.EDIT_APP_SETTINGS,
+    Permission.ADD_INCOME,
   ]),
   team: buildRole([
     Permission.VIEW_DASHBOARD,
@@ -178,6 +179,9 @@ export const DEFAULT_PERMISSIONS: PermissionsByRole = {
     Permission.ADD_WALK_IN_ATTENDEE,
     Permission.VIEW_SETTINGS,
     Permission.EDIT_APP_SETTINGS,
+    Permission.ADD_EXPENSE,       // ✅ NEW
+    Permission.EDIT_ATTENDEE,     // ✅ NEW
+    Permission.VIEW_MY_EVENTS,    // ✅ NEW
   ]),
 };
 

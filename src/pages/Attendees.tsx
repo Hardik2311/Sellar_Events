@@ -422,14 +422,14 @@ const Attendees: React.FC = () => {
         <BackButton />
         <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[65%]">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Attendees</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Guest list & real-time check-in manager</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">Guest list & real-time check-in</p>
         </div>
         <Link
           to="/events/account/recharge"
-          className="flex items-center gap-1 sm:gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 sm:px-2.5 py-1 sm:py-2 text-[10px] sm:text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs shrink-0"
+          className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
           title="Event credits — click to recharge"
         >
-          <Wallet className="w-3.5 h-6 sm:w-4 sm:h-4 shrink-0" />
+          <Wallet size={16} />
           {creditsLoading ? '…' : credits}
         </Link>
       </header>

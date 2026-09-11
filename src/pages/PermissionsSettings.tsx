@@ -107,7 +107,7 @@ const PermissionsSettings: React.FC = () => {
         <div className="w-[38px]"></div>
       </header>
 
-      <main className="grow overflow-y-auto p-4 sm:p-6">
+      <main className="grow overflow-y-auto p-4 pb-36 sm:p-6 sm:pb-6">
         <div className="mx-auto max-w-6xl xl:max-w-7xl">
           <div className="flex justify-center mb-5">
             <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
@@ -183,11 +183,11 @@ const PermissionsSettings: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-5 flex items-center justify-center gap-3">
+          <div className="fixed bottom-16 left-0 right-0 z-30 mt-5 flex items-center justify-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-[#1E293B]/95 sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none sm:dark:bg-transparent">
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-2.5 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] text-white dark:text-slate-950 text-sm font-bold disabled:opacity-60"
+              className="w-[90%] max-w-sm rounded-sm bg-[#007A78] px-8 py-2.5 text-sm font-bold text-white disabled:opacity-60 dark:bg-[#2DD4BF] dark:text-slate-950 sm:w-auto sm:max-w-none"
             >
               {isSaving ? 'Saving…' : `Save Changes for ${ROLE_TABS.find((t) => t.key === activeRole)?.label}`}
             </button>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Copy, Check, Loader2 } from 'lucide-react';
-import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
@@ -23,7 +23,21 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
 }
+interface TaxSettings {
+  enableTax?: boolean;
+  gstScheme?: 'regular' | 'composition' | 'none';
+  taxType?: 'inclusive' | 'exclusive';
+  defaultTaxRate?: number;
+  enableRounding?: boolean;
+  roundingInterval?: number;
+}
 
+const roundToInterval = (value: number, interval: number) => {
+  if (!interval) return Math.round(value);
+  return Math.round(value / interval) * interval;
+};
+const isValidPhone = (phone: string): boolean => /^[6-9]\d{9}$/.test(phone);
+const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 // Same scheme as CheckoutPage's getEventInitials — kept identical so
 // gateway and manual-QR tickets look consistent to the organizer.
 const getEventInitials = (title: string): string => {
@@ -50,7 +64,22 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
   const [isCompressing, setIsCompressing] = useState(false); // NEW
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null); // NEW
 
-  
+  const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
+
+  useEffect(() => {
+    if (!event.companyId) return;
+    const fetchTaxSettings = async () => {
+      try {
+        const ref = doc(db, 'companies', event.companyId, 'settings', 'general');
+        const snap = await getDoc(ref);
+        setTaxSettings(snap.exists() ? (snap.data() as TaxSettings) : {});
+      } catch (err) {
+        console.error('Failed to load tax settings:', err);
+        setTaxSettings({});
+      }
+    };
+    fetchTaxSettings();
+  }, [event.companyId]);
   useEffect(() => {
     if (!event.upiId) {
       setQrDataUrl(null);
@@ -62,22 +91,70 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
       .catch(() => setQrDataUrl(null));
   }, [event.upiId, event.payeeName, event.title]);
 
+  const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
+  const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
+  const taxRate = taxSettings?.defaultTaxRate || 0;
+
+  const { taxedBreakdown, totalTaxAmount, finalTotal, roundOffAmt } = React.useMemo(() => {
+    let tax = 0;
+    const items = breakdown.map((b) => {
+      let itemBase = b.subtotal;
+      let itemTax = 0;
+      let itemTotal = b.subtotal;
+
+      if (scheme === 'regular') {
+        if (taxType === 'exclusive') {
+          itemBase = b.subtotal;
+          itemTax = itemBase * (taxRate / 100);
+          itemTotal = itemBase + itemTax;
+        } else {
+          itemTotal = b.subtotal;
+          itemBase = itemTotal / (1 + taxRate / 100);
+          itemTax = itemTotal - itemBase;
+        }
+      }
+      tax += itemTax;
+      return { ...b, itemBase, itemTax, itemTotal };
+    });
+
+    const rawTotal = items.reduce((s, it) => s + it.itemTotal, 0);
+    const rounded = taxSettings?.enableRounding
+      ? roundToInterval(rawTotal, taxSettings.roundingInterval || 1)
+      : rawTotal;
+
+    return {
+      taxedBreakdown: items,
+      totalTaxAmount: tax,
+      finalTotal: rounded,
+      roundOffAmt: Number((rounded - rawTotal).toFixed(2)),
+    };
+  }, [breakdown, scheme, taxType, taxRate, taxSettings?.enableRounding, taxSettings?.roundingInterval]);
+
+  const MAX_UPLOAD_BYTES = 1 * 1024 * 1024; // 1 MB hard cap
+
   const handleFile = async (file: File) => {
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File must be under 10 MB.');
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('File must be under 1 MB.');
       return;
     }
     setError(null);
     setIsCompressing(true);
     try {
-      // Screenshots are photos of a screen — jpeg + target-size compression,
-      // capped around 500KB, keeps Storage usage predictable regardless of
-      // how large the source phone screenshot is.
-      const compressed = await compressImageToTargetSize(file, 500, {
+      // Target 700KB so the base64-encoded output (which is ~33% larger
+      // than raw bytes) still lands comfortably under the 1MB cap.
+      const compressed = await compressImageToTargetSize(file, 700, {
         maxWidth: 1280,
         maxHeight: 1280,
         mimeType: 'image/jpeg',
       });
+
+      // Safety check: base64 data URL length roughly approximates byte size.
+      const approxBytes = compressed.length * 0.75;
+      if (approxBytes > MAX_UPLOAD_BYTES) {
+        setError('Image is still too large after compression. Try a smaller photo.');
+        setScreenshot(null);
+        return;
+      }
       setScreenshot(compressed);
     } catch {
       setError('Could not process that image, please try another.');
@@ -93,7 +170,14 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
   };
 
   const handleSubmit = async () => {
-    if (!screenshot || !consentChecked || totalAmount <= 0 || !buyerName.trim() || !buyerPhone.trim()) return;
+    if (
+      !screenshot ||
+      !consentChecked ||
+      finalTotal <= 0 ||
+      !buyerName.trim() ||
+      !isValidPhone(buyerPhone) ||
+      (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail))
+    ) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -136,7 +220,11 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
         tx.update(eventRef, { tiers: updatedTiers });
 
         let index = 0;
-        breakdown.forEach((tier) => {
+        taxedBreakdown.forEach((tier) => {
+          const unitBase = tier.qty > 0 ? tier.itemBase / tier.qty : 0;
+          const unitTax = tier.qty > 0 ? tier.itemTax / tier.qty : 0;
+          const unitTotal = unitBase + unitTax;
+
           for (let i = 0; i < tier.qty; i++) {
             const attendeeDoc = doc(attendeesRef);
             const ticketNumber = totalAlreadySold + index + 1;
@@ -150,7 +238,11 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
               ticketTierId: tier.id,
               ticketId,
               status: 'valid',
-              amountPaid: tier.price,
+              amountPaid: Number(unitTotal.toFixed(2)),
+              baseAmount: Number(unitBase.toFixed(2)),
+              taxAmount: Number(unitTax.toFixed(2)),
+              taxRate,
+              taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
               purchasedAt: serverTimestamp(),
               checkedInAt: null,
               paymentMethod: 'manual_qr',
@@ -200,7 +292,6 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
           </div>
         ) : (
           <div className="grow overflow-y-auto p-4 space-y-4">
-            {/* Order breakdown */}
             <div className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 space-y-1">
               {breakdown.map((b) => (
                 <div key={b.id} className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
@@ -208,9 +299,21 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
                   <span>₹{b.subtotal.toLocaleString('en-IN')}</span>
                 </div>
               ))}
+              {totalTaxAmount > 0 && (
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Tax</span>
+                  <span>₹{totalTaxAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {roundOffAmt !== 0 && (
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Round off</span>
+                  <span>₹{roundOffAmt.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1.5 text-sm font-bold text-slate-800 dark:text-white">
                 <span>Total</span>
-                <span>₹{totalAmount.toLocaleString('en-IN')}</span>
+                <span>₹{finalTotal.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
@@ -244,20 +347,36 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
                 className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
               />
               <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="tel"
-                  placeholder="Phone *"
-                  value={buyerPhone}
-                  onChange={(e) => setBuyerPhone(e.target.value)}
-                  className="rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                />
-                <input
-                  type="email"
-                  placeholder="Email (optional)"
-                  value={buyerEmail}
-                  onChange={(e) => setBuyerEmail(e.target.value)}
-                  className="rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                />
+                <div>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="Phone *"
+                    value={buyerPhone}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setBuyerPhone(digitsOnly);
+                    }}
+                    maxLength={10}
+                    className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+                  />
+                  {buyerPhone && !isValidPhone(buyerPhone) && (
+                    <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
+                  )}
+                </div>
+
+                <div>
+                  <input
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+                  />
+                  {buyerEmail && !isValidEmail(buyerEmail) && (
+                    <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -277,7 +396,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
                       ? 'Screenshot selected — tap to change'
                       : 'Click to choose a file or drag here'}
                 </span>
-                <span className="text-[10px] text-slate-400">Size limit 10 MB</span>
+                <span className="text-[10px] text-slate-400">Size limit 1 MB</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -287,7 +406,22 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
                 />
               </label>
               {screenshot && (
-                <img src={screenshot} alt="Screenshot preview" className="mt-2 max-h-32 rounded-sm border border-slate-200 dark:border-slate-700 mx-auto" />
+                <div className="relative mt-2 w-fit mx-auto">
+                  <img src={screenshot} alt="Screenshot preview" className="max-h-32 rounded-sm border border-slate-200 dark:border-slate-700" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setScreenshot(null);
+                      setError(null);
+                    }}
+                    className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow hover:bg-slate-900"
+                    aria-label="Remove screenshot"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               )}
             </div>
 
@@ -298,8 +432,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
                 onChange={(e) => setConsentChecked(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
               />
-              I confirm I've paid the exact amount. No separate confirmation message will be sent — my ticket(s) are
-              confirmed now and payment will be checked against this screenshot at entry.
+              This confirms the submission of your ticket request. Final entry/pass allocation is subject to the organizer’s approval and discretion. Any further communication will be shared by the organizer.
             </label>
 
             {error && <p className="text-xs text-red-500">{error}</p>}
@@ -310,7 +443,16 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, totalAmount, breakdown, q
           <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-3">
             <button
               onClick={handleSubmit}
-              disabled={!screenshot || !consentChecked || !buyerName.trim() || !buyerPhone.trim() || submitting || isCompressing}
+              disabled={
+                !screenshot ||
+                !consentChecked ||
+                finalTotal <= 0 ||
+                !buyerName.trim() ||
+                !isValidPhone(buyerPhone) ||
+                (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail)) ||
+                submitting ||
+                isCompressing
+              }
               className="w-full rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#006361] disabled:opacity-40"
             >
               {submitting ? 'Submitting…' : "I've paid — confirm my ticket"}

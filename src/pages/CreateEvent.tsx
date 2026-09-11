@@ -19,7 +19,7 @@ import { collection, doc, setDoc, runTransaction, serverTimestamp, Timestamp } f
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
-import { generateAccessCode } from '../data/events';
+import { generateAccessCode, EVENT_CREDIT_VALIDITY_DAYS, getNewCreditExpiry } from '../data/events';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
@@ -27,6 +27,7 @@ import TextStyleControls from '../components/ui/TextStyleControls';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import RichTextEditor from '../components/RickTextEditor';
+import { getDraft, saveDraft, clearDraft } from '../lib/draftStorage';
 //import QRCodeImageUpload from '../components/ui/QRCodeImageUpload'; // NEW
 
 const createEmptyTier = (): TicketTierDraft => ({
@@ -68,20 +69,17 @@ const INITIAL_STATE: EventFormState = {
   payeeName: '',
   isPrivate: false,
 };
-const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
+const stripHtml = (html: string) =>
+  html
+    .replace(/<[^>]*>/g, '')       // remove HTML tags
+    .replace(/&nbsp;/gi, ' ')      // contenteditable often leaves stray &nbsp; on an "empty" field
+    .replace(/&#160;/gi, ' ')
+    .replace(/\u00A0/g, ' ')       // literal non-breaking space char, just in case
+    .trim();
 
-const DRAFT_STORAGE_KEY = 'sellar-events:create-event-draft';
-
-const loadDraftFromStorage = (): EventFormState | null => {
-  try {
-    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as EventFormState;
-  } catch (err) {
-    console.warn('Failed to parse saved event draft, ignoring it:', err);
-    return null;
-  }
-};
+const DRAFT_STORAGE_KEY = 'create-event-draft';
+// Draft is now stored in IndexedDB (see lib/draftStorage.ts) since it can
+// contain large base64 images that exceed localStorage's quota.
 
 const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
@@ -89,9 +87,18 @@ const CreateEvent: React.FC = () => {
   const { user, profile } = useAuth();
   const { can } = usePermissions();
   const { credits, loading: creditsLoading } = useEventCredits();
-  const [form, setForm] = useState<EventFormState>(
-    () => loadDraftFromStorage() ?? INITIAL_STATE
-  );
+  const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
+
+  // Load any previously saved draft from IndexedDB once, on mount.
+  useEffect(() => {
+    (async () => {
+      const saved = await getDraft<EventFormState>(DRAFT_STORAGE_KEY);
+      if (saved) setForm(saved);
+      setIsDraftLoaded(true); // only after this can we safely persist changes
+    })();
+  }, []);
   const [savingAction, setSavingAction] = useState<'draft' | 'published' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showPastEventConfirm, setShowPastEventConfirm] = useState(false);
@@ -115,15 +122,13 @@ const CreateEvent: React.FC = () => {
     }
   }, [companySettings.rsvpEnabled]);
 
-  // Navigate away and back without losing in-progress event details.
   useEffect(() => {
-    try {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(form));
-    } catch (err) {
-      // Likely quota exceeded due to large base64 cover/gallery images.
-      console.warn('Failed to save event draft to localStorage:', err);
-    }
-  }, [form]);
+    if (!isDraftLoaded) return; // avoid overwriting saved draft before initial load finishes
+    saveDraft(DRAFT_STORAGE_KEY, form).catch((err) => {
+      console.warn('Failed to save event draft:', err);
+      setSaveError('Could not auto-save your draft locally (storage may be full).');
+    });
+  }, [form, isDraftLoaded]);
   const isOtherCategory = form.category === 'Other';
 
   const isPastEventDateTime = () => {
@@ -281,16 +286,19 @@ const CreateEvent: React.FC = () => {
             throw new Error('NO_CREDITS');
           }
 
-          transaction.set(newEventRef, eventPayload);
-          transaction.update(companyRef, { eventCredits: currentCredits - 1 });
-          // Delete ke waqt ye field kabhi wapas nahi badhta — credit permanently consume ho jata hai
+                  transaction.set(newEventRef, {
+          ...eventPayload,
+          everPublished: true,
+          creditExpiresAt: getNewCreditExpiry(), // NEW — 3-month validity starts now
+        });
+        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
         });
       } else {
         // Draft free — no credit check, no decrement
         await setDoc(newEventRef, eventPayload);
       }
 
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      await clearDraft(DRAFT_STORAGE_KEY);
       navigate(`/events/e/${newEventRef.id}`);
     } catch (err: any) {
       console.error('Failed to save event:', err);
@@ -303,6 +311,11 @@ const CreateEvent: React.FC = () => {
     } finally {
       setSavingAction(null);
     }
+  };
+  const handleClearAllDraft = async () => {
+    await clearDraft(DRAFT_STORAGE_KEY);
+    setForm(INITIAL_STATE);
+    setShowClearAllConfirm(false);
   };
   const handleSaveDraft = () => {
     if (!can(Permission.SAVE_DRAFT_EVENT)) return;
@@ -332,6 +345,112 @@ const CreateEvent: React.FC = () => {
     saveEvent('draft');
   };
 
+  const eventLogisticsCard = (
+    <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+          <Calendar size={16} className="text-[#007A78] dark:text-[#2DD4BF]" /> Event Logistics
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Start date *" htmlFor="date">
+            <div className="relative">
+              <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+              <DatePicker
+                id="date"
+                selected={toDate(form.date)}
+                onChange={(d: Date | null) => {
+                  const value = toDateStr(d);
+                  update('date', value);
+                  if (form.endDate && form.endDate < value) update('endDate', value);
+                }}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="Select date"
+                wrapperClassName="w-full block"
+                popperClassName="react-datepicker-popper-custom"
+                popperPlacement="bottom-start"
+                showPopperArrow={false}
+                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                required
+              />
+            </div>
+          </FormField>
+
+          <FormField label={req.endDate ? 'End date *' : 'End date'} htmlFor="end-date">
+            <div className="relative">
+              <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+              <DatePicker
+                id="end-date"
+                selected={toDate(form.endDate)}
+                onChange={(d: Date | null) => update('endDate', toDateStr(d))}
+                minDate={toDate(form.date) || undefined}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="Select date"
+                wrapperClassName="w-full block"
+                popperClassName="react-datepicker-popper-custom"
+                popperPlacement="bottom-start"
+                showPopperArrow={false}
+                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                required={req.endDate}
+              />
+            </div>
+          </FormField>
+        </div>
+
+        <FormField label="Time *" htmlFor="time">
+          <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+            <Clock size={16} className="text-gray-400 shrink-0" />
+            <TimeSelect
+              value={form.time ? form.time.split(':')[0] : '00'}
+              options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+              onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
+            />
+            <span className="text-slate-400">:</span>
+            <TimeSelect
+              value={form.time ? form.time.split(':')[1] : '00'}
+              options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+              onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
+            />
+          </div>
+        </FormField>
+
+        {!form.isOnline && (
+          <div>
+            <FloatingLabelInput
+              id="venue"
+              label="Venue *"
+              value={form.venue}
+              onChange={(e) => update('venue', e.target.value)}
+              required
+            />
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-gray-500 dark:text-slate-500">Full address helps attendees find it on the day</p>
+              {form.venue.trim().length > 2 && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.venue)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-[#007A78] dark:text-[#2DD4BF] hover:underline shrink-0 ml-2"
+                >
+                  View on map ↗
+                </a>
+              )}
+            </div>
+            {form.venue.trim().length > 2 && (
+              <iframe
+                title="venue-map-preview"
+                className="w-full h-32 mt-2 rounded-sm border border-gray-200 dark:border-slate-700"
+                loading="lazy"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
+              />
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-24 md:mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
@@ -341,465 +460,396 @@ const CreateEvent: React.FC = () => {
         </div>
         <div className="text-center">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">Create Event</h1>
-          <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">Fill in event details, set ticket tiers, then publish</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            Fill in event details,
+            <br className="sm:hidden" />
+            {' '}set ticket tiers, then publish
+          </p>
         </div>
-        <div className="absolute right-6 top-1/2 -translate-y-1/2">
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
           <button
             onClick={() => navigate('/events/account/recharge')}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 sm:px-2.5 py-1 sm:py-2 text-[10px] sm:text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs shrink-0"
+            className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs shrink-0"
             title="Event credits — click to recharge"
           >
-            <Wallet className="w-3.5 h-6 sm:w-4 sm:h-4 shrink-0" />
+            <Wallet size={16} />
             {creditsLoading ? '…' : credits}
           </button>
         </div>
       </header>
 
+      {!creditsLoading && credits < 1 && (
+        <div className="w-full bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900 px-4 py-2 text-center">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+            You don't have enough credits to publish this event — you can still save it as a draft.
+          </p>
+        </div>
+      )}
+
       <main className="grow overflow-y-auto p-4 lg:p-6">
-        <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* ── Left column ────────────────────────────────────── */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
-                  Cover Photo{req.images && ' *'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CoverPhotoUpload
-                  desktopSrc={form.coverImageDesktop}
-                  mobileSrc={form.coverImageMobile}
-                  onChangeDesktop={(src) => update('coverImageDesktop', src)}
-                  onChangeMobile={(src) => update('coverImageMobile', src)}
-                />
-                {req.images &&
-                  form.images.length === 0 &&
-                  !form.coverImageDesktop &&
-                  !form.coverImageMobile && (
-                    <p className="text-xs text-red-500 dark:text-red-400 mt-2">
-                      At least one cover image (desktop or mobile) is required to publish.
-                    </p>
-                  )}
-              </CardContent>
-            </Card>
-
-            {/* Basic Information */}
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Basic Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <TextStyleControls
-                    fontSize={form.titleFontSize}
-                    onFontSizeChange={(size) => update('titleFontSize', size)}
-                    editorRef={titleEditorRef}
-                    onChange={(html) => update('title', html)}
-                  />
-                  <RichTextEditor
-                    id="title"
-                    editorRef={titleEditorRef}
-                    value={form.title}
-                    onChange={(html) => update('title', html)}
-                    fontSize={form.titleFontSize}
-                    label="Event title"
-                    required
-                  />
-                </div>
-
-                <div className={`grid grid-cols-1 ${isOtherCategory ? 'sm:grid-cols-2' : ''} gap-4 items-start`}>
-                  <div>
-                    <FloatingLabelSelect
-                      id="category"
-                      label="Category"
-                      value={form.category}
-                      options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                      onChange={(e) => {
-                        const value = e.target.value as EventFormState['category'];
-                        update('category', value);
-                        if (value !== 'Other') update('customCategory', '');
-                      }}
-                    />
-                    {/* invisible spacer keeps height identical to the helper text under Custom category */}
-                    {isOtherCategory && <p className="text-xs mt-1 invisible select-none">spacer</p>}
-                  </div>
-
-                  {isOtherCategory && (
-                    <div>
-                      <FloatingLabelInput
-                        id="custom-category"
-                        label="Custom category *"
-                        value={form.customCategory}
-                        onChange={(e) => update('customCategory', e.target.value)}
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <FormField label="Format" htmlFor="format">
-                  <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+        {!isDraftLoaded ? (
+          <div className="flex justify-center items-center py-20 text-sm text-slate-500 dark:text-slate-400">
+            Loading your saved draft…
+          </div>
+        ) : (
+          <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* ── Left column ────────────────────────────────────── */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                      Cover Photo{req.images && ' *'}
+                    </CardTitle>
                     <button
                       type="button"
-                      onClick={() => update('isOnline', false)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
-                        }`}
+                      onClick={() => setShowClearAllConfirm(true)}
+                      className="shrink-0 rounded-sm border border-red-200 dark:border-red-900 bg-white dark:bg-slate-800 px-2 py-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      title="Clear all locally saved draft data"
                     >
-                      In-person
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => update('isOnline', true)}
-                      className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
-                        }`}
-                    >
-                      Online
+                      Clear All Data
                     </button>
                   </div>
-                </FormField>
-
-                {/* NEW — private toggle: ON generates an access code automatically on publish */}
-                <FormField label="Visibility" htmlFor="is-private">
-                  <div className="flex items-center justify-between rounded-sm border border-gray-300 dark:border-slate-700 p-3 bg-white dark:bg-slate-800">
-                    <div className="pr-3">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Make this event private</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500">
-                        Hidden from Discover. Attendees need an access code to view and register.
+                </CardHeader>
+                <CardContent>
+                  <CoverPhotoUpload
+                    desktopSrc={form.coverImageDesktop}
+                    mobileSrc={form.coverImageMobile}
+                    onChangeDesktop={(src) => update('coverImageDesktop', src)}
+                    onChangeMobile={(src) => update('coverImageMobile', src)}
+                  />
+                  {req.images &&
+                    form.images.length === 0 &&
+                    !form.coverImageDesktop &&
+                    !form.coverImageMobile && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-2">
+                        At least one cover image (desktop or mobile) is required to publish.
                       </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={form.isPrivate}
-                      onClick={() => update('isPrivate', !form.isPrivate)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.isPrivate ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
-                        }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isPrivate ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                      />
-                    </button>
+                    )}
+                </CardContent>
+              </Card>
+
+              {/* Basic Information */}
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Basic Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <TextStyleControls
+                      fontSize={form.titleFontSize}
+                      onFontSizeChange={(size) => update('titleFontSize', size)}
+                      editorRef={titleEditorRef}
+                      onChange={(html) => update('title', html)}
+                    />
+                    <RichTextEditor
+                      id="title"
+                      editorRef={titleEditorRef}
+                      value={form.title}
+                      onChange={(html) => update('title', html)}
+                      fontSize={form.titleFontSize}
+                      label="Event title"
+                      required
+                    />
                   </div>
-                </FormField>
 
-                <div>
-                  <TextStyleControls
-                    fontSize={form.descriptionFontSize}
-                    onFontSizeChange={(size) => update('descriptionFontSize', size)}
-                    editorRef={descriptionEditorRef}
-                    onChange={(html) => update('description', html)}
-                  />
-                  <RichTextEditor
-                    id="description"
-                    editorRef={descriptionEditorRef}
-                    value={form.description}
-                    onChange={(html) => update('description', html)}
-                    fontSize={form.descriptionFontSize}
-                    label="Description"
-                    required={req.description}
-                    multiline
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                  <div className={`grid grid-cols-1 ${isOtherCategory ? 'sm:grid-cols-2' : ''} gap-4 items-start`}>
+                    <div>
+                      <FloatingLabelSelect
+                        id="category"
+                        label="Category"
+                        value={form.category}
+                        options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                        onChange={(e) => {
+                          const value = e.target.value as EventFormState['category'];
+                          update('category', value);
+                          if (value !== 'Other') update('customCategory', '');
+                        }}
+                      />
+                      {/* invisible spacer keeps height identical to the helper text under Custom category */}
+                      {isOtherCategory && <p className="text-xs mt-1 invisible select-none">spacer</p>}
+                    </div>
 
-            {/* Registration: ticket tiers OR RSVP link */}
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
-                  {form.registrationMode === 'tickets' ? 'Ticket Tiers' : 'RSVP details'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {companySettings.rsvpEnabled && (
-                  <FormField label="Registration type" htmlFor="registration-mode">
+                    {isOtherCategory && (
+                      <div>
+                        <FloatingLabelInput
+                          id="custom-category"
+                          label="Custom category *"
+                          value={form.customCategory}
+                          onChange={(e) => update('customCategory', e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <FormField label="Format" htmlFor="format">
                     <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
                       <button
                         type="button"
-                        onClick={() => update('registrationMode', 'tickets')}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                        onClick={() => update('isOnline', false)}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${!form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
                           }`}
                       >
-                        Ticketed
+                        In-person
                       </button>
                       <button
                         type="button"
-                        onClick={() => update('registrationMode', 'rsvp')}
-                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                        onClick={() => update('isOnline', true)}
+                        className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.isOnline ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
                           }`}
                       >
-                        RSVP (external link)
+                        Online
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                      {form.registrationMode === 'rsvp'
-                        ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
-                        : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
-                    </p>
                   </FormField>
-                )}
 
-                {form.registrationMode === 'tickets' ? (
-                  <>
-                    {companySettings.payments.allowManualQR && (
-                      <FormField label="Payment collection" htmlFor="payment-mode">
-                        <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
-                          <button
-                            type="button"
-                            onClick={() => update('paymentCollectionMode', 'gateway')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
-                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                              : 'text-gray-500 dark:text-slate-400'
-                              }`}
-                          >
-                            Payment gateway
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => update('paymentCollectionMode', 'manual_qr')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
-                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                              : 'text-gray-500 dark:text-slate-400'
-                              }`}
-                          >
-                            UPI QR (manual)
-                          </button>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                          {form.paymentCollectionMode === 'manual_qr'
-                            ? 'Attendees scan your QR, pay directly, and upload a screenshot. They\u2019re added as attendees immediately — verify payment manually at check-in.'
-                            : 'Attendees pay via the integrated payment gateway at checkout.'}
+                  {/* NEW — private toggle: ON generates an access code automatically on publish */}
+                  <FormField label="Visibility" htmlFor="is-private">
+                    <div className="flex items-center justify-between rounded-sm border border-gray-300 dark:border-slate-700 p-3 bg-white dark:bg-slate-800">
+                      <div className="pr-3">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Make this event private</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                          Hidden from Discover. Attendees need an access code to view and register.
                         </p>
-                      </FormField>
-                    )}
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={form.isPrivate}
+                        onClick={() => update('isPrivate', !form.isPrivate)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.isPrivate ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                          }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isPrivate ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                  </FormField>
 
-                    {form.paymentCollectionMode === 'manual_qr' && (
-                      <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
-                        {/* <div>
+                  <div>
+                    <TextStyleControls
+                      fontSize={form.descriptionFontSize}
+                      onFontSizeChange={(size) => update('descriptionFontSize', size)}
+                      editorRef={descriptionEditorRef}
+                      onChange={(html) => update('description', html)}
+                    />
+                    <RichTextEditor
+                      id="description"
+                      editorRef={descriptionEditorRef}
+                      value={form.description}
+                      onChange={(html) => update('description', html)}
+                      fontSize={form.descriptionFontSize}
+                      label="Description"
+                      required={req.description}
+                      multiline
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Mobile-only: Event Logistics right after Basic Information. Desktop keeps its own copy in the right column. */}
+              <div className="lg:hidden">
+                {eventLogisticsCard}
+              </div>
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                    {form.registrationMode === 'tickets' ? 'Ticket Tiers' : 'RSVP details'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {companySettings.rsvpEnabled && (
+                    <FormField label="Registration type" htmlFor="registration-mode">
+                      <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => update('registrationMode', 'tickets')}
+                          className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'tickets' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                            }`}
+                        >
+                          Ticketed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => update('registrationMode', 'rsvp')}
+                          className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.registrationMode === 'rsvp' ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]' : 'text-gray-500 dark:text-slate-400'
+                            }`}
+                        >
+                          RSVP (external link)
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                        {form.registrationMode === 'rsvp'
+                          ? 'Good for online sessions or free events — attendees fill a form instead of buying a ticket.'
+                          : 'Attendees pay and get a ticket, tracked with quantity per tier.'}
+                      </p>
+                    </FormField>
+                  )}
+
+                  {form.registrationMode === 'tickets' ? (
+                    <>
+                      {companySettings.payments.allowManualQR && (
+                        <FormField label="Payment collection" htmlFor="payment-mode">
+                          <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => update('paymentCollectionMode', 'gateway')}
+                              className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'gateway'
+                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                                : 'text-gray-500 dark:text-slate-400'
+                                }`}
+                            >
+                              Payment gateway
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => update('paymentCollectionMode', 'manual_qr')}
+                              className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
+                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
+                                : 'text-gray-500 dark:text-slate-400'
+                                }`}
+                            >
+                              UPI QR (manual)
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            {form.paymentCollectionMode === 'manual_qr'
+                              ? 'Attendees scan your QR, pay directly, and upload a screenshot. They\u2019re added as attendees immediately — verify payment manually at check-in.'
+                              : 'Attendees pay via the integrated payment gateway at checkout.'}
+                          </p>
+                        </FormField>
+                      )}
+
+                      {form.paymentCollectionMode === 'manual_qr' && (
+                        <div className="space-y-3 rounded-sm border border-dashed border-gray-300 dark:border-slate-700 p-3">
+                          {/* <div>
                           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">QR code image *</p>
                           <QRCodeImageUpload
                             value={form.qrImage}
                             onChange={(src) => update('qrImage', src)}
                           />
                         </div> */}
-                        <FloatingLabelInput
-                          id="upi-id"
-                          label="UPI ID *"
-                          value={form.upiId}
-                          onChange={(e) => update('upiId', e.target.value)}
-                          required
-                        />
-                        <FloatingLabelInput
-                          id="payee-name"
-                          label="Label shown above QR (optional)"
-                          value={form.payeeName}
-                          onChange={(e) => update('payeeName', e.target.value)}
-                        />
-                        <p className="text-xs text-gray-500 dark:text-slate-500">
-                          The payment QR will be generated automatically from this UPI ID no image upload needed.
-                        </p>
-                      </div>
-                    )}
+                          <FloatingLabelInput
+                            id="upi-id"
+                            label="UPI ID *"
+                            value={form.upiId}
+                            onChange={(e) => update('upiId', e.target.value)}
+                            required
+                          />
+                          <FloatingLabelInput
+                            id="payee-name"
+                            label="Label shown above QR (optional)"
+                            value={form.payeeName}
+                            onChange={(e) => update('payeeName', e.target.value)}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-slate-500">
+                            The payment QR will be generated automatically from this UPI ID no image upload needed.
+                          </p>
+                        </div>
+                      )}
 
-                    <TicketTierEditor
-                      tiers={form.tiers}
-                      onChange={(tiers) => update('tiers', tiers)}
-                      showDummyQuantity={
-                        companySettings.ticketDisplay.showTicketsRemaining &&
-                        companySettings.ticketDisplay.useDummyThreshold
-                      }
-                      showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
-                    />
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    <FloatingLabelInput id="rsvp-link" label="Registration link (Google Form, Typeform, etc.) *" value={form.rsvpLink} onChange={(e) => update('rsvpLink', e.target.value)} required />
-                    {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
-                      <p className="text-xs text-red-500 dark:text-red-400">Enter a valid link starting with http:// or https://</p>
-                    )}
-                    <FloatingLabelInput id="rsvp-button-label" label="Button text (optional)" value={form.rsvpButtonLabel} onChange={(e) => update('rsvpButtonLabel', e.target.value)} />
-                    <p className="text-xs text-gray-500 dark:text-slate-500">
-                      Attendees will see this button on the event page and be sent to your form to register.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      <TicketTierEditor
+                        tiers={form.tiers}
+                        onChange={(tiers) => update('tiers', tiers)}
+                        showDummyQuantity={
+                          companySettings.ticketDisplay.showTicketsRemaining &&
+                          companySettings.ticketDisplay.useDummyThreshold
+                        }
+                        showEndDateTime={companySettings.ticketDisplay.enableTierAvailabilityWindow}
+                      />
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <FloatingLabelInput id="rsvp-link" label="Registration link (Google Form, Typeform, etc.) *" value={form.rsvpLink} onChange={(e) => update('rsvpLink', e.target.value)} required />
+                      {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
+                        <p className="text-xs text-red-500 dark:text-red-400">Enter a valid link starting with http:// or https://</p>
+                      )}
+                      <FloatingLabelInput id="rsvp-button-label" label="Button text (optional)" value={form.rsvpButtonLabel} onChange={(e) => update('rsvpButtonLabel', e.target.value)} />
+                      <p className="text-xs text-gray-500 dark:text-slate-500">
+                        Attendees will see this button on the event page and be sent to your form to register.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Past events gallery */}
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Past Events Gallery</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PastEventsGallery
-                  media={form.pastEventsGallery}
-                  onChange={(media) => update('pastEventsGallery', media)}
-                  maxItems={6}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Custom attendee questions */}
-            {companySettings.attendeeQuestionsEnabled && (
+              {/* Past events gallery */}
               <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Attendee Questions</CardTitle>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Past Events Gallery</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CustomFieldsEditor
-                    fields={form.customFields}
-                    onChange={(fields) => update('customFields', fields)}
+                  <PastEventsGallery
+                    media={form.pastEventsGallery}
+                    onChange={(media) => update('pastEventsGallery', media)}
+                    maxItems={6}
                   />
                 </CardContent>
               </Card>
-            )}
+
+              {/* Custom attendee questions */}
+              {companySettings.attendeeQuestionsEnabled && (
+                <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                  <CardHeader>
+                    <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Attendee Questions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CustomFieldsEditor
+                      fields={form.customFields}
+                      onChange={(fields) => update('customFields', fields)}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {/* Desktop-only: Event Logistics stays in the right column. Mobile copy renders after Basic Information. */}
+              <div className="hidden lg:block">
+                {eventLogisticsCard}
+              </div>
+              {/* Consent & Important Information — moved to sidebar for desktop */}
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <TextStyleControls
+                    fontSize={form.consentFontSize}
+                    onFontSizeChange={(size) => update('consentFontSize', size)}
+                    editorRef={consentEditorRef}
+                    onChange={(html) => update('consentText', html)}
+                  />
+                  <RichTextEditor
+                    id="consent-text"
+                    editorRef={consentEditorRef}
+                    value={form.consentText}
+                    onChange={(html) => update('consentText', html)}
+                    fontSize={form.consentFontSize}
+                    label="Important information & consent text"
+                    multiline
+                  />
+                  <p className="text-xs text-gray-500 dark:text-slate-500">
+                    Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardContent className="pt-4">
+                  <p className="text-sm font-semibold text-[#007A78] dark:text-[#2DD4BF] mb-2">Organizer Pro-Tips</p>
+                  <ul className="space-y-2 text-xs text-gray-600 dark:text-slate-300">
+                    <li>Use a clear, action-oriented title.</li>
+                    <li>Add multiple high-contrast photos — listings with a gallery attract more attendees.</li>
+                    <li>Set ticket tiers early so you can track sell-through as you promote.</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-
-          {/* ── Right column: Logistics + Pro-tips ────────────── */}
-          <div className="flex flex-col gap-4">
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
-                  <Calendar size={16} className="text-[#007A78] dark:text-[#2DD4BF]" /> Event Logistics
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Start date *" htmlFor="date">
-                    <div className="relative">
-                      <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
-                      <DatePicker
-                        id="date"
-                        selected={toDate(form.date)}
-                        onChange={(d: Date | null) => {
-                          const value = toDateStr(d);
-                          update('date', value);
-                          if (form.endDate && form.endDate < value) update('endDate', value);
-                        }}
-                        dateFormat="dd/MM/yyyy"
-                        placeholderText="Select date"
-                        wrapperClassName="w-full block"
-                        popperClassName="react-datepicker-popper-custom"
-                        popperPlacement="bottom-start"
-                        showPopperArrow={false}
-                        className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
-                        required
-                      />
-                    </div>
-                  </FormField>
-
-                  <FormField label={req.endDate ? 'End date *' : 'End date'} htmlFor="end-date">
-                    <div className="relative">
-                      <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
-                      <DatePicker
-                        id="end-date"
-                        selected={toDate(form.endDate)}
-                        onChange={(d: Date | null) => update('endDate', toDateStr(d))}
-                        minDate={toDate(form.date) || undefined}
-                        dateFormat="dd/MM/yyyy"
-                        placeholderText="Select date"
-                        wrapperClassName="w-full block"
-                        popperClassName="react-datepicker-popper-custom"
-                        popperPlacement="bottom-start"
-                        showPopperArrow={false}
-                        className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
-                        required={req.endDate}
-                      />
-                    </div>
-                  </FormField>
-                </div>
-
-                <FormField label="Time *" htmlFor="time">
-                  <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
-                    <Clock size={16} className="text-gray-400 shrink-0" />
-                    <TimeSelect
-                      value={form.time ? form.time.split(':')[0] : '00'}
-                      options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
-                      onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
-                    />
-                    <span className="text-slate-400">:</span>
-                    <TimeSelect
-                      value={form.time ? form.time.split(':')[1] : '00'}
-                      options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
-                      onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
-                    />
-                  </div>
-                </FormField>
-
-                {!form.isOnline && (
-                  <div>
-                    <FloatingLabelInput
-                      id="venue"
-                      label="Venue *"
-                      value={form.venue}
-                      onChange={(e) => update('venue', e.target.value)}
-                      required
-                    />
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="text-xs text-gray-500 dark:text-slate-500">Full address helps attendees find it on the day</p>
-                      {form.venue.trim().length > 2 && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.venue)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-medium text-[#007A78] dark:text-[#2DD4BF] hover:underline shrink-0 ml-2"
-                        >
-                          View on map ↗
-                        </a>
-                      )}
-                    </div>
-                    {form.venue.trim().length > 2 && (
-                      <iframe
-                        title="venue-map-preview"
-                        className="w-full h-32 mt-2 rounded-sm border border-gray-200 dark:border-slate-700"
-                        loading="lazy"
-                        src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
-                      />
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            {/* Consent & Important Information — moved to sidebar for desktop */}
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <TextStyleControls
-                  fontSize={form.consentFontSize}
-                  onFontSizeChange={(size) => update('consentFontSize', size)}
-                  editorRef={consentEditorRef}
-                  onChange={(html) => update('consentText', html)}
-                />
-                <RichTextEditor
-                  id="consent-text"
-                  editorRef={consentEditorRef}
-                  value={form.consentText}
-                  onChange={(html) => update('consentText', html)}
-                  fontSize={form.consentFontSize}
-                  label="Important information & consent text (optional)"
-                  multiline
-                />
-                <p className="text-xs text-gray-500 dark:text-slate-500">
-                  Shown to attendees before registration. They must tick &ldquo;Acknowledged&rdquo; to proceed. Leave blank to skip this step.
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <p className="text-sm font-semibold text-[#007A78] dark:text-[#2DD4BF] mb-2">Organizer Pro-Tips</p>
-                <ul className="space-y-2 text-xs text-gray-600 dark:text-slate-300">
-                  <li>Use a clear, action-oriented title.</li>
-                  <li>Add multiple high-contrast photos — listings with a gallery attract more attendees.</li>
-                  <li>Set ticket tiers early so you can track sell-through as you promote.</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        )}
       </main>
 
       {/* ── Sticky action bar ──────────────────────────────────────────── */}
@@ -840,6 +890,39 @@ const CreateEvent: React.FC = () => {
           </div>
         </div>
       )}
+      {showClearAllConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+          onClick={() => setShowClearAllConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-sm bg-white dark:bg-[#1E293B] shadow-xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">
+              Clear this draft?
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              This will erase everything you've filled in on this device — title, description,
+              images, tiers, everything. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearAllConfirm(false)}
+                className="rounded-sm border border-gray-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearAllDraft}
+                className="rounded-sm bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Clear everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showCreditConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
@@ -852,13 +935,15 @@ const CreateEvent: React.FC = () => {
             <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">
               Use 1 event credit to publish?
             </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
+                       <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
               Publishing this event will use <span className="font-semibold">1 event credit</span> from your balance
-              ({credits} remaining).
+              ({credits} remaining). This keeps the event live for{' '}
+              <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> — after that it'll
+              automatically move back to Draft and you'll need another credit to republish it.
             </p>
             <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-4">
-              Credit usage is final — credits are non-refundable even if the event is later edited,
-              unpublished, or deleted.
+              Credit usage is final credits are non-refundable even if the event is later edited,
+              unpublished, or deleted before the 3-month window ends.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -889,14 +974,14 @@ const CreateEvent: React.FC = () => {
             </button>
           )}
           {can(Permission.PUBLISH_EVENT) && (
-  <button onClick={handlePublish} disabled={!isPublishable || savingAction !== null}
-    className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
-  >
-    {savingAction === 'published'
-      ? 'Publishing…'
-      : `Publish Event (${creditsLoading ? '…' : credits})`}
-  </button>
-)}
+            <button onClick={handlePublish} disabled={!isPublishable || savingAction !== null}
+              className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
+            >
+              {savingAction === 'published'
+                ? 'Publishing…'
+                : `Publish Event (${creditsLoading ? '…' : credits})`}
+            </button>
+          )}
         </div>
       </div>
     </div>
