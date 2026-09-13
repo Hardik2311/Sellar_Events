@@ -57,6 +57,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [consentChecked, setConsentChecked] = useState(false);
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -66,7 +67,17 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null); // NEW
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
+  const customFields = event.customFields ?? [];
 
+  const updateCustomAnswer = (fieldId: string, value: string) => {
+    setCustomAnswers((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
+  const customFieldsValid = customFields.every((f) => {
+    if (!f.required) return true;
+    const val = customAnswers[f.id] ?? '';
+    return f.type === 'checkbox' ? val === 'true' : val.trim().length > 0;
+  });
   useEffect(() => {
     if (!event.companyId) return;
     const fetchTaxSettings = async () => {
@@ -180,7 +191,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       finalTotal <= 0 ||
       !buyerName.trim() ||
       !isValidPhone(buyerPhone) ||
-      (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail))
+      (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail)) ||
+      !customFieldsValid
     ) return;
     setSubmitting(true);
     setError(null);
@@ -273,6 +285,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               taxAmount: Number(unitTax.toFixed(2)),
               taxRate,
               taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
+              customFieldAnswers: customAnswers,
               purchasedAt: serverTimestamp(),
               checkedInAt: null,
               paymentMethod: 'manual_qr',
@@ -417,6 +430,69 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               </div>
             </div>
 
+            {customFields.length > 0 && (
+              <div className="space-y-2">
+                {customFields.map((field) => {
+                  const value = customAnswers[field.id] ?? '';
+                  const baseClass =
+                    'w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]';
+
+                  return (
+                    <div key={field.id}>
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                        {field.label}{field.required ? ' *' : ''}
+                      </label>
+
+                      {field.type === 'textarea' && (
+                        <textarea
+                          rows={3}
+                          value={value}
+                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                          placeholder={field.label}
+                          className={baseClass}
+                        />
+                      )}
+
+                      {field.type === 'select' && (
+                        <select
+                          value={value}
+                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                          className={baseClass}
+                        >
+                          <option value="">Select…</option>
+                          {(field.options ?? []).map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {field.type === 'checkbox' && (
+                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={value === 'true'}
+                            onChange={(e) => updateCustomAnswer(field.id, e.target.checked ? 'true' : 'false')}
+                            className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300"
+                          />
+                          {field.label}
+                        </label>
+                      )}
+
+                      {field.type === 'text' && (
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                          placeholder={field.label}
+                          className={baseClass}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Screenshot upload */}
             <div>
               <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">Upload the screenshot once done *</p>
@@ -487,6 +563,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                 !buyerName.trim() ||
                 !isValidPhone(buyerPhone) ||
                 (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail)) ||
+                !customFieldsValid ||
                 submitting ||
                 isCompressing
               }
