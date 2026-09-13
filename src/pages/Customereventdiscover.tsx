@@ -67,7 +67,7 @@ const EventCard: React.FC<{ event: PublicEvent; onOpen: () => void; shareBaseUrl
                         }
                     }}
                     title="Share event"
-                    className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
+                    className="absolute top-2 right-2 rounded-sm bg-white/90 p-1.5 text-slate-500 hover:bg-teal-50 hover:text-[#007A78] transition-colors"
                 >
                     <Share2 size={14} />
                 </button>
@@ -146,7 +146,7 @@ const CustomerEventDiscover: React.FC = () => {
     const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
     const [formatMenuOpen, setFormatMenuOpen] = useState(false);
 
-    // Private events must never show up in the public discover grid — only
+    // Private events must never show up in the public discover grid only
     // a direct shared link + code should reach them. `isPrivate` is the
     // real source of truth (activeAccessCode was never populated by the mapper).
     const visibleEvents = useMemo(
@@ -188,7 +188,7 @@ const CustomerEventDiscover: React.FC = () => {
 
     const hasFiltersApplied = search.trim().length > 0 || activeCategory !== 'All' || format !== 'all';
 
-    // The featured pick is independent of filters — it's always the
+    // The featured pick is independent of filters it's always the
     // organizer/admin-flagged event (or soonest upcoming as fallback), and
     // only shown on the unfiltered view so it doesn't fight the search results.
     const featured = useMemo(
@@ -273,7 +273,7 @@ const CustomerEventDiscover: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
-                        {/* Category filter — dropdown, left side */}
+                        {/* Category filter dropdown, left side */}
                         <div className="relative shrink-0">
                             <button
                                 type="button"
@@ -307,7 +307,7 @@ const CustomerEventDiscover: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Format filter — dropdown, right side */}
+                        {/* Format filter dropdown, right side */}
                         <div className="relative shrink-0">
                             <button
                                 type="button"
@@ -364,7 +364,7 @@ const CustomerEventDiscover: React.FC = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Featured event — only shown on the unfiltered view */}
+                            {/* Featured event only shown on the unfiltered view */}
                             {!hasFiltersApplied && featured && (
                                 <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B] overflow-hidden cursor-pointer" onClick={() => openEvent(featured)}>
                                     <div

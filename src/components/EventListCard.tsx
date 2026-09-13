@@ -36,13 +36,19 @@ export const EventListCard: React.FC<EventListCardProps> = ({
     [events, selectedEventId]
   );
 
-  const filteredEvents = useMemo(() => {
+    const filteredEvents = useMemo(() => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
+    // Deleted events live in their own "Deleted" tab — they must never show
+    // up in this selector. Filtering here (not just relying on the caller
+    // to pass a pre-filtered list) means this stays true no matter who's
+    // rendering this component.
+    const visibleEvents = events.filter((e) => e.status !== 'deleted');
+
     // Show all events (past + upcoming). Sort so upcoming events come first
     // (soonest first), then past events (most recent first) below them.
-    const sorted = [...events].sort((a, b) => {
+    const sorted = [...visibleEvents].sort((a, b) => {
       const aDate = new Date(a.startDate).setHours(0, 0, 0, 0);
       const bDate = new Date(b.startDate).setHours(0, 0, 0, 0);
       const aUpcoming = aDate >= startOfToday.getTime();

@@ -42,7 +42,7 @@ const isPastEvent = (event: PublicEvent): boolean => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Small pill toggle switch — reused for the Live/Draft and Featured controls
+// Small pill toggle switch reused for the Live/Draft and Featured controls
 // ─────────────────────────────────────────────────────────────────────────
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean }> = ({
   checked,
@@ -69,7 +69,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// Organizer event card — same visuals as customer card + status controls
+// Organizer event card same visuals as customer card + status controls
 // ─────────────────────────────────────────────────────────────────────────
 const OrganizerEventCard: React.FC<{
   event: PublicEvent;
@@ -126,7 +126,7 @@ const OrganizerEventCard: React.FC<{
               e.stopPropagation();
               onShare(event);
             }}
-            title={event.isPrivate ? 'Share event (private — access code required)' : 'Share event'}
+            title={event.isPrivate ? 'Share event (private access code required)' : 'Share event'}
             className="absolute top-2 right-2 rounded-sm bg-[#007A78] p-1.5 text-white hover:bg-[#006361] transition-colors"
           >
             <Share2 size={14} />
@@ -378,6 +378,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const [deletingEvent, setDeletingEvent] = useState<PublicEvent | null>(null);
   const [duplicatingEvent, setDuplicatingEvent] = useState<PublicEvent | null>(null);
   const [editBlockedEvent, setEditBlockedEvent] = useState<PublicEvent | null>(null);
+  const [restoringEvent, setRestoringEvent] = useState<PublicEvent | null>(null);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(events.map(getCategoryLabel)))], [events]);
 
@@ -478,7 +479,11 @@ const OrganizerEventDiscover: React.FC = () => {
     await duplicateEvent(duplicatingEvent.id);
     setDuplicatingEvent(null);
   };
-
+  const handleConfirmRestore = async () => {
+    if (!restoringEvent || !can(Permission.DELETE_EVENT)) return;
+    await restoreEvent(restoringEvent.id);
+    setRestoringEvent(null);
+  };
   const handleRestoreFromEditBlock = async () => {
     if (!editBlockedEvent) return;
     await restoreEvent(editBlockedEvent.id);
@@ -498,7 +503,7 @@ const OrganizerEventDiscover: React.FC = () => {
               <Link
                 to="/events/account/recharge"
                 className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
-                title="Event credits — click to recharge"
+                title="Event credits click to recharge"
               >
                 <Wallet size={16} />
                 {creditsLoading ? '…' : credits}
@@ -533,7 +538,7 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {/* Category filter — dropdown, left side */}
+            {/* Category filter dropdown, left side */}
             <div className="relative shrink-0 order-1">
               <button
                 type="button"
@@ -565,7 +570,7 @@ const OrganizerEventDiscover: React.FC = () => {
                 </>
               )}
             </div>
-            {/* Format filter — dropdown, right side */}
+            {/* Format filter dropdown, right side */}
             <div className="relative shrink-0 order-2 sm:order-3">
               <button
                 type="button"
@@ -597,7 +602,7 @@ const OrganizerEventDiscover: React.FC = () => {
                 </>
               )}
             </div>
-            {/* Upcoming / Past / Deleted view switch — row 2 on mobile, full width, buttons evenly stretched */}
+            {/* Upcoming / Past / Deleted view switch row 2 on mobile, full width, buttons evenly stretched */}
             <div className="order-3 sm:order-2 w-full sm:w-auto mt-2 sm:mt-0 flex items-center gap-1 rounded-sm border border-gray-300 bg-white p-0.5 text-xs font-medium shrink-0 dark:border-slate-700 dark:bg-slate-800">
               {([
                 { value: 'upcoming', label: 'Upcoming' },
@@ -661,7 +666,7 @@ const OrganizerEventDiscover: React.FC = () => {
                     }
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
-                    onRestore={can(Permission.DELETE_EVENT) ? (ev) => restoreEvent(ev.id) : undefined}
+                    onRestore={can(Permission.DELETE_EVENT) ? setRestoringEvent : undefined}
                     onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}
                     onEditBlocked={setEditBlockedEvent}
                     onDuplicate={can(Permission.DUPLICATE_EVENT) ? setDuplicatingEvent : undefined}
@@ -753,7 +758,7 @@ const OrganizerEventDiscover: React.FC = () => {
               <li>Cover images</li>
             </ul>
             <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-              Attendees, tickets sold &amp; live status will not be copied — the new event starts as a Draft.
+              Attendees, tickets sold &amp; live status will not be copied the new event starts as a Draft.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -774,6 +779,34 @@ const OrganizerEventDiscover: React.FC = () => {
           </div>
         </div>
       )}
+      {restoringEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Restore event?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Restore "{stripHtmlTags(restoringEvent.title)}"? It'll move back out of the Deleted tab as a Draft.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRestoringEvent(null)}
+                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
+              >
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {editBlockedEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800">
@@ -781,7 +814,7 @@ const OrganizerEventDiscover: React.FC = () => {
               Restore event to edit it
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              "{stripHtmlTags(editBlockedEvent.title)}" is currently deleted. Restore it first — then you'll be able to edit it.
+              "{stripHtmlTags(editBlockedEvent.title)}" is currently deleted. Restore it first then you'll be able to edit it.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -870,7 +903,7 @@ const OrganizerEventDiscover: React.FC = () => {
                   <span className="font-semibold">utilised immediately</span> and{' '}
                   <span className="font-semibold text-red-600">will not be refunded</span> even if the event
                   is not used, cancelled, or taken down later. This credit will keep the event live for{' '}
-                  <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> — after that
+                  <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> after that
                   it will automatically move back to Draft and republishing will use a fresh credit.</>
               )}
             </p>

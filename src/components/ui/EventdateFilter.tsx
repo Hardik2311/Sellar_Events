@@ -20,6 +20,36 @@ interface EventFilterContextType {
 
 const EventFilterContext = createContext<EventFilterContextType | undefined>(undefined);
 
+// Shared so both the provider's initial state and the preset dropdown
+// compute ranges the same way.
+const getPresetRange = (preset: EventFilterState['filterType']): EventFilterState => {
+  const today = new Date();
+
+  switch (preset) {
+    case 'yesterday': {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      return { startDate: getLocalDateString(y), endDate: getLocalDateString(y), filterType: 'yesterday' };
+    }
+    case 'last7days': {
+      const l7 = new Date();
+      l7.setDate(l7.getDate() - 6);
+      return { startDate: getLocalDateString(l7), endDate: getLocalDateString(today), filterType: 'last7days' };
+    }
+    case 'last30days': {
+      const l30 = new Date();
+      l30.setDate(l30.getDate() - 29);
+      return { startDate: getLocalDateString(l30), endDate: getLocalDateString(today), filterType: 'last30days' };
+    }
+    case 'alltime':
+      return { startDate: '', endDate: '', filterType: 'alltime' };
+    case 'today':
+    case 'custom':
+    default:
+      return { startDate: getLocalDateString(today), endDate: getLocalDateString(today), filterType: 'today' };
+  }
+};
+
 export const EventFilterProvider = ({
   children,
   defaultFilterType = 'today',
@@ -27,11 +57,7 @@ export const EventFilterProvider = ({
   children: ReactNode;
   defaultFilterType?: EventFilterState['filterType'];
 }) => {
-  const [filters, setFilters] = useState<EventFilterState>(
-    defaultFilterType === 'alltime'
-      ? { startDate: '', endDate: '', filterType: 'alltime' }
-      : { startDate: getLocalDateString(), endDate: getLocalDateString(), filterType: 'today' }
-  );
+  const [filters, setFilters] = useState<EventFilterState>(() => getPresetRange(defaultFilterType));
 
   return <EventFilterContext.Provider value={{ filters, setFilters }}>{children}</EventFilterContext.Provider>;
 };

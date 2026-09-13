@@ -330,15 +330,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         ) : (
           <div className="grow overflow-y-auto p-4 space-y-4">
             <div className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 space-y-1">
-              {breakdown.map((b) => (
+              {taxedBreakdown.map((b) => (
                 <div key={b.id} className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
                   <span>{b.qty}× {b.name}</span>
-                  <span>₹{b.subtotal.toLocaleString('en-IN')}</span>
+                  <span>₹{b.itemBase.toFixed(2)}</span>
                 </div>
               ))}
               {totalTaxAmount > 0 && (
                 <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Tax</span>
+                  <span>{taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}</span>
                   <span>₹{totalTaxAmount.toFixed(2)}</span>
                 </div>
               )}
@@ -430,7 +430,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                   {isCompressing
                     ? 'Processing image…'
                     : screenshot
-                      ? 'Screenshot selected — tap to change'
+                      ? 'Screenshot selected tap to change'
                       : 'Click to choose a file or drag here'}
                 </span>
                 <span className="text-[10px] text-slate-400">Size limit 1 MB</span>
@@ -492,7 +492,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               }
               className="w-full rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#006361] disabled:opacity-40"
             >
-              {submitting ? 'Submitting…' : "I've paid — confirm my ticket"}
+              {submitting ? 'Submitting…' : "I've paid confirm my ticket"}
             </button>
           </div>
         )}

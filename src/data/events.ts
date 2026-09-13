@@ -84,7 +84,21 @@ export const isCreditExpired = (event: Pick<PublicEvent, 'creditExpiresAt'>): bo
 
 export const formatCreditExpiry = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+// NEW — deleted events are hard-deleted (permanently removed from Firestore)
+// automatically once they've sat in the Deleted tab for this many days.
+export const HARD_DELETE_AFTER_DAYS = 30;
 
+// True once a soft-deleted event has passed its 30-day grace window and is
+// eligible for permanent removal. Events with no deletedAt (shouldn't happen
+// for status === 'deleted', but just in case) are treated as NOT yet eligible
+// so we never delete something by accident.
+export const isPastHardDeleteWindow = (event: Pick<PublicEvent, 'status' | 'deletedAt'>): boolean => {
+  if (event.status !== 'deleted' || !event.deletedAt) return false;
+  const deletedAtMs = new Date(event.deletedAt).getTime();
+  if (isNaN(deletedAtMs)) return false;
+  const daysSinceDelete = (Date.now() - deletedAtMs) / (1000 * 60 * 60 * 24);
+  return daysSinceDelete >= HARD_DELETE_AFTER_DAYS;
+};
 // Default per-order cap when the organizer hasn't set one.
 export const DEFAULT_MAX_TICKETS_PER_ORDER = 10;
 

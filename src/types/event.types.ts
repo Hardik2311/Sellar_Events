@@ -1,4 +1,4 @@
-export type EventStatus = 'draft' | 'published' | 'completed' | 'cancelled';
+export type EventStatus = 'draft' | 'published' | 'completed' | 'cancelled' | 'deleted';
 export type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox';
 export interface CustomField {
   id: string;

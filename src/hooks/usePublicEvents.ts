@@ -27,8 +27,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   featured: d.featured || false,
   isPrivate: d.isPrivate || false,
   accessCodes: d.accessCodes ?? [],
-   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
-   everPublished: d.everPublished || false,
+  creditExpiresAt: d.creditExpiresAt ?? null, // NEW
+  everPublished: d.everPublished || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -94,7 +94,7 @@ export function usePublicEvents(targetCompanyId?: string | null) {
         where('status', '==', 'published')
       );
 
-           unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
+      unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
         const mapped = snapshot.docs
           .map((docSnap) => mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId))
           // NEW — hide events whose credit validity has run out even if the

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { addDoc, arrayUnion, collection, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import { generateAccessCode, isCreditExpired, getNewCreditExpiry, type PublicEvent } from '../data/events';
+import { generateAccessCode, isCreditExpired, isPastHardDeleteWindow, getNewCreditExpiry, type PublicEvent } from '../data/events';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
@@ -24,7 +24,10 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   pastEventsGallery: d.pastEventsGallery ?? [],
   status: d.status,
   featured: d.featured || false,
-  deletedAt: d.deletedAt ?? null,
+  // deletedEvent() writes this as a Firestore serverTimestamp(), not a
+  // string — so it needs converting here or the 30-day hard-delete check
+  // downstream will compare against garbage.
+  deletedAt: d.deletedAt?.toDate ? d.deletedAt.toDate().toISOString() : (d.deletedAt ?? null),
   isPrivate: d.isPrivate || false,
   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
   tiers: (d.tiers || []).map((t: any) => ({
@@ -76,17 +79,24 @@ export const useOrganizerEvents = () => {
       setEvents(mapped);
       setLoading(false);
 
-      // NEW — lazy auto-unpublish: there's no server cron, so whichever
-      // organizer's dashboard loads next after a credit's 3-month window
-      // has lapsed flips that event back to Draft. Customer-facing side
-      // (usePublicEvents) also filters expired events out independently,
-      // so attendees never see a stale published event either way.
-      mapped
+            mapped
         .filter((e) => e.status === 'published' && isCreditExpired(e))
         .forEach((e) => {
           updateDoc(doc(db, 'companies', profile.companyId, 'events', e.id), {
             status: 'draft',
           }).catch((err) => console.error('Failed to auto-expire event:', err));
+        });
+
+      // NEW — lazy hard-delete: same "whoever's dashboard loads next" trick
+      // as the auto-unpublish above. No server cron, so once a soft-deleted
+      // event has sat past its 30-day grace window, whichever organizer's
+      // dashboard loads next permanently removes the doc.
+      mapped
+        .filter((e) => isPastHardDeleteWindow(e))
+        .forEach((e) => {
+          deleteDoc(doc(db, 'companies', profile.companyId, 'events', e.id)).catch((err) =>
+            console.error('Failed to hard-delete expired event:', err)
+          );
         });
     });
 
