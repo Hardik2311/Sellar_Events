@@ -64,6 +64,7 @@ const CustomerReportPageInner: React.FC = () => {
           c.totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
         ]),
         foot: [['TOTAL', `${summary.totalCustomers} customers`, filtered.reduce((s, c) => s + c.ticketsBought, 0).toString(), summary.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
+        showFoot: 'lastPage',   // 👈 ye line add ki — ab TOTAL sirf last page pe aayega
         theme: 'plain',
         styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
         headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },

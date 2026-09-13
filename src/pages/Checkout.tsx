@@ -192,10 +192,7 @@ const CheckoutPage: React.FC = () => {
   const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
   const taxRate = taxSettings?.defaultTaxRate || 0;
 
-  let baseSubtotal = 0;
-  let totalTaxAmount = 0;
-
-  const subtotal = lineItems.reduce((acc, item) => {
+  const lineItemsWithTax = lineItems.map((item) => {
     const qty = item.qty;
     const price = item.tier.price;
 
@@ -205,27 +202,26 @@ const CheckoutPage: React.FC = () => {
 
     if (scheme === 'regular') {
       if (taxType === 'exclusive') {
-        // EXCLUSIVE: tax is added on top of the ticket price
         itemBaseAmount = price * qty;
         itemTaxAmount = itemBaseAmount * (taxRate / 100);
         itemTotalAmount = itemBaseAmount + itemTaxAmount;
       } else {
-        // INCLUSIVE: tax is already inside the ticket price, extract it
         itemTotalAmount = price * qty;
         itemBaseAmount = itemTotalAmount / (1 + taxRate / 100);
         itemTaxAmount = itemTotalAmount - itemBaseAmount;
       }
     } else {
-      // EXEMPT / COMPOSITION: no tax
       itemBaseAmount = price * qty;
       itemTaxAmount = 0;
       itemTotalAmount = itemBaseAmount;
     }
 
-    baseSubtotal += itemBaseAmount;
-    totalTaxAmount += itemTaxAmount;
-    return acc + itemTotalAmount;
-  }, 0);
+    return { ...item, itemBaseAmount, itemTaxAmount, itemTotalAmount };
+  });
+
+  const baseSubtotal = lineItemsWithTax.reduce((s, it) => s + it.itemBaseAmount, 0);
+  const totalTaxAmount = lineItemsWithTax.reduce((s, it) => s + it.itemTaxAmount, 0);
+  const subtotal = lineItemsWithTax.reduce((s, it) => s + it.itemTotalAmount, 0);
 
   const total = taxSettings?.enableRounding
     ? roundToInterval(subtotal, taxSettings.roundingInterval || 1)
@@ -510,21 +506,23 @@ const CheckoutPage: React.FC = () => {
             <CardContent className="pt-4">
               <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Order summary</h2>
               <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-700">
-                {lineItems.map(({ tier, qty }) => (
+                {lineItemsWithTax.map(({ tier, qty, itemBaseAmount }) => (
                   <div key={tier.id} className="flex items-center justify-between py-2 text-sm">
                     <span className="text-slate-600 dark:text-slate-300">
                       {tier.name} <span className="text-slate-400 dark:text-slate-500">× {qty}</span>
                     </span>
                     <span className="font-medium text-slate-800 dark:text-slate-100">
-                      {tier.price === 0 ? 'Free' : `\u20B9${(tier.price * qty).toLocaleString('en-IN')}`}
+                      {tier.price === 0 ? 'Free' : `₹${itemBaseAmount.toFixed(2)}`}
                     </span>
                   </div>
                 ))}
               </div>
               {totalTaxAmount > 0 && (
                 <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Tax</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{`\u20B9${totalTaxAmount.toFixed(2)}`}</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}
+                  </span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{`₹${totalTaxAmount.toFixed(2)}`}</span>
                 </div>
               )}
               {roundOffAmt !== 0 && (
@@ -563,126 +561,126 @@ const CheckoutPage: React.FC = () => {
                 {attendeeDetails.map((entry, index) => {
                   if (sameForAll && index > 0) return null;
                   return (
-                  <div key={index} className="flex flex-col gap-3">
-                    {totalQty > 1 && !sameForAll && (
-                      <p className="text-xs font-bold text-[#007A78]">
-                        Ticket {index + 1} · {ticketSlots[index]?.tierName}
-                      </p>
-                    )}
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
-                      <input
-                        value={entry.name}
-                        onChange={(e) => updateAttendee(index, 'name', e.target.value)}
-                        placeholder="As it should appear on the ticket"
-                        autoComplete="name"
-                        spellCheck={false}
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
-                      <input
-                        type="email"
-                        value={entry.email}
-                        onChange={(e) => updateAttendee(index, 'email', e.target.value)}
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                        spellCheck={false}
-                        className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
-                          ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                          : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
-                          }`}
-                      />
-                      {entry.email.length > 0 && !isValidEmail(entry.email) && (
-                        <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        value={entry.phone}
-                        onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        maxLength={10}
-                        placeholder="10-digit mobile number"
-                        autoComplete="tel"
-                        className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
-                          ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                          : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
-                          }`}
-                      />
-                      {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
-                        <p className="mt-1 text-xs font-medium text-red-500">
-                          {entry.phone.length < 10
-                            ? 'Enter a 10-digit mobile number.'
-                            : 'Must start with 6, 7, 8, or 9.'}
+                    <div key={index} className="flex flex-col gap-3">
+                      {totalQty > 1 && !sameForAll && (
+                        <p className="text-xs font-bold text-[#007A78]">
+                          Ticket {index + 1} · {ticketSlots[index]?.tierName}
                         </p>
                       )}
-                    </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
+                        <input
+                          value={entry.name}
+                          onChange={(e) => updateAttendee(index, 'name', e.target.value)}
+                          placeholder="As it should appear on the ticket"
+                          autoComplete="name"
+                          spellCheck={false}
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                        <input
+                          type="email"
+                          value={entry.email}
+                          onChange={(e) => updateAttendee(index, 'email', e.target.value)}
+                          placeholder="you@example.com"
+                          autoComplete="email"
+                          spellCheck={false}
+                          className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
+                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                            }`}
+                        />
+                        {entry.email.length > 0 && !isValidEmail(entry.email) && (
+                          <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={entry.phone}
+                          onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          maxLength={10}
+                          placeholder="10-digit mobile number"
+                          autoComplete="tel"
+                          className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
+                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
+                            }`}
+                        />
+                        {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
+                          <p className="mt-1 text-xs font-medium text-red-500">
+                            {entry.phone.length < 10
+                              ? 'Enter a 10-digit mobile number.'
+                              : 'Must start with 6, 7, 8, or 9.'}
+                          </p>
+                        )}
+                      </div>
 
-                    {customFields.map((field) => {
-                      const value = entry.customAnswers[field.id] ?? '';
-                      const baseClass =
-                        'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]';
+                      {customFields.map((field) => {
+                        const value = entry.customAnswers[field.id] ?? '';
+                        const baseClass =
+                          'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]';
 
-                      return (
-                        <div key={field.id}>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">
-                            {field.label}{field.required ? ' *' : ''}
-                          </label>
-
-                          {field.type === 'textarea' && (
-                            <textarea
-                              rows={3}
-                              value={value}
-                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                              placeholder={field.label}
-                              className={baseClass}
-                            />
-                          )}
-
-                          {field.type === 'select' && (
-                            <select
-                              value={value}
-                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                              className={baseClass}
-                            >
-                              <option value="">Select…</option>
-                              {(field.options ?? []).map((opt) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          )}
-
-                          {field.type === 'checkbox' && (
-                            <label className="flex items-center gap-2 text-sm text-slate-700">
-                              <input
-                                type="checkbox"
-                                checked={value === 'true'}
-                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
-                                className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
-                              />
-                              {field.label}
+                        return (
+                          <div key={field.id}>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">
+                              {field.label}{field.required ? ' *' : ''}
                             </label>
-                          )}
 
-                          {field.type === 'text' && (
-                            <input
-                              type="text"
-                              value={value}
-                              onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                              placeholder={field.label}
-                              className={baseClass}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                            {field.type === 'textarea' && (
+                              <textarea
+                                rows={3}
+                                value={value}
+                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                placeholder={field.label}
+                                className={baseClass}
+                              />
+                            )}
 
-                    {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
-                  </div>
+                            {field.type === 'select' && (
+                              <select
+                                value={value}
+                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                className={baseClass}
+                              >
+                                <option value="">Select…</option>
+                                {(field.options ?? []).map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            )}
+
+                            {field.type === 'checkbox' && (
+                              <label className="flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={value === 'true'}
+                                  onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
+                                  className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
+                                />
+                                {field.label}
+                              </label>
+                            )}
+
+                            {field.type === 'text' && (
+                              <input
+                                type="text"
+                                value={value}
+                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                placeholder={field.label}
+                                className={baseClass}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
+                    </div>
                   );
                 })}
               </div>

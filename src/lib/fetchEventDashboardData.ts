@@ -43,12 +43,18 @@ export async function fetchEventDashboardData(
     const start = new Date(startDate); start.setHours(0, 0, 0, 0);
     const end = new Date(endDate); end.setHours(23, 59, 59, 999);
 
-        // Events are NOT date-filtered anymore — always fetch all of them.
+    // Events are NOT date-filtered anymore — always fetch all of them.
     // The selected date range only scopes ticketsSold/revenue/tier/trend stats below.
     const eventsSnap = await getDocs(query(
         collection(db, 'companies', companyId, 'events'),
         orderBy('date', 'asc')
     ));
+
+    // NEW — soft-deleted events must never surface anywhere on this dashboard
+    // (list selector, overview card, tier breakdown, sales trend, or the
+    // auto-select-first-event logic below). They live only in the separate
+    // "Deleted" tab (useOrganizerEvents), not here.
+    const activeEventDocs = eventsSnap.docs.filter((d) => d.data().status !== 'deleted');
 
     // 3. Aggregate each event's attendees subcollection.
     //    N+1 reads — fine for a handful of events; if the event count grows,
@@ -63,7 +69,7 @@ export async function fetchEventDashboardData(
     };
 
     const eventResults: PromiseSettledResult<EventSummary>[] = await Promise.allSettled(
-        eventsSnap.docs.map(async (eventDoc): Promise<EventSummary> => {
+        activeEventDocs.map(async (eventDoc): Promise<EventSummary> => {
             const salesByDate = makeEmptySalesByDate();
             const e = eventDoc.data();
 
@@ -117,7 +123,7 @@ export async function fetchEventDashboardData(
                 if (dateKey in salesByDate) salesByDate[dateKey] += Number(resolvedAmount) || 0;
             });
 
-                        const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({
+            const tiers: TicketTier[] = (e.tiers || []).map((t: any) => ({
                 id: t.id, name: t.name, price: t.price, total: t.quantity, sold: tierSold[t.id] || 0,
             }));
 
@@ -158,7 +164,7 @@ export async function fetchEventDashboardData(
         cacheEnd: endDate,
     };
 
-      try {
+    try {
         localStorage.setItem(cacheKey, JSON.stringify(result));
     } catch (err) {
         console.warn('Skipping dashboard cache write:', (err as Error)?.name, (err as Error)?.message);

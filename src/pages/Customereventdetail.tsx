@@ -247,7 +247,13 @@ const CustomerEventDetail: React.FC = () => {
     }));
 
   const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
-
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/');
+  };
   const handleGetTickets = () => {
     if (event.registrationMode === 'tickets' && event.paymentCollectionMode === 'manual_qr') {
       setShowManualQR(true); // inline QR card, no navigation to /checkout
@@ -319,7 +325,13 @@ const CustomerEventDetail: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          <BackButton className="border-white/40 bg-white/90 hover:bg-white" />
+          <button
+            onClick={handleBack}
+            aria-label="Go back"
+            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
         </div>
 
         {/* category badge — back to its original spot, overlaid on the image */}

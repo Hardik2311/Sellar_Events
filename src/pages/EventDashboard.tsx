@@ -179,7 +179,7 @@ const EventDashboardContent: React.FC = () => {
   );
 };
 const EventDashboard: React.FC = () => (
-  <EventFilterProvider>
+  <EventFilterProvider defaultFilterType="last30days">
     <EventDashboardContent />
   </EventFilterProvider>
 );

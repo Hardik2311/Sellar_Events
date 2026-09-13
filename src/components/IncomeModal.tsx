@@ -74,11 +74,19 @@ export const IncomeModal = ({ isOpen, onClose, events = [], eventsLoading = fals
   return (
     <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-black/40 px-4">
       <div className="bg-white dark:bg-[#1E293B] w-full max-w-sm rounded-sm shadow-xl p-5 border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Add Income</h2>
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            Added by: <span className="text-slate-900 dark:text-white font-semibold">{currentUserName}</span>
-          </span>
+        <div className="flex items-start justify-between gap-2 mb-4">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+            Add Income
+          </h2>
+          <div className="flex flex-col items-end text-right min-w-0">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Added by:</span>
+            <span
+              className="text-sm text-slate-900 dark:text-white font-semibold truncate max-w-[140px]"
+              title={currentUserName}
+            >
+              {currentUserName}
+            </span>
+          </div>
         </div>
 
         <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Event</label>

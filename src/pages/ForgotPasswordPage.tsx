@@ -9,6 +9,7 @@ import {
   Spinner,
   AuthHeroPanel,
 } from '../components/ui/AuthUIComponents';
+import FloatingEventIcons from '../components/ui/FloatingEventIcons';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ const ForgotPasswordPage: React.FC = () => {
       return;
     }
 
-   setLoading(true);
+    setLoading(true);
     try {
       await sendPasswordResetEmail(auth, email, {
         url: `${window.location.origin}${ROUTES.RESET_PASSWORD}`,
@@ -54,7 +55,10 @@ const ForgotPasswordPage: React.FC = () => {
     <>
       {/* ================= MOBILE VIEW ================= */}
       <div className="relative min-h-screen w-screen flex flex-col lg:hidden bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
-        <AuthHeroPanel className="w-full h-64 shrink-0" />
+        <div className="relative w-full h-64 shrink-0 overflow-hidden">
+          <AuthHeroPanel className="w-full h-full" />
+          <FloatingEventIcons iconClassName="text-white" />
+        </div>
 
         <div className="w-full bg-[#F9FAFB] dark:bg-[#1E293B] p-6 py-8 rounded-t-3xl flex-1 z-20 -mt-6 border-t border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto">
           <div className="w-full max-w-sm mx-auto">
@@ -124,7 +128,11 @@ const ForgotPasswordPage: React.FC = () => {
       {/* ================= DESKTOP VIEW ================= */}
       <div className="hidden lg:flex h-screen w-screen items-center justify-center bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
         <div className="flex w-full h-full overflow-hidden bg-white dark:bg-[#0F172A]">
-          <AuthHeroPanel className="w-1/2 h-full" />
+          <div className="relative w-1/2 h-full overflow-hidden">
+            <AuthHeroPanel className="w-full h-full" />
+            <FloatingEventIcons iconClassName="text-white" />
+          </div>
+          ...
 
           <div className="w-1/2 flex items-center justify-center bg-[#F9FAFB] dark:bg-[#1E293B] border-l border-slate-200 dark:border-slate-800">
             <div className="grow overflow-hidden flex flex-col justify-center">

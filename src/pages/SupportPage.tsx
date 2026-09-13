@@ -175,7 +175,7 @@ const SupportPage: React.FC = () => {
             isOpen={openSection === 'faq-2'}
             onClick={() => toggleSection('faq-2')}
           >
-            From your Dashboard, tap <strong>"Create Event"</strong>, fill in the event details, and publish. You can edit event fields anytime from <strong>Discover Page</strong>.
+            From your Dashboard, tap <strong>"Add Event"</strong>, fill in the event details, and publish. You can edit event fields anytime from <strong>Discover Page</strong>.
           </AccordionItem>
 
           <AccordionItem

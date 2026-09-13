@@ -428,7 +428,7 @@ const Attendees: React.FC = () => {
         <Link
           to="/events/account/recharge"
           className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
-          title="Event credits — click to recharge"
+          title="Event credits click to recharge"
         >
           <Wallet size={16} />
           {creditsLoading ? '…' : credits}
@@ -574,7 +574,7 @@ const Attendees: React.FC = () => {
                       data={attendees}
                       columns={EXPORT_COLUMNS}
                       fileNameBase={selectedEvent.title}
-                      documentTitle={`${selectedEvent.title} — Attendees`}
+                      documentTitle={`${selectedEvent.title} Attendees`}
                       disabled={attendees.length === 0}
                     />
                   </ShowWrapper>

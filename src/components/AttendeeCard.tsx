@@ -3,6 +3,7 @@ import { Phone, Mail, ChevronDown, Pencil } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { Attendee } from '../types/attendee.types';
 import type { CustomField } from '../types/event.types';
+import { stripHtmlTags } from '../lib/utils';
 
 interface AttendeeCardProps {
   attendee: Attendee;
@@ -130,9 +131,9 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText('E · T I C K E T', cardX + 20, cardY + 22);
 
-    ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px sans-serif';
-    const titleText = eventTitle || 'Event Ticket';
+    const titleText = stripHtmlTags(eventTitle || '') || 'Event Ticket';
     ctx.fillText(titleText.length > 26 ? titleText.slice(0, 24) + '…' : titleText, cardX + 20, cardY + 44);
 
     if (eventDate) {
@@ -227,8 +228,9 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     return out;
   };
 
-  const handleShare = () => {
-    const text = `${eventTitle ? eventTitle + '\n' : ''}${attendee.name} — ${attendee.tierName}\nTicket: ${attendee.ticketId}\nPhone: ${attendee.phone}`;
+   const handleShare = () => {
+    const cleanEventTitle = eventTitle ? stripHtmlTags(eventTitle) : '';
+    const text = `${cleanEventTitle ? cleanEventTitle + '\n' : ''}${attendee.name} — ${attendee.tierName}\nTicket: ${attendee.ticketId}\nPhone: ${attendee.phone}`;
     const canvas = buildTicketCanvas();
 
     if (canvas && navigator.share) {
