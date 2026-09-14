@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, Copy, Check, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
 import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
@@ -68,6 +68,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
   const customFields = event.customFields ?? [];
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  // Whenever an error appears (upload/validation/submit), pull it into view
+  // instead of letting it silently sit below the fold and shift layout.
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
 
   const updateCustomAnswer = (fieldId: string, value: string) => {
     setCustomAnswers((prev) => ({ ...prev, [fieldId]: value }));
@@ -548,7 +557,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               This confirms the submission of your ticket request. Final entry/pass allocation is subject to the organizer’s approval and discretion. Any further communication will be shared by the organizer.
             </label>
 
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && (
+              <div
+                ref={errorRef}
+                className="flex items-start gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
+              >
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
           </div>
         )}
 

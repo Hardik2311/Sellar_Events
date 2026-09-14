@@ -114,7 +114,7 @@ const PnlReportPageInner: React.FC = () => {
       const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Type', width: 14 }, { header: 'Description', width: 34 }, { header: 'Amount (₹)', width: 18 }];
       const colCount = COLS.length;
       const dataStartRow = 7;
-       const totalRows = dataStartRow + filtered.length + 4; 
+      const totalRows = dataStartRow + filtered.length + 4;
       const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
       aoa[0][0] = profile?.organizationName
@@ -128,7 +128,7 @@ const PnlReportPageInner: React.FC = () => {
         const row = dataStartRow + idx;
         aoa[row] = [idx + 1, formatDate(r.date), r.type, r.description, r.type === 'Expense' ? -r.amount : r.amount];
       });
-       const salesRow = dataStartRow + filtered.length;
+      const salesRow = dataStartRow + filtered.length;
       const incomeRow = salesRow + 1;
       const expRow = incomeRow + 1;
       const netRow = expRow + 1;
@@ -264,7 +264,7 @@ const PnlReportPageInner: React.FC = () => {
 
           <EventDateFilter />
 
-         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Sales</p>
               <p className="text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">₹{Math.round(summary.totalSales).toLocaleString('en-IN')}</p>
@@ -391,18 +391,16 @@ const PnlReportPageInner: React.FC = () => {
                   ) : filtered.map((r, i) => (
                     <tr key={r.id} className={i % 2 === 0 ? 'bg-white dark:bg-[#1E293B]' : 'bg-slate-50 dark:bg-[#182234]'}>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatDate(r.date)}</td>
-                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                          r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                          : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                          : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
                           {r.type}
                         </span>
                       </td>
-                      <td className={`px-4 py-3 font-semibold ${
-                        r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
-                        : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      <td className={`px-4 py-3 font-semibold ${r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
+                          : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-emerald-600 dark:text-emerald-400'}`}>
                         {r.type === 'Expense' ? '-' : '+'}₹{r.amount.toLocaleString('en-IN')}
                       </td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.description}</td>
@@ -429,7 +427,7 @@ const PnlReportPageInner: React.FC = () => {
 };
 
 const PnlReportPage: React.FC = () => (
-  <EventFilterProvider>
+  <EventFilterProvider defaultFilterType="last30days">
     <PnlReportPageInner />
   </EventFilterProvider>
 );

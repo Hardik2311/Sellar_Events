@@ -368,7 +368,7 @@ const SalesReportPageInner: React.FC = () => {
 };
 
 const SalesReportPage: React.FC = () => (
-    <EventFilterProvider>
+    <EventFilterProvider defaultFilterType="last30days">
         <SalesReportPageInner />
     </EventFilterProvider>
 );

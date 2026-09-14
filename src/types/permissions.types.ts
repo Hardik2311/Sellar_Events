@@ -163,7 +163,7 @@ export const DEFAULT_PERMISSIONS: PermissionsByRole = {
     Permission.ADD_WALK_IN_ATTENDEE,
     Permission.IMPORT_ATTENDEES,
     Permission.EDIT_ATTENDEE,
-    Permission.VIEW_REPORTS,
+    //Permission.VIEW_REPORTS,
     Permission.ADD_EXPENSE,
     Permission.VIEW_SETTINGS,
     Permission.EDIT_EVENT_SETTINGS,
