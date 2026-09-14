@@ -28,21 +28,6 @@ const ReportsHub: React.FC = () => {
             <main className="grow overflow-y-auto p-4 sm:p-6">
                 <div className="mx-auto max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <Link
-                        to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_REPORTS_EXPENSE}`.replace('//', '/')}
-                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
-                    >
-                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
-                            <Receipt className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-bold">Expense Report</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Track and download expenses for a specific event
-                            </p>
-                        </div>
-                    </Link>
-
-                    <Link
                         to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_REPORTS_SALES}`.replace('//', '/')}
                         className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
                     >
@@ -98,6 +83,21 @@ const ReportsHub: React.FC = () => {
                             <p className="text-sm font-bold">Income Report</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                 Track and download income for a specific event
+                            </p>
+                        </div>
+                    </Link>
+
+                    <Link
+                        to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_REPORTS_EXPENSE}`.replace('//', '/')}
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                    >
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                            <Receipt className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold">Expense Report</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Track and download expenses for a specific event
                             </p>
                         </div>
                     </Link>
