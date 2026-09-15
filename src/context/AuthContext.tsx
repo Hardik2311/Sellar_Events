@@ -4,7 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { auth, db } from '../lib/firebase';
 import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
 
-interface UserProfile {
+export interface UserProfile {
   fullName: string;
   email: string;
   role: string;
@@ -40,6 +40,19 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export const useAuth = () => useContext(AuthContext);
+
+// PAN + Aadhaar (number and at least one uploaded doc each) are required
+// before an organizer can create/publish events — collected at signup, but
+// this also catches accounts that predate that requirement or never
+// finished it, gating them until they fill it in via Edit Profile.
+export const isProfileComplete = (profile: UserProfile | null): boolean =>
+  !!(
+    profile &&
+    profile.aadhaarNumber?.trim() &&
+    profile.panNumber?.trim() &&
+    (profile.aadhaarDocUrls?.length ?? 0) > 0 &&
+    (profile.panDocUrls?.length ?? 0) > 0
+  );
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -105,23 +118,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const companyData = companySnap && companySnap.exists() ? companySnap.data() : {};
       const rootData = rootSnap && rootSnap.exists() ? rootSnap.data() : {};
       const mergedCompany = { ...rootData, ...companyData };
+      const role = userData.role || mergedCompany.role || 'admin';
+      const isOwnerRole = role === 'admin';
 
+      // Identity (PAN/Aadhaar) and social/contact details are personal to
+      // each user — a team member must complete their OWN KYC and enter
+      // their OWN social handles, not silently inherit the owner's, or the
+      // isProfileComplete() gate below would consider them "done" just
+      // because the owner happened to be. Only the owner (whose identity
+      // legitimately IS the business's, for back-compat with data saved
+      // before per-user storage existed) still falls back to company data.
       setProfile({
         fullName: userData.fullName || userData.name || mergedCompany.fullName || firebaseUser.displayName || 'Organizer User',
         email: userData.email || mergedCompany.email || firebaseUser.email || '',
-        role: userData.role || mergedCompany.role || 'admin',
+        role,
         companyId,
         phone: userData.phone || rootData.ownerPhoneNumber || mergedCompany.phone,
-        aadhaarNumber: userData.aadhaarNumber || mergedCompany.aadhaarNumber,
-        panNumber: userData.panNumber || mergedCompany.panNumber,
+        aadhaarNumber: userData.aadhaarNumber || (isOwnerRole ? mergedCompany.aadhaarNumber : undefined),
+        panNumber: userData.panNumber || (isOwnerRole ? mergedCompany.panNumber : undefined),
         gstinNumber: userData.gstinNumber || mergedCompany.gstinNumber,
         gstType: userData.gstType || mergedCompany.gstType,
         aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
         panDocUrls: normalizeDocFiles(userData.panDocUrls),
-        instagram: userData.instagram || mergedCompany.instagram,
-        facebook: userData.facebook || mergedCompany.facebook,
-        twitter: userData.twitter || mergedCompany.twitter,
-        whatsappNumber: userData.whatsappNumber || mergedCompany.whatsappNumber || rootData.ownerPhoneNumber,
+        instagram: userData.instagram || (isOwnerRole ? mergedCompany.instagram : undefined),
+        facebook: userData.facebook || (isOwnerRole ? mergedCompany.facebook : undefined),
+        twitter: userData.twitter || (isOwnerRole ? mergedCompany.twitter : undefined),
+        whatsappNumber: userData.whatsappNumber || (isOwnerRole ? (mergedCompany.whatsappNumber || rootData.ownerPhoneNumber) : undefined),
         profilePictureUrl: userData.profilePictureUrl || userData.profilePicture || mergedCompany.profilePictureUrl || firebaseUser.photoURL || undefined,
         organizationName: mergedCompany.organizationName || rootData.name || userData.organizationName,
         website: mergedCompany.website || userData.website,

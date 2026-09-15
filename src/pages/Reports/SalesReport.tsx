@@ -64,6 +64,7 @@ const SalesReportPageInner: React.FC = () => {
                     (a.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
                 ]),
                 foot: [['TOTAL', `${summary.ticketsSold} tickets`, '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
+                showFoot: 'lastPage',
                 theme: 'plain',
                 styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
                 headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },

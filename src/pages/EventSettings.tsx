@@ -216,7 +216,7 @@ const EventFieldSettings: React.FC = () => {
                 </div>
                 <SettingToggle
                   checked={draft.payments.allowManualQR}
-                  disabled={loading}
+                  disabled={true}
                   onChange={() =>
                     setDraft((prev) => ({
                       ...prev,

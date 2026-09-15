@@ -391,14 +391,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         </a>
                       )}
                     </div>
-                    {form.venue.trim().length > 2 && (
-                      <iframe
-                        title="venue-map-preview"
-                        className="w-full h-32 mt-2 rounded-sm border border-gray-200 dark:border-slate-700"
-                        loading="lazy"
-                        src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
-                      />
-                    )}
                   </div>
                 )}
 
@@ -514,7 +506,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                           onChange={(e) => update('payeeName', e.target.value)}
                         />
                         <p className="text-xs text-gray-500 dark:text-slate-500">
-                          Payment QR yahi UPI ID se automatically generate hoga — koi image upload nahi karni.
+                          The payment QR will be generated automatically from this UPI ID no image upload needed.
                         </p>
                       </div>
                     )}

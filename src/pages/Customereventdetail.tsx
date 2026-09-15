@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Minus, Plus, User, Loader2, Ticket, X } from 'lucide-react';
-import BackButton from '../components/ui/BackButton';
 import { Card, CardContent } from '../components/ui/card';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
 import {

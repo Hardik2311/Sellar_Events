@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw, Lock, Wallet, AlertTriangle } from 'lucide-react';
+import { Search, MapPin, Calendar, Wifi, Clock, Ticket, X, Star, Radio, ChevronDown, Loader2, Trash2, LinkIcon, Pencil, Share2, Copy, CheckCircle, Eye, RotateCcw, Lock, Wallet } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import EventSubdomainModal from '../components/SubDomainModal';
 import EditEventModal from '../components/EditEventModal';
@@ -327,7 +327,7 @@ const OrganizerEventCard: React.FC<{
 const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { can } = usePermissions();
+  const { can, isOwner } = usePermissions();
   const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
   const { settings } = useCompanySettings();
   const { credits, loading: creditsLoading } = useEventCredits();
@@ -435,7 +435,6 @@ const OrganizerEventDiscover: React.FC = () => {
 
   const [toggleLiveError, setToggleLiveError] = useState<string | null>(null);
   const [confirmingLiveEvent, setConfirmingLiveEvent] = useState<PublicEvent | null>(null);
-  const [showPublishCaution, setShowPublishCaution] = useState(false); // 2nd-step credit caution
   useEffect(() => {
     if (!toggleLiveError) return;
     const t = setTimeout(() => setToggleLiveError(null), 3000);
@@ -508,13 +507,15 @@ const OrganizerEventDiscover: React.FC = () => {
                 <Wallet size={16} />
                 {creditsLoading ? '…' : credits}
               </Link>
-              <button
-                type="button"
-                onClick={() => setIsSubdomainModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                <LinkIcon size={16} /> <span className="hidden sm:inline">Event Link</span>
-              </button>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setIsSubdomainModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <LinkIcon size={16} /> <span className="hidden sm:inline">Event Link</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -874,59 +875,12 @@ const OrganizerEventDiscover: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setShowPublishCaution(true)}   // hamesha caution modal pehle dikhao
+                onClick={async () => {
+                  await handleConfirmGoLive();
+                }}
                 className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361]"
               >
                 Publish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPublishCaution && confirmingLiveEvent && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-sm bg-white p-5 shadow-xl dark:bg-slate-800 border-2 border-amber-400">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={20} className="text-amber-500 shrink-0" />
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                Are you sure you want to publish?
-              </h2>
-            </div>
-            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              {!isCreditExpired(confirmingLiveEvent) ? (
-                <>This event's current credit is still valid
-                  {confirmingLiveEvent.creditExpiresAt && <> until <span className="font-semibold">{formatCreditExpiry(confirmingLiveEvent.creditExpiresAt)}</span></>}
-                  , so re-publishing <span className="font-semibold">won't use another credit</span>. Please confirm you want to make it live again.</>
-              ) : (
-                <>Once you click <span className="font-semibold">Publish</span>, 1 event credit will be{' '}
-                  <span className="font-semibold">utilised immediately</span> and{' '}
-                  <span className="font-semibold text-red-600">will not be refunded</span> even if the event
-                  is not used, cancelled, or taken down later. This credit will keep the event live for{' '}
-                  <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> after that
-                  it will automatically move back to Draft and republishing will use a fresh credit.</>
-              )}
-            </p>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Please make sure you are certain before proceeding.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPublishCaution(false)}
-                className="rounded-sm border border-gray-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setShowPublishCaution(false);
-                  await handleConfirmGoLive();
-                }}
-                className="rounded-sm bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
-              >
-                Yes, Publish
               </button>
             </div>
           </div>

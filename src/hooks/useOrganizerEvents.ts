@@ -298,7 +298,9 @@ export const useOrganizerEvents = () => {
       registrationMode: form.registrationMode,
       rsvpLink: form.rsvpLink,
       rsvpButtonLabel: form.rsvpButtonLabel,
-      customFields: form.customFields || [],
+      // Drop any question the organizer never labeled — an empty label
+      // would otherwise still render as a blank input at checkout.
+      customFields: (form.customFields || []).filter((f) => f.label.trim()),
       titleStyle: {
         ...DEFAULT_TEXT_STYLE,
         ...existingEvent?.titleStyle,

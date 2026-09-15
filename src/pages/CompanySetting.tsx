@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 
-import { X } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { doc, setDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 import { useCompanySettings } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { db } from '../lib/firebase';
 import EventSubdomainModal from '../components/SubDomainModal';
 
@@ -35,12 +35,13 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const Settings: React.FC = () => {
   const { profile } = useAuth();
+  const { isOwner } = usePermissions();
   const { settings, loading } = useCompanySettings();
 
- const [showSubdomainModal, setShowSubdomainModal] = useState(false);
+  const [showSubdomainModal, setShowSubdomainModal] = useState(false);
 
-// GSTIN shown/edited directly on this page, linked to live business_info/profile via settings
-const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
+  // GSTIN shown/edited directly on this page, linked to live business_info/profile via settings
+  const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
   const [gstinDraftError, setGstinDraftError] = useState<string | null>(null);
   const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
 
@@ -77,17 +78,17 @@ const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
   }, [loading, initialized, settings]);
 
   React.useEffect(() => {
-  if (loading) return;
-  if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
-    setGstinDraft(settings.gstinNumber ?? '');
-    setGstinDraftInitialized(true);
-  }
-}, [settings.gstinNumber, loading, gstinDraftInitialized]);
+    if (loading) return;
+    if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
+      setGstinDraft(settings.gstinNumber ?? '');
+      setGstinDraftInitialized(true);
+    }
+  }, [settings.gstinNumber, loading, gstinDraftInitialized]);
 
   const handleSchemeSelect = (value: 'none' | 'regular' | 'composition') => {
-  // No modal — user fills GSTIN in the field above, validated at Save time.
-  setDraft((prev) => ({ ...prev, gstScheme: value }));
-};
+    // No modal — user fills GSTIN in the field above, validated at Save time.
+    setDraft((prev) => ({ ...prev, gstScheme: value }));
+  };
 
   const handleSaveSettings = async () => {
     if (!profile?.companyId) {
@@ -291,26 +292,28 @@ const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Event Link</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Event Link</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Claim a unique URL for your public event page.</p>
+          {isOwner && (
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Event Link</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Event Link</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Claim a unique URL for your public event page.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSubdomainModal(true)}
+                    className="px-4 py-2 text-sm font-semibold rounded-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    Manage Link
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSubdomainModal(true)}
-                  className="px-4 py-2 text-sm font-semibold rounded-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
-                >
-                  Manage Link
-                </button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Future settings go here */}
         </div>

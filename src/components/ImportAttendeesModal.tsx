@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { X, UploadCloud, AlertTriangle, CheckCircle2, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types'; // CHANGED — PublicEvent → EventSummary (matches what Attendees.tsx actually passes)
+import { stripHtmlTags } from '../lib/utils';
 
 interface ParsedRow {
     name: string;
@@ -36,7 +37,7 @@ const HEADER_ALIASES: Record<string, keyof ParsedRow> = {
 // consistent across checkout, walk-in, and import flows.
 // "Party Popper" -> "PP", "Sunburn Festival" -> "SF", "Diwali" -> "DI"
 const getEventInitials = (title: string): string => {
-    const words = title.trim().split(/\s+/).filter(Boolean);
+    const words = stripHtmlTags(title).trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return 'EV';
     if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
     return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
@@ -125,30 +126,57 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
         setIsImporting(true);
         setError(null);
         try {
-            // Firestore batch limit is 500 writes — chunk if needed
+            const eventRef = doc(db, 'companies', companyId, 'events', event.id);
+            // Firestore transaction write limit is ~500 — chunk if needed. Each chunk
+            // re-reads the event's tiers inside its own transaction, so the ticket
+            // sequence always continues from the true tiers[].sold count (same source
+            // checkout/walk-in use) instead of a stale client-side attendee count —
+            // that mismatch was causing imported tickets to reuse numbers already
+            // assigned via checkout/walk-in (e.g. two attendees both getting FU-001).
             const chunkSize = 450;
             for (let i = 0; i < validRows.length; i += chunkSize) {
-                const batch = writeBatch(db);
                 const chunk = validRows.slice(i, i + chunkSize);
-                chunk.forEach((row, chunkIndex) => {
-                    const ref = doc(collection(db, 'companies', companyId, 'events', event.id, 'attendees'));
-                    // CHANGED — sequence continues from current attendee count, so imported
-                    // tickets don't collide with ones already created via checkout/walk-in
-                    const sequenceNumber = existingAttendees.length + i + chunkIndex + 1;
-                    batch.set(ref, {
-                        name: row.name,
-                        email: row.email,
-                        phone: row.phone,
-                        tierName: row.tierName,
-                        ticketId: genTicketId(event.title, sequenceNumber),
-                        status: 'valid',
-                        amountPaid: 0,
-                        source: 'import',
-                        customFieldAnswers: {},
-                        createdAt: serverTimestamp(),
+                await runTransaction(db, async (transaction) => {
+                    const eventSnap = await transaction.get(eventRef);
+                    if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+
+                    const currentTiers = (eventSnap.data().tiers || []) as {
+                        id: string; name: string; sold: number;
+                    }[];
+                    const totalAlreadySold = currentTiers.reduce(
+                        (sum, t) => sum + (Number.isFinite(t.sold) ? t.sold : 0), 0
+                    );
+                    const soldDelta: Record<string, number> = {};
+
+                    chunk.forEach((row, chunkIndex) => {
+                        const ref = doc(collection(db, 'companies', companyId, 'events', event.id, 'attendees'));
+                        const sequenceNumber = totalAlreadySold + chunkIndex + 1;
+                        const matchedTier = currentTiers.find((t) => t.name === row.tierName);
+                        if (matchedTier) {
+                            soldDelta[matchedTier.id] = (soldDelta[matchedTier.id] ?? 0) + 1;
+                        }
+                        transaction.set(ref, {
+                            name: row.name,
+                            email: row.email,
+                            phone: row.phone,
+                            tierName: row.tierName,
+                            ...(matchedTier ? { ticketTierId: matchedTier.id } : {}),
+                            ticketId: genTicketId(event.title, sequenceNumber),
+                            status: 'valid',
+                            amountPaid: 0,
+                            source: 'import',
+                            customFieldAnswers: {},
+                            createdAt: serverTimestamp(),
+                        });
                     });
+
+                    const updatedTiers = currentTiers.map((t) =>
+                        soldDelta[t.id]
+                            ? { ...t, sold: (Number.isFinite(t.sold) ? t.sold : 0) + soldDelta[t.id] }
+                            : t
+                    );
+                    transaction.update(eventRef, { tiers: updatedTiers });
                 });
-                await batch.commit();
             }
             onSuccess(validRows.length);
             setRows([]);

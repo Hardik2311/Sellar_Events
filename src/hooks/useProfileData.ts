@@ -97,23 +97,30 @@ export const useProfileData = (userId?: string, companyId?: string) => {
       const companyData = companySnap?.exists() ? companySnap.data() : {};
       const settingsData = settingsSnap?.exists() ? settingsSnap.data() : {};
 
+      const role = userData.role || 'admin';
+      const isOwnerRole = role === 'admin';
       const companyAddress = companyData.address || {};
+      const userAddress = userData.address || {};
 
-      // 4. Map the data based on your exact Firestore structure
+      // Identity docs, address and social handles are personal to each
+      // user — a team member must see (and complete) their OWN copy, not
+      // the owner's shared business_info data. Only the owner still falls
+      // back to business_info for these, for back-compat with data saved
+      // before per-user storage existed.
       setProfile({
         name: userData.fullName || rootCompanyData.name || auth.currentUser?.displayName || '',
         email: userData.email || rootCompanyData.email || auth.currentUser?.email || '',
         phone: rootCompanyData.ownerPhoneNumber || userData.phone || '',
-        aadhaarNumber: userData.aadhaarNumber || companyData.aadhaarNumber || '',
-        panNumber: userData.panNumber || companyData.panNumber || '',
+        aadhaarNumber: userData.aadhaarNumber || (isOwnerRole ? companyData.aadhaarNumber : '') || '',
+        panNumber: userData.panNumber || (isOwnerRole ? companyData.panNumber : '') || '',
         profilePicture: userData.profilePictureUrl || auth.currentUser?.photoURL || '',
         aadhaarDocUrls: normalizeDocFiles(userData.aadhaarDocUrls),
         panDocUrls: normalizeDocFiles(userData.panDocUrls),
-        instagram: userData.instagram || companyData.instagram || '',
-        facebook: userData.facebook || companyData.facebook || '',
-        twitter: userData.twitter || companyData.twitter || '',
-        whatsappNumber: companyData.whatsappNumber || rootCompanyData.ownerPhoneNumber || '',
-        role: userData.role || 'admin',
+        instagram: userData.instagram || (isOwnerRole ? companyData.instagram : '') || '',
+        facebook: userData.facebook || (isOwnerRole ? companyData.facebook : '') || '',
+        twitter: userData.twitter || (isOwnerRole ? companyData.twitter : '') || '',
+        whatsappNumber: userData.whatsappNumber || (isOwnerRole ? (companyData.whatsappNumber || rootCompanyData.ownerPhoneNumber) : '') || '',
+        role,
         organizationName: companyData.organizationName || rootCompanyData.name || '',
         eventCategory: companyData.eventCategory || '',
         website: companyData.website || '',
@@ -123,11 +130,11 @@ export const useProfileData = (userId?: string, companyId?: string) => {
 // gstType from it. business_info/profile.gstType is legacy/unused for reads
 // now, since it goes stale whenever the scheme is changed from the other page.
 gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
-        streetAddress: companyAddress.street || '',
-        landmark: companyAddress.landmark || '',
-        city: companyAddress.city || '',
-        state: companyAddress.state || '',
-        postalCode: companyAddress.postalCode || '',
+        streetAddress: (isOwnerRole ? (userAddress.street || companyAddress.street) : userAddress.street) || '',
+        landmark: (isOwnerRole ? (userAddress.landmark || companyAddress.landmark) : userAddress.landmark) || '',
+        city: (isOwnerRole ? (userAddress.city || companyAddress.city) : userAddress.city) || '',
+        state: (isOwnerRole ? (userAddress.state || companyAddress.state) : userAddress.state) || '',
+        postalCode: (isOwnerRole ? (userAddress.postalCode || companyAddress.postalCode) : userAddress.postalCode) || '',
       });
     } catch (err) {
       console.error('Error in fetchProfileData:', err);
@@ -158,6 +165,12 @@ gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
 
     const effectiveUserId = userId || currentUser.uid;
     const effectiveCompanyId = resolvedCompanyIdState || companyId || effectiveUserId;
+    // Org-level fields (name/category/website/GST) are shared and owner-only
+    // to edit — enforced client-side (EditProfile disables the inputs) and
+    // again here as the actual data-integrity boundary. Everything else
+    // (PAN/Aadhaar, address, social handles) is personal to this user and
+    // always goes only to their own user doc, never the shared company doc.
+    const isOwnerRole = profile.role === 'admin';
 
     const {
       organizationName,
@@ -193,6 +206,7 @@ gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
       userUpdateData.phoneNumber = userFields.phone;
     }
     if (userFields.aadhaarNumber !== undefined) userUpdateData.aadhaarNumber = userFields.aadhaarNumber;
+    if (panNumber !== undefined) userUpdateData.panNumber = panNumber;
     if (userFields.profilePicture !== undefined) userUpdateData.profilePictureUrl = userFields.profilePicture;
     if (userFields.aadhaarDocUrls !== undefined) userUpdateData.aadhaarDocUrls = userFields.aadhaarDocUrls;
     if (userFields.panDocUrls !== undefined) userUpdateData.panDocUrls = userFields.panDocUrls;
@@ -201,8 +215,22 @@ gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
     if (userFields.twitter !== undefined) userUpdateData.twitter = userFields.twitter;
     if (userFields.whatsappNumber !== undefined) userUpdateData.whatsappNumber = userFields.whatsappNumber;
 
+    const userAddressUpdate: Record<string, any> = {};
+    if (streetAddress !== undefined) userAddressUpdate.street = streetAddress;
+    if (landmark !== undefined) userAddressUpdate.landmark = landmark;
+    if (city !== undefined) userAddressUpdate.city = city;
+    if (state !== undefined) userAddressUpdate.state = state;
+    if (postalCode !== undefined) userAddressUpdate.postalCode = postalCode;
+    if (Object.keys(userAddressUpdate).length > 0) userUpdateData.address = userAddressUpdate;
+
     if (Object.keys(userUpdateData).length > 0) {
       promises.push(setDoc(userDocRef, userUpdateData, { merge: true }));
+    }
+
+    // Everything below writes to the shared company docs — owner only.
+    if (!isOwnerRole) {
+      await Promise.all(promises);
+      return;
     }
 
         const companyUpdateData: Record<string, any> = {

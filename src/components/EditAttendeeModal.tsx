@@ -39,13 +39,17 @@ const EditAttendeeModal: React.FC<EditAttendeeModalProps> = ({ attendee, event, 
       );
       setTierId(matchedTier?.id ?? '');
       setAmountPaid((attendee as any).amountPaid ?? 0);
-      setPaymentMode((attendee as any).paymentMode ?? 'Cash');
+      // Older manual-QR records were created before paymentMode was stored —
+      // manual_qr always means UPI, so infer it instead of defaulting to Cash.
+      setPaymentMode(
+        (attendee as any).paymentMode ?? ((attendee as any).paymentMethod === 'manual_qr' ? 'UPI' : 'Cash')
+      );
     }
   }, [attendee, event]);
 
   if (!attendee) return null;
 
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const isValidEmail = email.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isValidPhone = /^[6-9]\d{9}$/.test(phone.trim());
   const selectedTier = event?.tiers.find((t) => t.id === tierId) ?? null;
 
@@ -89,14 +93,13 @@ const EditAttendeeModal: React.FC<EditAttendeeModalProps> = ({ attendee, event, 
             />
           </div>
           <div>
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Email</label>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Email (optional)</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`mt-1 w-full rounded-sm border bg-[#F9FAFB] dark:bg-slate-800 px-3 py-2 text-sm ${showEmailError ? 'border-red-400 focus:border-red-500' : 'border-slate-200 dark:border-slate-700'
                 }`}
-              required
             />
             {showEmailError && (
               <p className="mt-1 text-[11px] font-medium text-red-600">Enter a valid email address.</p>

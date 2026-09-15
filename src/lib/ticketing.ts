@@ -1,8 +1,9 @@
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { stripHtmlTags } from './utils';
 
 export const getEventInitials = (title: string): string => {
-  const words = title.trim().split(/\s+/).filter(Boolean);
+  const words = stripHtmlTags(title).trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'EV';
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();

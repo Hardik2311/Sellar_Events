@@ -1,6 +1,12 @@
 // src/firebase.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+    initializeAuth,
+    indexedDBLocalPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence,
+    inMemoryPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
@@ -20,7 +26,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Export service instances
-export const auth = getAuth(app);
+// Embedded in-app browsers (Instagram, Facebook, etc.) often run in a
+// restricted storage context where IndexedDB access throws — plain getAuth()
+// doesn't reliably fall back from that and can take the whole app down with
+// it. initializeAuth with an explicit persistence chain degrades gracefully
+// down to in-memory persistence instead.
+export const auth = initializeAuth(app, {
+    persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence,
+    ],
+});
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);

@@ -22,7 +22,6 @@ import {
   FiMap,
   FiCheckCircle,
   FiFileText,
-  FiCreditCard,
 } from 'react-icons/fi';
 import { Building2Icon, PinIcon } from 'lucide-react';
 import {
@@ -33,7 +32,7 @@ import {
   AuthHeroPanel,
 } from '../components/ui/AuthUIComponents';
 import SmokeScreenLoader from '../components/ui/SmokeScreenLoader';
-import IdentityDocumentUpload, { type DocFile } from '../components/IdentityUpload';
+import type { DocFile } from '../components/IdentityUpload';
 import FloatingEventIcons from '../components/ui/FloatingEventIcons';
 import { useAuth } from '../context/AuthContext';
 
@@ -135,8 +134,6 @@ const Signup: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [showSmokeScreen, setShowSmokeScreen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null); // set once step 1 account is created
-  const [aadhaarError, setAadhaarError] = useState<string | null>(null);
-  const [panError, setPanError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
 
@@ -207,25 +204,6 @@ const Signup: React.FC = () => {
       )
     ) {
       setError('Please enter a valid 15-character GSTIN.');
-      return false;
-    }
-    if (!formData.aadhaarNumber.trim() || formData.aadhaarNumber.trim().length !== 12) {
-      setError('Aadhaar number is required and must be exactly 12 digits.');
-      return false;
-    }
-    if (
-      !formData.panNumber.trim() ||
-      !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber.trim())
-    ) {
-      setError('A valid 10-character PAN is required.');
-      return false;
-    }
-    if (formData.aadhaarDocUrls.length === 0) {
-      setError('Please upload your Aadhaar document (front/back).');
-      return false;
-    }
-    if (formData.panDocUrls.length === 0) {
-      setError('Please upload your PAN card document.');
       return false;
     }
     return true;
@@ -601,71 +579,6 @@ const Signup: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <FloatingLabelInput
-                        id="aadhaarNumber"
-                        label="Aadhaar Number *"
-                        icon={<FiCreditCard size={20} />}
-                        inputMode="numeric"
-                        value={formData.aadhaarNumber}
-                        required
-                        onChange={(e) => {
-                          const digits = e.target.value.replace(/\D/g, '');
-                          if (digits.length <= 12) handleChange('aadhaarNumber', digits);
-                          setAadhaarError(
-                            digits.length > 0 && digits.length < 12
-                              ? 'Aadhaar number must be exactly 12 digits.'
-                              : null
-                          );
-                        }}
-                      />
-                      {aadhaarError && (
-                        <p className="text-red-500 text-[11px] font-bold mb-0">{aadhaarError}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <FloatingLabelInput
-                        id="panNumber"
-                        label="PAN Number *"
-                        icon={<FiCreditCard size={20} />}
-                        value={formData.panNumber}
-                        maxLength={10}
-                        required
-                        onChange={(e) => {
-                          const value = e.target.value.toUpperCase();
-                          if (/^[0-9A-Z]{0,10}$/.test(value)) handleChange('panNumber', value);
-                          setPanError(
-                            value.length > 0 && value.length < 10
-                              ? 'PAN must be exactly 10 characters.'
-                              : null
-                          );
-                        }}
-                      />
-                      {panError && <p className="text-red-500 text-[11px] font-bold mb-0">{panError}</p>}
-                    </div>
-                  </div>
-
-                  {authUser && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <IdentityDocumentUpload
-                        label="Aadhaar (Front / Back) *"
-                        docType="aadhaar"
-                        companyId={authUser.uid}
-                        userId={authUser.uid}
-                        existingUrls={formData.aadhaarDocUrls}
-                        onUploaded={(urls) => handleChange('aadhaarDocUrls', urls as any)}
-                      />
-                      <IdentityDocumentUpload
-                        label="PAN Card *"
-                        docType="pan"
-                        companyId={authUser.uid}
-                        userId={authUser.uid}
-                        existingUrls={formData.panDocUrls}
-                        onUploaded={(urls) => handleChange('panDocUrls', urls as any)}
-                      />
-                    </div>
-                  )}
 
                   <FloatingLabelInput
                     id="streetAddress"

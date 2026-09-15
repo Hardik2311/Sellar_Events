@@ -1,11 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Upload, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
 import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
+import { stripHtmlTags } from '../lib/utils';
 import type { AccessCodeEntry, PublicEvent } from '../data/events';
 import QRCode from 'qrcode';
+import TicketConfirmation from './TicketConfirmation';
+
+interface PurchasedTicket {
+  ticketId: string;
+  tierName: string;
+  attendeeName: string;
+  accessCode?: string;
+}
 
 interface Breakdown {
   id: string;      // tierId
@@ -42,7 +51,7 @@ const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.te
 // Same scheme as CheckoutPage's getEventInitials — kept identical so
 // gateway and manual-QR tickets look consistent to the organizer.
 const getEventInitials = (title: string): string => {
-  const words = title.trim().split(/\s+/).filter(Boolean);
+  const words = stripHtmlTags(title).trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'EV';
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return words
@@ -52,17 +61,22 @@ const getEventInitials = (title: string): string => {
     .toUpperCase();
 };
 
+interface AttendeeFormEntry {
+  name: string;
+  email: string;
+  phone: string;
+}
+
 const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, accessCode, onClose, onSuccess }) => {
   const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [consentChecked, setConsentChecked] = useState(false);
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false); // NEW
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null); // NEW
 
@@ -87,6 +101,43 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     const val = customAnswers[f.id] ?? '';
     return f.type === 'checkbox' ? val === 'true' : val.trim().length > 0;
   });
+
+  // One ticket = one attendee slot, flattened in tier order — same idea as
+  // the gateway checkout's ticketSlots.
+  const ticketSlots = useMemo(
+    () => breakdown.flatMap((b) => Array.from({ length: b.qty }, () => ({ tierId: b.id, tierName: b.name }))),
+    [breakdown]
+  );
+
+  const [sameForAll, setSameForAll] = useState(true); // default matches the previous "one buyer" behaviour
+  const [attendeeDetails, setAttendeeDetails] = useState<AttendeeFormEntry[]>([]);
+  useEffect(() => {
+    setAttendeeDetails((prev) => {
+      if (prev.length === ticketSlots.length) return prev;
+      return Array.from({ length: ticketSlots.length }, (_, i) => prev[i] ?? { name: '', email: '', phone: '' });
+    });
+  }, [ticketSlots.length]);
+
+  // When "same for all" is on, editing ticket 1 mirrors the change to every other slot.
+  const updateAttendee = (index: number, field: keyof AttendeeFormEntry, value: string) => {
+    setAttendeeDetails((prev) =>
+      prev.map((a, i) => (i === index || (sameForAll && index === 0) ? { ...a, [field]: value } : a))
+    );
+  };
+
+  const handleToggleSameForAll = (checked: boolean) => {
+    setSameForAll(checked);
+    if (checked) {
+      setAttendeeDetails((prev) => (prev.length > 0 ? prev.map(() => ({ ...prev[0] })) : prev));
+    }
+  };
+
+  const attendeeDetailsComplete =
+    attendeeDetails.length === ticketSlots.length &&
+    attendeeDetails.length > 0 &&
+    attendeeDetails.every(
+      (a) => a.name.trim().length > 0 && isValidPhone(a.phone) && (a.email.trim() === '' || isValidEmail(a.email))
+    );
   useEffect(() => {
     if (!event.companyId) return;
     const fetchTaxSettings = async () => {
@@ -158,10 +209,11 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
   const handleFile = async (file: File) => {
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError('File must be under 1 MB.');
+      setScreenshotError('File must be under 1 MB.');
+      setScreenshot(null);
       return;
     }
-    setError(null);
+    setScreenshotError(null);
     setIsCompressing(true);
     try {
       // Target 700KB so the base64-encoded output (which is ~33% larger
@@ -175,13 +227,13 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       // Safety check: base64 data URL length roughly approximates byte size.
       const approxBytes = compressed.length * 0.75;
       if (approxBytes > MAX_UPLOAD_BYTES) {
-        setError('Image is still too large after compression. Try a smaller photo.');
+        setScreenshotError('Image is still too large after compression. Try a smaller photo.');
         setScreenshot(null);
         return;
       }
       setScreenshot(compressed);
     } catch {
-      setError('Could not process that image, please try another.');
+      setScreenshotError('Could not process that image, please try another.');
     } finally {
       setIsCompressing(false);
     }
@@ -198,9 +250,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       !screenshot ||
       !consentChecked ||
       finalTotal <= 0 ||
-      !buyerName.trim() ||
-      !isValidPhone(buyerPhone) ||
-      (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail)) ||
+      !attendeeDetailsComplete ||
       !customFieldsValid
     ) return;
     setSubmitting(true);
@@ -222,7 +272,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       const attendeesRef = collection(db, 'companies', event.companyId, 'events', event.id, 'attendees');
       const initials = getEventInitials(event.title);
 
-      await runTransaction(db, async (tx) => {
+      // Returned (not set as state directly) since a transaction callback can
+      // retry on contention — setting state inside it could fire more than once.
+      const created = await runTransaction(db, async (tx) => {
         const snap = await tx.get(eventRef);
         if (!snap.exists()) throw new Error('Event not found');
         const data = snap.data();
@@ -271,6 +323,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         });
 
         let index = 0;
+        const created: PurchasedTicket[] = [];
         taxedBreakdown.forEach((tier) => {
           const unitBase = tier.qty > 0 ? tier.itemBase / tier.qty : 0;
           const unitTax = tier.qty > 0 ? tier.itemTax / tier.qty : 0;
@@ -280,11 +333,12 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
             const attendeeDoc = doc(attendeesRef);
             const ticketNumber = totalAlreadySold + index + 1;
             const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+            const attendee = attendeeDetails[index] ?? { name: '', email: '', phone: '' };
 
             tx.set(attendeeDoc, {
-              name: buyerName.trim(),
-              email: buyerEmail.trim(),
-              phone: buyerPhone.trim(),
+              name: attendee.name.trim(),
+              email: attendee.email.trim(),
+              phone: attendee.phone.trim(),
               tierName: tier.name,
               ticketTierId: tier.id,
               ticketId,
@@ -298,14 +352,18 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               purchasedAt: serverTimestamp(),
               checkedInAt: null,
               paymentMethod: 'manual_qr',
+              paymentMode: 'UPI',
               screenshotUrl,
               accessCode: accessCode || null,
             });
+            created.push({ ticketId, tierName: tier.name, attendeeName: attendee.name.trim(), accessCode });
             index += 1;
           }
         });
+        return created;
       });
 
+      setPurchasedTickets(created);
       setSubmitted(true);
       onSuccess();
     } catch (e: any) {
@@ -322,6 +380,23 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     }
   };
 
+  // Once submitted, the buyer already has a valid ticket (status is set to
+  // 'valid' immediately, not held pending) — show it the same way a gateway
+  // checkout does, with the QR and a download option, instead of just a
+  // plain "request submitted" message with nothing to take away.
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-[#0F172A]">
+        <TicketConfirmation
+          eventTitle={event.title}
+          eventDate={event.date}
+          tickets={purchasedTickets}
+          onDone={onClose}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-3" onClick={onClose}>
       <div
@@ -335,21 +410,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           </button>
         </div>
 
-        {submitted ? (
-          <div className="flex flex-col items-center gap-3 p-8 text-center">
-            <Check size={40} className="text-[#007A78] dark:text-[#2DD4BF]" />
-            <p className="text-sm font-semibold text-slate-800 dark:text-white">Request submitted! 🎉</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Your ticket request has been received and is pending the organizer's approval. Carry the payment screenshot it'll be checked against our records at the door.
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361]"
-            >
-              Done
-            </button>
-          </div>
-        ) : (
+        {(
           <div className="grow overflow-y-auto p-4 space-y-4">
             <div className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 space-y-1">
               {taxedBreakdown.map((b) => (
@@ -396,47 +457,75 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               </button>
             )}
 
-            {/* Buyer details — needed so the attendee doc is complete, like a normal ticket */}
-            <div className="space-y-2">
-              <input
-                type="text"
-                placeholder="Full name *"
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
-                className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="Phone *"
-                    value={buyerPhone}
-                    onChange={(e) => {
-                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setBuyerPhone(digitsOnly);
-                    }}
-                    maxLength={10}
-                    className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+            {/* Attendee details — needed so each attendee doc is complete, like a normal ticket */}
+            {ticketSlots.length > 1 && (
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                Use the same details for all {ticketSlots.length} tickets
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={sameForAll}
+                  onClick={() => handleToggleSameForAll(!sameForAll)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sameForAll ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${sameForAll ? 'translate-x-4' : 'translate-x-1'
+                      }`}
                   />
-                  {buyerPhone && !isValidPhone(buyerPhone) && (
-                    <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
-                  )}
-                </div>
+                </button>
+              </label>
+            )}
 
-                <div>
-                  <input
-                    type="email"
-                    placeholder="Email (optional)"
-                    value={buyerEmail}
-                    onChange={(e) => setBuyerEmail(e.target.value)}
-                    className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                  />
-                  {buyerEmail && !isValidEmail(buyerEmail) && (
-                    <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
-                  )}
-                </div>
-              </div>
+            <div className="space-y-4">
+              {attendeeDetails.map((entry, index) => {
+                if (sameForAll && index > 0) return null;
+                return (
+                  <div key={index} className="space-y-2">
+                    {ticketSlots.length > 1 && !sameForAll && (
+                      <p className="text-xs font-bold text-[#007A78]">
+                        Ticket {index + 1} · {ticketSlots[index]?.tierName}
+                      </p>
+                    )}
+                    <input
+                      type="text"
+                      placeholder="Full name *"
+                      value={entry.name}
+                      onChange={(e) => updateAttendee(index, 'name', e.target.value)}
+                      className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          placeholder="Phone *"
+                          value={entry.phone}
+                          onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          maxLength={10}
+                          className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+                        />
+                        {entry.phone && !isValidPhone(entry.phone) && (
+                          <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <input
+                          type="email"
+                          placeholder="Email (optional)"
+                          value={entry.email}
+                          onChange={(e) => updateAttendee(index, 'email', e.target.value)}
+                          className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
+                        />
+                        {entry.email && !isValidEmail(entry.email) && (
+                          <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {customFields.length > 0 && (
@@ -505,7 +594,10 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
             {/* Screenshot upload */}
             <div>
               <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">Upload the screenshot once done *</p>
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed border-slate-300 dark:border-slate-600 p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800">
+              <label
+                className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 ${screenshotError ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                  }`}
+              >
                 {isCompressing ? (
                   <Loader2 size={18} className="animate-spin text-slate-400" />
                 ) : (
@@ -527,6 +619,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                   onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
                 />
               </label>
+              {screenshotError && <p className="mt-1 text-xs font-medium text-red-500">{screenshotError}</p>}
               {screenshot && (
                 <div className="relative mt-2 w-fit mx-auto">
                   <img src={screenshot} alt="Screenshot preview" className="max-h-32 rounded-sm border border-slate-200 dark:border-slate-700" />
@@ -536,7 +629,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                       e.preventDefault();
                       e.stopPropagation();
                       setScreenshot(null);
-                      setError(null);
+                      setScreenshotError(null);
                     }}
                     className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow hover:bg-slate-900"
                     aria-label="Remove screenshot"
@@ -577,9 +670,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                 !screenshot ||
                 !consentChecked ||
                 finalTotal <= 0 ||
-                !buyerName.trim() ||
-                !isValidPhone(buyerPhone) ||
-                (buyerEmail.trim() !== '' && !isValidEmail(buyerEmail)) ||
+                !attendeeDetailsComplete ||
                 !customFieldsValid ||
                 submitting ||
                 isCompressing

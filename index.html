@@ -3,6 +3,35 @@
 
 <head>
   <meta charset="UTF-8" />
+  <!--
+    A stale cached index.html (e.g. on Safari, which can be more aggressive
+    about reusing a cached page than Chrome) can point at a JS chunk hash
+    that no longer exists after a deploy. If that's the *entry* script
+    itself, it fails before React (and our in-app ErrorBoundary) ever runs,
+    so nothing else can catch it — this would otherwise just be a blank
+    white screen forever. Catch that specific case here and do a single
+    guarded reload, which (now that index.html is served no-cache) fetches
+    the current, correct build on retry.
+
+    Deliberately first thing in <head>, before Vite's injected entry
+    <script type="module"> tag (which it hoists to the end of <head> at
+    build time) — the error listener must be registered before that script
+    tag is even parsed, since a module script begins fetching immediately
+    and browsers dispatch its error event as soon as the fetch fails.
+  -->
+  <script>
+    (function () {
+      var GUARD_KEY = 'app:reloadedForEntryLoadError';
+      window.addEventListener('error', function (e) {
+        var target = e.target;
+        if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+          if (sessionStorage.getItem(GUARD_KEY) === '1') return;
+          sessionStorage.setItem(GUARD_KEY, '1');
+          location.reload();
+        }
+      }, true);
+    })();
+  </script>
   <link rel="icon" type="image/png" href="/Outsold.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Outsold</title>

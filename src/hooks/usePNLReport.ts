@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useEventFilter } from '../components/ui/EventdateFilter';
 import { useAttendees } from './useAttendees';
-import { useIncomes } from './useIncomes';
-import { useExpenses } from './useExpenses';
+import { useIncomes, type Income } from './useIncomes';
+import { useExpenses, type Expense } from './useExpenses';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import { CONFIRMED_TICKET_STATUSES } from '../types/attendee.types';
+import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
+import { ALL_EVENTS_ID } from '../components/EventListCard';
+import { stripHtmlTags } from '../lib/utils';
 
 const formatDateForInput = (d: Date) => d.toISOString().split('T')[0];
 
 export interface LedgerRow {
   id: string;
   date: number;
-  type: 'Sale' | 'Income' | 'Expense';
+  type: 'Sale' | 'Income' | 'Expense' | 'Event';
   description: string;
   amount: number;
 }
@@ -45,15 +50,78 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
     load();
   }, [companyId]);
 
-  const selectedEvent = useMemo(
-    () => events.find(e => e.id === selectedEventId) ?? null,
-    [events, selectedEventId],
+  const isAllEvents = selectedEventId === ALL_EVENTS_ID;
+
+  const selectedEvent = useMemo(() => {
+    if (isAllEvents) return null; // synthetic — page shows "All Events" via selectedEventId check
+    return events.find(e => e.id === selectedEventId) ?? null;
+  }, [events, selectedEventId, isAllEvents]);
+
+  const { attendees: singleEventAttendees, loading: singleAttendeesLoading } = useAttendees(
+    companyId, isAllEvents ? undefined : selectedEventId ?? undefined,
+  );
+  const { expenses: singleEventExpenses, loading: singleExpensesLoading } = useExpenses(
+    companyId, isAllEvents ? undefined : selectedEventId ?? undefined,
+  );
+  const { incomes: singleEventIncomes, loading: singleIncomesLoading } = useIncomes(
+    companyId, isAllEvents ? undefined : selectedEventId ?? undefined,
   );
 
-  const { attendees, loading: attendeesLoading } = useAttendees(companyId, selectedEventId ?? undefined);
-  const { expenses, loading: expensesLoading } = useExpenses(companyId, selectedEventId ?? undefined);
-  const { incomes, loading: incomesLoading } = useIncomes(companyId, selectedEventId ?? undefined);
-  const loading = attendeesLoading || expensesLoading || incomesLoading;
+  // Same "loop over every event with getDocs" pattern used by useCustomerReport's
+  // All Events mode — these subcollections live under each event, so there's no
+  // single collection to query across all of them at once.
+  const [allEventsAttendees, setAllEventsAttendees] = useState<(Attendee & { eventId: string })[]>([]);
+  const [allEventsExpenses, setAllEventsExpenses] = useState<(Expense & { eventId: string })[]>([]);
+  const [allEventsIncomes, setAllEventsIncomes] = useState<(Income & { eventId: string })[]>([]);
+  const [allEventsLoading, setAllEventsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isAllEvents || !companyId || events.length === 0) return;
+
+    const loadAll = async () => {
+      setAllEventsLoading(true);
+      try {
+        const [attendeeResults, expenseResults, incomeResults] = await Promise.all([
+          Promise.all(events.map(async (ev) => {
+            const snap = await getDocs(collection(db, 'companies', companyId, 'events', ev.id, 'attendees'));
+            return snap.docs.map((d) => {
+              const data: any = d.data();
+              const purchasedAtRaw = data.purchasedAt ?? data.createdAt;
+              const purchasedAt = purchasedAtRaw instanceof Timestamp ? purchasedAtRaw.toMillis() : purchasedAtRaw;
+              return { id: d.id, eventId: ev.id, ...data, purchasedAt } as Attendee & { eventId: string };
+            });
+          })),
+          Promise.all(events.map(async (ev) => {
+            const snap = await getDocs(collection(db, 'companies', companyId, 'events', ev.id, 'expenses'));
+            return snap.docs.map((d) => ({ id: d.id, eventId: ev.id, ...d.data() } as Expense & { eventId: string }));
+          })),
+          Promise.all(events.map(async (ev) => {
+            const snap = await getDocs(collection(db, 'companies', companyId, 'events', ev.id, 'incomes'));
+            return snap.docs.map((d) => ({ id: d.id, eventId: ev.id, ...d.data() } as Income & { eventId: string }));
+          })),
+        ]);
+        setAllEventsAttendees(attendeeResults.flat());
+        setAllEventsExpenses(expenseResults.flat());
+        setAllEventsIncomes(incomeResults.flat());
+      } catch (err) {
+        console.error('Failed to load all-events PNL data', err);
+        setAllEventsAttendees([]);
+        setAllEventsExpenses([]);
+        setAllEventsIncomes([]);
+      } finally {
+        setAllEventsLoading(false);
+      }
+    };
+
+    loadAll();
+  }, [isAllEvents, companyId, events]);
+
+  const attendees = isAllEvents ? allEventsAttendees : singleEventAttendees;
+  const expenses = isAllEvents ? allEventsExpenses : singleEventExpenses;
+  const incomes = isAllEvents ? allEventsIncomes : singleEventIncomes;
+  const loading = isAllEvents
+    ? allEventsLoading
+    : singleAttendeesLoading || singleExpensesLoading || singleIncomesLoading;
 
   const { filters } = useEventFilter();
   const { startDate, endDate } = filters;
@@ -117,7 +185,49 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
         amount: e.amount || 0,
       }));
 
-    let list = [...saleRows, ...incomeRows, ...expenseRows];
+    let list: LedgerRow[];
+
+    if (isAllEvents) {
+      // "All Events" mode shows each event's own profitability as a single
+      // row instead of every individual transaction — the per-transaction
+      // rows above still feed the totals, just not the visible list.
+      const byEvent = new Map<string, { sales: number; income: number; expenses: number; latestDate: number }>();
+      const bump = (eventId: string | undefined, key: 'sales' | 'income' | 'expenses', amount: number, date: number) => {
+        if (!eventId) return;
+        const entry = byEvent.get(eventId) ?? { sales: 0, income: 0, expenses: 0, latestDate: 0 };
+        entry[key] += amount;
+        entry.latestDate = Math.max(entry.latestDate, date);
+        byEvent.set(eventId, entry);
+      };
+      (attendees as (Attendee & { eventId?: string })[])
+        .filter(a =>
+          CONFIRMED_TICKET_STATUSES.has(a.status) &&
+          !!a.purchasedAt &&
+          a.purchasedAt! >= appliedFilters.start &&
+          a.purchasedAt! <= appliedFilters.end,
+        )
+        .forEach(a => bump(a.eventId, 'sales', a.amountPaid || 0, a.purchasedAt!));
+      (incomes as (Income & { eventId?: string })[])
+        .filter(inc => inc.date >= appliedFilters.start && inc.date <= appliedFilters.end)
+        .forEach(inc => bump(inc.eventId, 'income', inc.amount || 0, inc.date));
+      (expenses as (Expense & { eventId?: string })[])
+        .filter(e => e.date >= appliedFilters.start && e.date <= appliedFilters.end)
+        .forEach(e => bump(e.eventId, 'expenses', e.amount || 0, e.date));
+
+      list = Array.from(byEvent.entries()).map(([eventId, totals]) => {
+        const event = events.find(ev => ev.id === eventId);
+        const netProfit = totals.sales + totals.income - totals.expenses;
+        return {
+          id: `event-${eventId}`,
+          date: totals.latestDate,
+          type: 'Event' as const,
+          description: event ? stripHtmlTags(event.title) : 'Unknown event',
+          amount: netProfit,
+        };
+      });
+    } else {
+      list = [...saleRows, ...incomeRows, ...expenseRows];
+    }
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -145,11 +255,11 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
         ticketsSold: saleRows.length,
       },
     };
-  }, [attendees, expenses, incomes, appliedFilters, searchQuery, sortConfig]);
+  }, [attendees, expenses, incomes, appliedFilters, searchQuery, sortConfig, isAllEvents, events]);
 
   return {
     events, eventsLoading, eventSearch, setEventSearch,
-    selectedEventId, setSelectedEventId, selectedEvent,
+    selectedEventId, setSelectedEventId, selectedEvent, isAllEvents,
     loading,
     startDate, endDate, appliedFilters,
     searchQuery, setSearchQuery,
