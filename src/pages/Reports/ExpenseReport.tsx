@@ -124,21 +124,25 @@ const ExpenseReportPageInner: React.FC = () => {
             const doc = new jsPDF();
             const pw = doc.internal.pageSize.getWidth();
             const ph = doc.internal.pageSize.getHeight();
-            doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 6, 'F');
-            doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
             const orgName = stripHtmlTags(profile?.organizationName);
-            const reportTitle = orgName
-                ? `Event Expense Report — ${orgName}`
-                : 'Event Expense Report';
-            doc.text(reportTitle, 14, 24);
+            const eventName = stripHtmlTags(selectedEvent?.title) || 'N/A';
+
+            // Green strip with org name centered inside
+            doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 20, 'F');
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+            doc.text(orgName || 'Event Expense Report', pw / 2, 13, { align: 'center' });
+
+            // Title + subtitle below the strip
+            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+            doc.text(`Event Expense Report — ${eventName}`, 14, 34);
             doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
             const periodLabel = isAllTime
                 ? 'All Time'
                 : `${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`;
-            doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`, 14, 31);
+            doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`, 14, 41);
 
             autoTable(doc, {
-                startY: 38,
+                startY: 44,
                 head: [['DATE', 'TITLE', 'DESCRIPTION', 'ADDED BY', 'AMOUNT (Rs)']],
                 body: filtered.map(e => [formatDate(e.date), e.title, e.description, e.createdBy || '—', e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })]),
                 foot: [['TOTAL', '', '', '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
@@ -176,22 +180,24 @@ const ExpenseReportPageInner: React.FC = () => {
             const allBorders = { top: { style: 'thin', color: { rgb: 'CBD5E1' } }, bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
             const bblr = { bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
 
+            const orgName = stripHtmlTags(profile?.organizationName);
+            const eventName = stripHtmlTags(selectedEvent?.title) || 'N/A';
+
             const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Title', width: 20 }, { header: 'Description', width: 32 }, { header: 'Added By', width: 18 }, { header: 'Amount (₹)', width: 18 }];
             const colCount = COLS.length;
-            const dataStartRow = 7;
+            const dataStartRow = 8;
             const totalRows = dataStartRow + filtered.length + 1;
             const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
-            aoa[0][0] = profile?.organizationName
-                ? `Event Expense Report  —  ${profile.organizationName}`
-                : 'Event Expense Report';
+            aoa[0][0] = orgName || 'Event Expense Report';
+            aoa[1][0] = `Event Expense Report — ${eventName}`;
             const periodLabel = isAllTime
                 ? 'All Time'
                 : `${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
-            aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`;
-            aoa[3][0] = 'SUMMARY';
-            aoa[4][0] = `Total Expenses: ₹${summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Entries: ${summary.count}`;
-            COLS.forEach((c, i) => { aoa[6][i] = c.header; });
+            aoa[2][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${periodLabel}`;
+            aoa[4][0] = 'SUMMARY';
+            aoa[5][0] = `Total Expenses: ₹${summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Entries: ${summary.count}`;
+            COLS.forEach((c, i) => { aoa[7][i] = c.header; });
             filtered.forEach((exp, idx) => {
                 const r = dataStartRow + idx;
                 aoa[r] = [idx + 1, formatDate(exp.date), exp.title, exp.description, exp.createdBy || '—', exp.amount];
@@ -201,16 +207,17 @@ const ExpenseReportPageInner: React.FC = () => {
 
             const ws: any = XLSX.utils.aoa_to_sheet(aoa);
             ws['!cols'] = COLS.map(c => ({ wch: c.width }));
-            ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
-            ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }];
+            ws['!rows'] = [{ hpt: 36 }, { hpt: 18 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
+            ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }, { s: { r: 5, c: 0 }, e: { r: 5, c: colCount - 1 } }];
 
             const styleCell = (addr: string, st: any) => { if (!ws[addr]) ws[addr] = { t: 's', v: '' }; ws[addr].s = st; };
-            styleCell('A1', s({ sz: 16, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
-            styleCell('A2', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
-            styleCell('A4', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
-            styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
+            styleCell('A1', s({ sz: 14, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A2', s({ sz: 13, bold: true, color: { rgb: '111827' } }, solidFill('FFFFFF'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A3', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
+            styleCell('A6', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
             COLS.forEach((_, i) => {
-                const addr = XLSX.utils.encode_cell({ r: 6, c: i });
+                const addr = XLSX.utils.encode_cell({ r: 7, c: i });
                 styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: i <= 3 ? 'left' : 'center', vertical: 'center' }, allBorders));
             });
             filtered.forEach((_, idx) => {

@@ -19,16 +19,12 @@ interface ExportMenuProps<T> {
   columns: ExportColumn<T>[];
   fileNameBase: string;
   documentTitle: string;
+  organizationName: string; // shown as letterhead in both PDF & Excel
   disabled?: boolean;
 }
 
-// App's teal accent — matches the "Checked In" stat & icons on Attendees page
-const BRAND_TEAL = '#007A78';
 const BRAND_TEAL_RGB: [number, number, number] = [0, 122, 120];
-const BRAND_TEAL_LIGHT = 'E6F5F4'; // light tint for alternating rows / excel header bg
-const BRAND_TEAL_LIGHT_RGB: [number, number, number] = [230, 245, 244];
-
-function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, disabled }: ExportMenuProps<T>) {
+function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, organizationName, disabled }: ExportMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,30 +38,58 @@ function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, disabled }:
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const safeFileName = (ext: string) => `${fileNameBase.replace(/\s+/g, '-').toLowerCase()}-attendees.${ext}`;
+  const safeFileName = (ext: string) => `${fileNameBase.replace(/\s+/g, '-').toLowerCase()}.${ext}`;
 
   const handleExportPdf = () => {
     const doc = new jsPDF();
 
-    // Title bar in brand teal
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const generatedOn = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Brand strip with organization name centered inside — same as Sales Report export
     doc.setFillColor(...BRAND_TEAL_RGB);
-    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 20, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 20, 'F');
     doc.setFontSize(14);
-    doc.text(documentTitle, 14, 13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(organizationName || documentTitle, pageWidth / 2, 13, { align: 'center' });
+
+    // Title + subtitle below the strip
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text(documentTitle, 14, 34);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(
+      `Generated: ${generatedOn}   |   ${data.length} record${data.length === 1 ? '' : 's'}`,
+      14,
+      41
+    );
 
     autoTable(doc, {
-      startY: 26,
+      startY: 44,
       head: [columns.map((c) => c.header)],
       body: data.map((row) => columns.map((c) => String(c.accessor(row)))),
-      styles: { fontSize: 8, textColor: [30, 41, 59] }, // slate-800, matches app text
+      theme: 'plain',
+      styles: { font: 'helvetica', cellPadding: 4, fontSize: 8, textColor: [55, 65, 81], overflow: 'linebreak' },
       headStyles: {
-        fillColor: BRAND_TEAL_RGB,
-        textColor: [255, 255, 255],
+        fillColor: [240, 253, 250],
+        textColor: [0, 90, 88],
         fontStyle: 'bold',
+        fontSize: 8,
+        lineWidth: { top: 1, bottom: 1 },
+        lineColor: [204, 251, 241],
       },
-      alternateRowStyles: {
-        fillColor: BRAND_TEAL_LIGHT_RGB,
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      margin: { top: 44, bottom: 16 },
+      didDrawPage: () => {
+        const w = doc.internal.pageSize.getWidth();
+        const h = doc.internal.pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.setTextColor(156, 163, 175);
+        doc.text(`Page ${doc.getNumberOfPages()}`, w - 14, h - 8, { align: 'right' });
       },
     });
 
@@ -74,91 +98,118 @@ function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, disabled }:
   };
 
   const handleExportExcel = () => {
-  const s = (font: any, fill?: any, alignment?: any, border?: any) => ({
-    font: { name: 'Arial', ...font },
-    fill: fill ?? {},
-    alignment: alignment ?? { horizontal: 'center', vertical: 'center', wrapText: true },
-    border: border ?? {},
-  });
-  const solidFill = (rgb: string) => ({ patternType: 'solid', fgColor: { rgb } });
-  const allBorders = {
-    top: { style: 'thin', color: { rgb: 'CBD5E1' } },
-    bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-    left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-    right: { style: 'thin', color: { rgb: 'CBD5E1' } },
-  };
-  const bblr = {
-    bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-    left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-    right: { style: 'thin', color: { rgb: 'CBD5E1' } },
-  };
+    const s = (font: any, fill?: any, alignment?: any, border?: any) => ({
+      font: { name: 'Arial', ...font },
+      fill: fill ?? {},
+      alignment: alignment ?? { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: border ?? {},
+    });
+    const solidFill = (rgb: string) => ({ patternType: 'solid', fgColor: { rgb } });
+    const allBorders = {
+      top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+    };
+    const bblr = {
+      bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+    };
 
-  const headers = columns.map((c) => c.header);
-  const colCount = headers.length;
-  const dataStartRow = 7;
-  const totalRows = dataStartRow + data.length + 1;
-  const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
+    const headers = columns.map((c) => c.header);
+    const colCount = headers.length;
+    const dataStartRow = 8; // shifted +1 for the org-name row
+    const totalRows = dataStartRow + data.length + 1;
+    const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
-  aoa[0][0] = documentTitle;
-  aoa[1][0] = `Generated: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-  aoa[3][0] = 'SUMMARY';
-  aoa[4][0] = `Total Records: ${data.length}`;
-  headers.forEach((h, i) => { aoa[6][i] = h; });
-  data.forEach((row, idx) => {
-    aoa[dataStartRow + idx] = columns.map((c) => c.accessor(row));
-  });
-  const footerRow = dataStartRow + data.length;
-  aoa[footerRow][0] = 'TOTAL';
-  aoa[footerRow][1] = `${data.length} record${data.length === 1 ? '' : 's'}`;
+    const generatedOn = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const worksheet: any = XLSX.utils.aoa_to_sheet(aoa);
-  worksheet['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 14) }));
-  worksheet['!rows'] = [
-    { hpt: 32 }, { hpt: 18 }, { hpt: 8 }, { hpt: 16 }, { hpt: 20 }, { hpt: 8 }, { hpt: 26 },
-    ...data.map(() => ({ hpt: 20 })),
-    { hpt: 22 },
-  ];
-  worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } },
-    { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } },
-  ];
-
-  const styleCell = (addr: string, st: any) => {
-    if (!worksheet[addr]) worksheet[addr] = { t: 's', v: '' };
-    worksheet[addr].s = st;
-  };
-
-  styleCell('A1', s({ sz: 15, bold: true, color: { rgb: 'FFFFFF' } }, solidFill(BRAND_TEAL.replace('#', '')), { horizontal: 'center', vertical: 'center' }));
-  styleCell('A2', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill(BRAND_TEAL_LIGHT), { horizontal: 'center', vertical: 'center' }));
-  styleCell('A4', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
-  styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
-
-  headers.forEach((_, i) => {
-    const addr = XLSX.utils.encode_cell({ r: 6, c: i });
-    styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: 'left', vertical: 'center' }, allBorders));
-  });
-
-  data.forEach((_, idx) => {
-    const r = dataStartRow + idx;
-    const isAlt = idx % 2 === 1;
-    for (let ci = 0; ci < colCount; ci++) {
-      const addr = XLSX.utils.encode_cell({ r, c: ci });
-      styleCell(addr, s({ sz: 9, color: { rgb: '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: 'left', vertical: 'center' }, bblr));
+    aoa[0][0] = organizationName || documentTitle;
+    aoa[1][0] = documentTitle;
+    aoa[2][0] = `Generated: ${generatedOn}   |   ${data.length} record${data.length === 1 ? '' : 's'}`;
+    aoa[4][0] = 'SUMMARY';
+    aoa[5][0] = `Total Records: ${data.length}`;
+    headers.forEach((h, i) => { aoa[7][i] = h; });
+    data.forEach((row, idx) => {
+      aoa[dataStartRow + idx] = columns.map((c) => c.accessor(row));
+    });
+    const footerRow = dataStartRow + data.length;
+    if (colCount === 1) {
+      aoa[footerRow][0] = `TOTAL: ${data.length} record${data.length === 1 ? '' : 's'}`;
+    } else {
+      aoa[footerRow][0] = 'TOTAL';
+      aoa[footerRow][1] = `${data.length} record${data.length === 1 ? '' : 's'}`;
     }
-  });
 
-  for (let ci = 0; ci < colCount; ci++) {
-    const addr = XLSX.utils.encode_cell({ r: footerRow, c: ci });
-    styleCell(addr, s({ sz: 10, bold: true, color: { rgb: '1E293B' } }, solidFill('E2E8F0'), { horizontal: 'left', vertical: 'center' }, { top: { style: 'medium', color: { rgb: '1E293B' } }, bottom: { style: 'medium', color: { rgb: '1E293B' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } }));
-  }
+    const worksheet: any = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet['!cols'] = headers.map((h, colIdx) => {
+      const maxDataLen = data.reduce((max, row) => {
+        const val = String(columns[colIdx].accessor(row) ?? '');
+        return Math.max(max, val.length);
+      }, 0);
+      // widest of: header text, actual data, capped so one column doesn't blow up the sheet
+      const idealWidth = Math.max(h.length + 4, maxDataLen + 2, 14);
+      return { wch: Math.min(idealWidth, 40) };
+    });
+    worksheet['!rows'] = [
+      { hpt: 20 }, // org name row
+      { hpt: 32 }, { hpt: 18 }, { hpt: 8 }, { hpt: 16 }, { hpt: 20 }, { hpt: 8 }, { hpt: 26 },
+      ...data.map(() => ({ hpt: 20 })),
+      { hpt: 22 },
+    ];
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, // org name
+      { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, // title
+      { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } }, // generated date
+      { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }, // SUMMARY
+      { s: { r: 5, c: 0 }, e: { r: 5, c: colCount - 1 } }, // total records
+    ];
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendees');
-  XLSX.writeFile(workbook, safeFileName('xlsx'));
-  setOpen(false);
-};
+    const styleCell = (addr: string, st: any) => {
+      if (!worksheet[addr]) worksheet[addr] = { t: 's', v: '' };
+      worksheet[addr].s = st;
+    };
+
+    styleCell('A1', s({ sz: 14, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' })); // org name
+    styleCell('A2', s({ sz: 13, bold: true, color: { rgb: '111827' } }, solidFill('FFFFFF'), { horizontal: 'center', vertical: 'center' })); // title
+    styleCell('A3', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' })); // generated
+    styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
+    styleCell('A6', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
+
+    headers.forEach((_, i) => {
+      const addr = XLSX.utils.encode_cell({ r: 7, c: i });
+      styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: i === 0 ? 'left' : 'center', vertical: 'center' }, allBorders));
+    });
+
+    data.forEach((_, idx) => {
+      const r = dataStartRow + idx;
+      const isAlt = idx % 2 === 1;
+      for (let ci = 0; ci < colCount; ci++) {
+        const addr = XLSX.utils.encode_cell({ r, c: ci });
+        styleCell(addr, s({ sz: 9, color: { rgb: '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 0 ? 'left' : 'center', vertical: 'center' }, bblr));
+      }
+    });
+
+    for (let ci = 0; ci < colCount; ci++) {
+      const addr = XLSX.utils.encode_cell({ r: footerRow, c: ci });
+      styleCell(addr, s({ sz: 10, bold: true, color: { rgb: '1E293B' } }, solidFill('E2E8F0'), { horizontal: ci === 0 ? 'left' : 'center', vertical: 'center' }, { top: { style: 'medium', color: { rgb: '1E293B' } }, bottom: { style: 'medium', color: { rgb: '1E293B' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } }));
+    }
+
+    worksheet['!freeze'] = { xSplit: 0, ySplit: dataStartRow }; // freeze everything above the data rows
+    worksheet['!autofilter'] = {
+      ref: XLSX.utils.encode_range(
+        { r: dataStartRow - 1, c: 0 },
+        { r: dataStartRow - 1, c: colCount - 1 }
+      ),
+    };
+
+    const workbook = XLSX.utils.book_new();
+    const sheetName = documentTitle.replace(/[\\/*?:[\]]/g, '').slice(0, 31) || 'Sheet1';
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, safeFileName('xlsx'));
+    setOpen(false);
+  };
 
   return (
     <div ref={containerRef} className="relative">
