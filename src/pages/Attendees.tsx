@@ -608,6 +608,7 @@ const Attendees: React.FC = () => {
                       columns={EXPORT_COLUMNS}
                       fileNameBase={stripHtmlTags(selectedEvent.title)}
                       documentTitle={`${stripHtmlTags(selectedEvent.title)} Attendees`}
+                      organizationName={profile?.organizationName || profile?.fullName || 'Organizer'}
                       disabled={attendees.length === 0}
                     />
                   </ShowWrapper>

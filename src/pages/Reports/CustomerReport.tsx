@@ -44,18 +44,24 @@ const CustomerReportPageInner: React.FC = () => {
       const doc = new jsPDF();
       const pw = doc.internal.pageSize.getWidth();
       const ph = doc.internal.pageSize.getHeight();
-      doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 6, 'F');
-      doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
       const orgName = stripHtmlTags(profile?.organizationName);
-      const reportTitle = orgName
-        ? `Customer Report — ${orgName}`
-        : 'Customer Report';
-      doc.text(reportTitle, 14, 24);
+      const eventName = selectedEventId === 'all'
+        ? 'All Events'
+        : (stripHtmlTags(selectedEvent?.title) || 'All Events');
+
+      // Green strip with org name centered inside
+      doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 20, 'F');
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text(orgName || 'Customer Report', pw / 2, 13, { align: 'center' });
+
+      // Title + subtitle below the strip
+      doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text(`Customer Report — ${eventName}`, 14, 34);
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
-      doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 31);
+      doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 41);
 
       autoTable(doc, {
-        startY: 38,
+        startY: 44,
         head: [['CUSTOMER', 'PHONE', 'TICKETS', 'TOTAL SPENT (Rs)']],
         body: filtered.map(c => [
           c.name,
@@ -99,17 +105,20 @@ const CustomerReportPageInner: React.FC = () => {
 
       const COLS = [{ header: '#', width: 6 }, { header: 'Customer', width: 22 }, { header: 'Phone', width: 16 }, { header: 'Email', width: 24 }, { header: 'Tickets Bought', width: 16 }, { header: 'Total Spent (₹)', width: 18 }];
       const colCount = COLS.length;
-      const dataStartRow = 7;
+      const dataStartRow = 8;
       const totalRows = dataStartRow + filtered.length + 1;
       const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
-      aoa[0][0] = profile?.organizationName
-        ? `Customer Report  —  ${profile.organizationName}`
-        : 'Customer Report';
-      aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
-      aoa[3][0] = 'SUMMARY';
-      aoa[4][0] = `Total Customers: ${summary.totalCustomers}   |   Total Revenue: ₹${summary.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      COLS.forEach((c, i) => { aoa[6][i] = c.header; });
+      const orgName = stripHtmlTags(profile?.organizationName);
+      const eventName = selectedEventId === 'all'
+        ? 'All Events'
+        : (stripHtmlTags(selectedEvent?.title) || 'All Events');
+      aoa[0][0] = orgName || 'Customer Report';
+      aoa[1][0] = `Customer Report — ${eventName}`;
+      aoa[2][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
+      aoa[4][0] = 'SUMMARY';
+      aoa[5][0] = `Total Customers: ${summary.totalCustomers}   |   Total Revenue: ₹${summary.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      COLS.forEach((c, i) => { aoa[7][i] = c.header; });
       filtered.forEach((c, idx) => {
         const r = dataStartRow + idx;
         aoa[r] = [idx + 1, c.name, c.phone, c.email, c.ticketsBought, c.totalSpent];
@@ -119,16 +128,17 @@ const CustomerReportPageInner: React.FC = () => {
 
       const ws: any = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = COLS.map(c => ({ wch: c.width }));
-      ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }];
+      ws['!rows'] = [{ hpt: 36 }, { hpt: 18 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }, { s: { r: 5, c: 0 }, e: { r: 5, c: colCount - 1 } }];
 
       const styleCell = (addr: string, st: any) => { if (!ws[addr]) ws[addr] = { t: 's', v: '' }; ws[addr].s = st; };
-      styleCell('A1', s({ sz: 16, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
-      styleCell('A2', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
-      styleCell('A4', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
-      styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
+      styleCell('A1', s({ sz: 14, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A2', s({ sz: 13, bold: true, color: { rgb: '111827' } }, solidFill('FFFFFF'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A3', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
+      styleCell('A6', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
       COLS.forEach((_, i) => {
-        const addr = XLSX.utils.encode_cell({ r: 6, c: i });
+        const addr = XLSX.utils.encode_cell({ r: 7, c: i });
         styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: i <= 1 ? 'left' : 'center', vertical: 'center' }, allBorders));
       });
       filtered.forEach((_, idx) => {
