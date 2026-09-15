@@ -44,18 +44,44 @@ const PnlReportPageInner: React.FC = () => {
       const doc = new jsPDF();
       const pw = doc.internal.pageSize.getWidth();
       const ph = doc.internal.pageSize.getHeight();
-      doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 6, 'F');
-      doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
       const orgName = stripHtmlTags(profile?.organizationName);
-      const reportTitle = orgName
-        ? `Profit & Loss Report — ${orgName}`
-        : 'Profit & Loss Report';
-      doc.text(reportTitle, 14, 24);
+      const eventName = isAllEvents ? 'All Events' : (stripHtmlTags(selectedEvent?.title) || 'N/A');
+
+      // Green strip with org name centered inside
+      doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 20, 'F');
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text(orgName || 'Profit & Loss Report', pw / 2, 13, { align: 'center' });
+
+      // Title + subtitle below the strip
+      doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text(`Profit & Loss Report — ${eventName}`, 14, 34);
       doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
-      doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 31);
+      doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 41);
+
+      // ---- Summary boxes ABOVE the table: Total Sales / Total Income / Total Expenses ----
+      const boxY = 48;
+      const boxH = 18;
+      const gap = 6;
+      const boxW = (pw - 28 - gap * 2) / 3;
+      const summaryBoxes = [
+        { label: 'TOTAL SALES', value: summary.totalSales, color: [22, 163, 74] },
+        { label: 'TOTAL INCOME', value: summary.totalIncome, color: [37, 99, 235] },
+        { label: 'TOTAL EXPENSES', value: summary.totalExpenses, color: [220, 38, 38] },
+      ];
+      summaryBoxes.forEach((b, i) => {
+        const x = 14 + i * (boxW + gap);
+        doc.setDrawColor(226, 232, 240);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(x, boxY, boxW, boxH, 1.5, 1.5, 'FD');
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+        doc.text(b.label, x + 4, boxY + 7);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.setTextColor(b.color[0], b.color[1], b.color[2]);
+        doc.text(`Rs ${b.value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, x + 4, boxY + 14);
+      });
 
       autoTable(doc, {
-        startY: 38,
+        startY: boxY + boxH + 8,
         head: [[isAllEvents ? 'DATE' : 'DATE', isAllEvents ? 'RESULT' : 'TYPE', isAllEvents ? 'EVENT' : 'DESCRIPTION', isAllEvents ? 'NET PROFIT/LOSS (Rs)' : 'AMOUNT (Rs)']],
         body: filtered.map(r => [
           formatDate(r.date),
@@ -64,9 +90,6 @@ const PnlReportPageInner: React.FC = () => {
           `${r.type === 'Expense' || (r.type === 'Event' && r.amount < 0) ? '-' : '+'}${Math.abs(r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         ]),
         foot: [
-          ['', '', 'Total Sales', `+${summary.totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
-          ['', '', 'Total Income', `+${summary.totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
-          ['', '', 'Total Expenses', `-${summary.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
           ['', '', 'NET PROFIT/LOSS', `${summary.netProfit >= 0 ? '+' : '-'}${Math.abs(summary.netProfit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
         ],
         showFoot: 'lastPage',
@@ -82,7 +105,7 @@ const PnlReportPageInner: React.FC = () => {
             data.cell.styles.textColor = raw === 'Expense' || raw === 'Loss' ? [220, 38, 38] : raw === 'Income' ? [37, 99, 235] : [22, 163, 74];
             data.cell.styles.fontStyle = 'bold';
           }
-          if (data.section === 'foot' && data.row.index === 3) {
+          if (data.section === 'foot' && data.row.index === 0) {
             data.cell.styles.textColor = summary.netProfit >= 0 ? [22, 163, 74] : [220, 38, 38];
           }
         },
@@ -100,8 +123,7 @@ const PnlReportPageInner: React.FC = () => {
     }
   };
 
-  // ---- Excel ----
-  const downloadAsExcel = () => {
+    const downloadAsExcel = () => {
     if (!appliedFilters) return;
     try {
       const s = (font: any, fill?: any, alignment?: any, border?: any) => ({
@@ -112,47 +134,82 @@ const PnlReportPageInner: React.FC = () => {
       const allBorders = { top: { style: 'thin', color: { rgb: 'CBD5E1' } }, bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
       const bblr = { bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
 
-      const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Type', width: 14 }, { header: 'Description', width: 34 }, { header: 'Amount (₹)', width: 18 }];
-      const colCount = COLS.length;
-      const dataStartRow = 7;
-      const totalRows = dataStartRow + filtered.length + 4;
+      const COLS = [
+        { header: '#', width: 6 },
+        { header: 'Date', width: 16 },
+        { header: 'Type', width: 14 },
+        { header: 'Description', width: 34 },
+        { header: 'Amount (₹)', width: 18 },
+        { header: '', width: 12 }, // spacer column so "Total Expenses" (E:F merge) doesn't get cut
+      ];
+      const colCount = COLS.length; // 6
+      const dataStartRow = 8; // totals now sit in a single row above the table
+      const totalRows = dataStartRow + filtered.length + 1; // only NET PROFIT/LOSS remains after the table
       const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
-      aoa[0][0] = profile?.organizationName
-        ? `Profit & Loss Report  —  ${profile.organizationName}`
-        : 'Profit & Loss Report';
-      aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
-      aoa[3][0] = 'SUMMARY';
-      aoa[4][0] = `Net Profit/Loss: ₹${summary.netProfit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Tickets Sold: ${summary.ticketsSold}`;
-      COLS.forEach((c, i) => { aoa[6][i] = c.header; });
+      const orgName = stripHtmlTags(profile?.organizationName);
+      const eventName = isAllEvents ? 'All Events' : (stripHtmlTags(selectedEvent?.title) || 'N/A');
+      aoa[0][0] = orgName || 'Profit & Loss Report';
+      aoa[1][0] = `Profit & Loss Report — ${eventName}`;
+      aoa[2][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
+      aoa[4][0] = `SUMMARY   |   Tickets Sold: ${summary.ticketsSold}`;
+
+      // ---- Total Sales / Total Income / Total Expenses in ONE line, above the table ----
+      aoa[5] = [
+        `Total Sales: ₹${summary.totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        '',
+        `Total Income: ₹${summary.totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        '',
+        `Total Expenses: ₹${summary.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        '',
+      ];
+
+      COLS.forEach((c, i) => { aoa[7][i] = c.header; });
       filtered.forEach((r, idx) => {
         const row = dataStartRow + idx;
         const typeLabel = r.type === 'Event' ? (r.amount >= 0 ? 'Profit' : 'Loss') : r.type;
-        aoa[row] = [idx + 1, formatDate(r.date), typeLabel, r.description, r.type === 'Expense' ? -r.amount : r.amount];
+        aoa[row] = [idx + 1, formatDate(r.date), typeLabel, r.description, r.type === 'Expense' ? -r.amount : r.amount, ''];
       });
-      const salesRow = dataStartRow + filtered.length;
-      const incomeRow = salesRow + 1;
-      const expRow = incomeRow + 1;
-      const netRow = expRow + 1;
-      aoa[salesRow] = ['', '', '', 'Total Sales', summary.totalSales];
-      aoa[incomeRow] = ['', '', '', 'Total Income', summary.totalIncome];
-      aoa[expRow] = ['', '', '', 'Total Expenses', -summary.totalExpenses];
-      aoa[netRow] = ['', '', '', 'NET PROFIT/LOSS', summary.netProfit];
+
+      // ---- NET PROFIT/LOSS stays BELOW the table (footer) ----
+      const netRow = dataStartRow + filtered.length;
+      aoa[netRow] = ['', '', '', 'NET PROFIT/LOSS', summary.netProfit, ''];
 
       const ws: any = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = COLS.map(c => ({ wch: c.width }));
-      ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 22 }, { hpt: 22 }, { hpt: 22 }, { hpt: 26 }];
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }];
+      ws['!rows'] = [
+        { hpt: 36 }, { hpt: 18 }, { hpt: 20 }, { hpt: 8 },
+        { hpt: 18 }, { hpt: 26 },
+        { hpt: 8 }, { hpt: 28 },
+        ...filtered.map(() => ({ hpt: 20 })),
+        { hpt: 26 },
+      ];
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } },
+        { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } },
+        { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } },
+        { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } }, // Total Sales
+        { s: { r: 5, c: 2 }, e: { r: 5, c: 3 } }, // Total Income
+        { s: { r: 5, c: 4 }, e: { r: 5, c: 5 } }, // Total Expenses
+      ];
 
       const styleCell = (addr: string, st: any) => { if (!ws[addr]) ws[addr] = { t: 's', v: '' }; ws[addr].s = st; };
-      styleCell('A1', s({ sz: 16, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
-      styleCell('A2', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
-      styleCell('A4', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
-      styleCell('A5', s({ sz: 10, bold: true, color: { rgb: summary.netProfit >= 0 ? '166534' : '991B1B' } }, solidFill(summary.netProfit >= 0 ? 'DCFCE7' : 'FEE2E2'), { horizontal: 'center', vertical: 'center' }, bblr));
+      styleCell('A1', s({ sz: 14, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A2', s({ sz: 13, bold: true, color: { rgb: '111827' } }, solidFill('FFFFFF'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A3', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
+      styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
+
+      // Total Sales / Total Income / Total Expenses — single row, 3 segments
+      styleCell('A6', s({ sz: 10, bold: true, color: { rgb: '16A34A' } }, solidFill('F0FDF4'), { horizontal: 'center', vertical: 'center' }, bblr));
+      styleCell('C6', s({ sz: 10, bold: true, color: { rgb: '2563EB' } }, solidFill('EFF6FF'), { horizontal: 'center', vertical: 'center' }, bblr));
+      styleCell('E6', s({ sz: 10, bold: true, color: { rgb: 'DC2626' } }, solidFill('FEF2F2'), { horizontal: 'center', vertical: 'center' }, bblr));
+
       COLS.forEach((_, i) => {
-        const addr = XLSX.utils.encode_cell({ r: 6, c: i });
+        const addr = XLSX.utils.encode_cell({ r: 7, c: i });
         styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: i === 3 ? 'left' : 'center', vertical: 'center' }, allBorders));
       });
+
       filtered.forEach((r, idx) => {
         const row = dataStartRow + idx;
         const isAlt = idx % 2 === 1;
@@ -163,13 +220,8 @@ const PnlReportPageInner: React.FC = () => {
           if (ci === 4 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00;[Red]-₹#,##0.00'; }
         }
       });
-      [salesRow, incomeRow, expRow].forEach((row) => {
-        for (let ci = 0; ci < colCount; ci++) {
-          const addr = XLSX.utils.encode_cell({ r: row, c: ci });
-          styleCell(addr, s({ sz: 10, bold: true, color: { rgb: '1E293B' } }, solidFill('F1F5F9'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, bblr));
-          if (ci === 4 && ws[addr]) { ws[addr].t = 'n'; ws[addr].z = '₹#,##0.00;[Red]-₹#,##0.00'; }
-        }
-      });
+
+      // NET PROFIT/LOSS row stays below the table (footer)
       for (let ci = 0; ci < colCount; ci++) {
         const addr = XLSX.utils.encode_cell({ r: netRow, c: ci });
         styleCell(addr, s({ sz: 11, bold: true, color: { rgb: summary.netProfit >= 0 ? '166534' : '991B1B' } }, solidFill(summary.netProfit >= 0 ? 'DCFCE7' : 'FEE2E2'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, { top: { style: 'medium', color: { rgb: '1E293B' } }, bottom: { style: 'medium', color: { rgb: '1E293B' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } }));
@@ -409,18 +461,18 @@ const PnlReportPageInner: React.FC = () => {
                     const resultCell = (
                       <td key="type" className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                            : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                              : r.type === 'Event' ? (r.amount >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300')
-                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                          : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                            : r.type === 'Event' ? (r.amount >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300')
+                              : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
                           {r.type === 'Event' ? (r.amount >= 0 ? 'Profit' : 'Loss') : r.type}
                         </span>
                       </td>
                     );
                     const amountCell = (
                       <td key="amount" className={`px-4 py-3 font-semibold ${r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
-                          : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
-                            : r.type === 'Event' ? (r.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
-                              : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
+                          : r.type === 'Event' ? (r.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
+                            : 'text-emerald-600 dark:text-emerald-400'}`}>
                         {r.type === 'Expense' || (r.type === 'Event' && r.amount < 0) ? '-' : '+'}₹{Math.abs(r.amount).toLocaleString('en-IN')}
                       </td>
                     );

@@ -13,6 +13,12 @@ import { stripHtmlTags } from '../../lib/utils';
 const formatDate = (ms: number) =>
     new Date(ms).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
+const formatDateTime = (ms: number) =>
+    new Date(ms).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+    });
+
 const SalesReportPageInner: React.FC = () => {
     const { profile } = useAuth();
     const { eventId } = useParams<{ eventId: string }>();
@@ -44,18 +50,22 @@ const SalesReportPageInner: React.FC = () => {
             const doc = new jsPDF();
             const pw = doc.internal.pageSize.getWidth();
             const ph = doc.internal.pageSize.getHeight();
-            doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 6, 'F');
-            doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
             const orgName = stripHtmlTags(profile?.organizationName);
-            const reportTitle = orgName
-                ? `Ticket Sales Report — ${orgName}`
-                : 'Ticket Sales Report';
-            doc.text(reportTitle, 14, 24);
+            const eventName = stripHtmlTags(selectedEvent?.title) || 'N/A';
+
+            // Green strip with org name centered inside
+            doc.setFillColor(0, 122, 120); doc.rect(0, 0, pw, 20, 'F');
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+            doc.text(orgName || 'Ticket Sales Report', pw / 2, 13, { align: 'center' });
+
+            // Title + subtitle below the strip
+            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+            doc.text(`Ticket Sales Report — ${eventName}`, 14, 34);
             doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
-            doc.text(`Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 31);
+            doc.text(`Generated: ${formatDateTime(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} to ${formatDate(appliedFilters.end)}`, 14, 41);
 
             autoTable(doc, {
-                startY: 38,
+                startY: 44,
                 head: [['DATE', 'BUYER', 'TIER', 'AMOUNT (Rs)']],
                 body: filtered.map(a => [
                     formatDate(a.purchasedAt!),
@@ -99,17 +109,18 @@ const SalesReportPageInner: React.FC = () => {
 
             const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Buyer', width: 22 }, { header: 'Tier', width: 18 }, { header: 'Amount (₹)', width: 18 }];
             const colCount = COLS.length;
-            const dataStartRow = 7;
+            const dataStartRow = 8;
             const totalRows = dataStartRow + filtered.length + 1;
             const aoa: any[][] = Array.from({ length: totalRows }, () => Array(colCount).fill(null));
 
-            aoa[0][0] = profile?.organizationName
-                ? `Ticket Sales Report  —  ${profile.organizationName}`
-                : 'Ticket Sales Report';
-            aoa[1][0] = `Generated: ${formatDate(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
-            aoa[3][0] = 'SUMMARY';
-            aoa[4][0] = `Total Sales: ₹${summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Tickets Sold: ${summary.ticketsSold}`;
-            COLS.forEach((c, i) => { aoa[6][i] = c.header; });
+            const orgName = stripHtmlTags(profile?.organizationName);
+            const eventName = stripHtmlTags(selectedEvent?.title) || 'N/A';
+            aoa[0][0] = orgName || 'Ticket Sales Report';
+            aoa[1][0] = `Ticket Sales Report — ${eventName}`;
+            aoa[2][0] = `Generated: ${formatDateTime(Date.now())}   |   Period: ${formatDate(appliedFilters.start)} → ${formatDate(appliedFilters.end)}`;
+            aoa[4][0] = 'SUMMARY';
+            aoa[5][0] = `Total Sales: ₹${summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   |   Tickets Sold: ${summary.ticketsSold}`;
+            COLS.forEach((c, i) => { aoa[7][i] = c.header; });
             filtered.forEach((a, idx) => {
                 const r = dataStartRow + idx;
                 aoa[r] = [idx + 1, formatDate(a.purchasedAt!), a.name || 'N/A', a.tierName || 'N/A', a.amountPaid || 0];
@@ -119,16 +130,17 @@ const SalesReportPageInner: React.FC = () => {
 
             const ws: any = XLSX.utils.aoa_to_sheet(aoa);
             ws['!cols'] = COLS.map(c => ({ wch: c.width }));
-            ws['!rows'] = [{ hpt: 36 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
-            ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 3, c: 0 }, e: { r: 3, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }];
+            ws['!rows'] = [{ hpt: 36 }, { hpt: 18 }, { hpt: 20 }, { hpt: 8 }, { hpt: 18 }, { hpt: 22 }, { hpt: 8 }, { hpt: 28 }, ...filtered.map(() => ({ hpt: 20 })), { hpt: 24 }];
+            ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } }, { s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: colCount - 1 } }, { s: { r: 5, c: 0 }, e: { r: 5, c: colCount - 1 } }];
 
             const styleCell = (addr: string, st: any) => { if (!ws[addr]) ws[addr] = { t: 's', v: '' }; ws[addr].s = st; };
-            styleCell('A1', s({ sz: 16, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
-            styleCell('A2', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
-            styleCell('A4', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
-            styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
+            styleCell('A1', s({ sz: 14, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('007A78'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A2', s({ sz: 13, bold: true, color: { rgb: '111827' } }, solidFill('FFFFFF'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A3', s({ sz: 9, italic: true, color: { rgb: '134E4A' } }, solidFill('CCFBF1'), { horizontal: 'center', vertical: 'center' }));
+            styleCell('A5', s({ sz: 10, bold: true, color: { rgb: '0F766E' } }, solidFill('F0FDFA'), { horizontal: 'left', vertical: 'center' }, allBorders));
+            styleCell('A6', s({ sz: 10, bold: true, color: { rgb: '166534' } }, solidFill('DCFCE7'), { horizontal: 'center', vertical: 'center' }, bblr));
             COLS.forEach((_, i) => {
-                const addr = XLSX.utils.encode_cell({ r: 6, c: i });
+                const addr = XLSX.utils.encode_cell({ r: 7, c: i });
                 styleCell(addr, s({ sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, solidFill('0F5F5D'), { horizontal: i <= 2 ? 'left' : 'center', vertical: 'center' }, allBorders));
             });
             filtered.forEach((_, idx) => {
