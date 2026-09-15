@@ -6,6 +6,7 @@ const STATUS_STYLES: Record<EventStatus, string> = {
   published: 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF]',
   completed: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400',
   cancelled: 'bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400',
+  deleted: 'bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400',
 };
 
 const STATUS_LABEL: Record<EventStatus, string> = {
@@ -13,6 +14,7 @@ const STATUS_LABEL: Record<EventStatus, string> = {
   published: 'Live',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  deleted: 'Deleted',
 };
 
 export const StatusBadge: React.FC<{ status: EventStatus }> = ({ status }) => (

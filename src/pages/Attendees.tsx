@@ -21,6 +21,7 @@ import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
+import { stripHtmlTags } from '../lib/utils';
 import EventListCard from '../components/EventListCard';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
@@ -36,16 +37,27 @@ import ConfirmCancelModal from '../components/ConfirmCancelModal';
 import ConfirmReviveModal from '../components/ConfirmReviveModal';
 import EditAttendeeModal from '../components/EditAttendeeModal';
 import { useEventCredits } from '../hooks/useEventCredits';
+import { loadImageAsCoverBanner } from '../lib/imageBanner';
 
-type SortOption = 'name_asc' | 'name_desc' | 'checked_in' | 'pending' | 'cancelled';
+// Matches the PDF acknowledgement's banner box in AttendeeCard.tsx.
+const PDF_BANNER_WIDTH = 760;
+const PDF_BANNER_HEIGHT = 220;
+
+type SortOption = 'name_asc' | 'name_desc' | 'purchased_first' | 'purchased_last' | 'checked_in' | 'pending' | 'cancelled';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'name_asc', label: ' A to Z ' },
   { value: 'name_desc', label: 'Z to A' },
+  { value: 'purchased_first', label: 'Ticket: first - last' },
+  { value: 'purchased_last', label: 'Ticket: last - first' },
   { value: 'checked_in', label: 'Checked in' },
   { value: 'pending', label: 'Pending / not arrived' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
+
+// purchasedAt is the source of truth for when the ticket was bought;
+// createdAt is the fallback for older records that predate that field.
+const getPurchaseTime = (a: Attendee): number => a.purchasedAt ?? a.createdAt ?? 0;
 
 const EXPORT_COLUMNS: ExportColumn<Attendee>[] = [
   { header: 'Name', accessor: (a) => a.name },
@@ -61,7 +73,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     id: t.id,
     name: t.name,
     price: t.price,
-    sold: 0,
+    sold: Number.isFinite(t.sold) ? t.sold : 0,
     total: t.quantity,
   }));
   return {
@@ -72,14 +84,15 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     status: data.status,
     startDate: data.date,
     venue: data.isOnline ? 'Online' : data.venue,
-    ticketsSold: 0,
+    ticketsSold: tiers.reduce((sum: number, t: any) => sum + t.sold, 0),
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
-    revenue: 0,
+    revenue: tiers.reduce((sum: number, t: any) => sum + t.sold * (t.price || 0), 0),
     description: data.description,
     tiers,
     customFields: data.customFields ?? [],
     salesTrend: data.salesTrend ?? [],
     registrationMode: data.registrationMode,
+    consentText: data.consentText,
   };
 };
 
@@ -99,6 +112,8 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   paymentMethod: data.paymentMethod ?? undefined,
   screenshotUrl: data.screenshotUrl ?? undefined,
   accessCode: data.accessCode ?? undefined,
+  purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
+  createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
 });
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
@@ -155,6 +170,20 @@ const Attendees: React.FC = () => {
   }, [profile?.companyId, selectedEventId]);
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
+
+  // Pre-fetched once per event (not once per attendee card) and shared by
+  // every AttendeeCard's "Share PDF" acknowledgement, so building that PDF
+  // at click time is instant and has no network dependency of its own.
+  const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setPdfBannerDataUrl(null);
+    if (!selectedEvent?.coverImage) return;
+    loadImageAsCoverBanner(selectedEvent.coverImage, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+      if (!cancelled) setPdfBannerDataUrl(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [selectedEvent?.coverImage]);
 
   // Check-in should only be allowed on/after the event's date (date-only comparison, time ignored)
   const isEventDateInFuture = useCallback((event: EventSummary | null): boolean => {
@@ -381,6 +410,10 @@ const Attendees: React.FC = () => {
         return [...searchedAttendees].sort((a, b) => a.name.localeCompare(b.name));
       case 'name_desc':
         return [...searchedAttendees].sort((a, b) => b.name.localeCompare(a.name));
+      case 'purchased_first':
+        return [...searchedAttendees].sort((a, b) => getPurchaseTime(a) - getPurchaseTime(b));
+      case 'purchased_last':
+        return [...searchedAttendees].sort((a, b) => getPurchaseTime(b) - getPurchaseTime(a));
       case 'checked_in':
         return searchedAttendees.filter((a) => a.status === 'checked_in');
       case 'pending':
@@ -562,7 +595,7 @@ const Attendees: React.FC = () => {
                         'noopener,noreferrer'
                       );
                     }}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
                     title="View public event page"
                   >
                     <Eye size={14} /> Live page
@@ -573,8 +606,8 @@ const Attendees: React.FC = () => {
                     <ExportMenu
                       data={attendees}
                       columns={EXPORT_COLUMNS}
-                      fileNameBase={selectedEvent.title}
-                      documentTitle={`${selectedEvent.title} Attendees`}
+                      fileNameBase={stripHtmlTags(selectedEvent.title)}
+                      documentTitle={`${stripHtmlTags(selectedEvent.title)} Attendees`}
                       disabled={attendees.length === 0}
                     />
                   </ShowWrapper>
@@ -602,6 +635,9 @@ const Attendees: React.FC = () => {
                       onEdit={can(Permission.EDIT_ATTENDEE) ? requestEdit : undefined}
                       eventTitle={selectedEvent.title}
                       eventDate={selectedEvent.startDate}
+                      eventVenue={selectedEvent.venue}
+                      eventBannerDataUrl={pdfBannerDataUrl}
+                      eventConsentText={selectedEvent.consentText}
                       customFields={selectedEvent.customFields}
                     />
                   ))}

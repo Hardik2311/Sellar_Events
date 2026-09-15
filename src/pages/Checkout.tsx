@@ -219,7 +219,6 @@ const CheckoutPage: React.FC = () => {
     return { ...item, itemBaseAmount, itemTaxAmount, itemTotalAmount };
   });
 
-  const baseSubtotal = lineItemsWithTax.reduce((s, it) => s + it.itemBaseAmount, 0);
   const totalTaxAmount = lineItemsWithTax.reduce((s, it) => s + it.itemTaxAmount, 0);
   const subtotal = lineItemsWithTax.reduce((s, it) => s + it.itemTotalAmount, 0);
 
@@ -232,7 +231,9 @@ const CheckoutPage: React.FC = () => {
   const isValidPhone = (value: string) => /^[6-9]\d{9}$/.test(value.trim());
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
-  const customFields = event.customFields ?? [];
+  // Drop questions the organizer never actually labeled — otherwise an
+  // empty custom field still renders as a blank, pointless input at checkout.
+  const customFields = (event.customFields ?? []).filter((f) => f.label?.trim());
 
   const detailsComplete =
     attendeeDetails.length === totalQty &&

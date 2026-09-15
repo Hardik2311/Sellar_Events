@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration } from 'react-router-dom';
 import EventsLayout from '../Layout/EventsLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
+import ErrorBoundary from '../components/ErrorBoundary';
+import ErrorScreen from '../components/ErrorScreen';
 import { ROUTES } from '../constants/routes.constants';
 import { AppRegistry } from './AppRegistry';
 import { getSubdomain } from '../lib/subdomain';
@@ -103,15 +105,20 @@ const router = subdomain
           { path: ROUTES.PUBLIC_STORE, element: <CustomerEventDiscover /> },
           { path: ROUTES.PUBLIC_EVENT_DETAIL, element: <CustomerEventDetail /> },
           { path: ROUTES.PUBLIC_CHECKOUT, element: <CheckoutPage /> },
+
+          // Unmatched URL
+          { path: '*', element: <ErrorScreen heading="Page not found" message="This page doesn't exist or may have moved." icon="🔍" /> },
         ],
       },
     ]);
 
 const AppRouter = () => {
   return (
-    <Suspense fallback={<Loading />}>
-      <RouterProvider router={router} />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<Loading />}>
+        <RouterProvider router={router} />
+      </Suspense>
+    </ErrorBoundary>
   );
 };
 

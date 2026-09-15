@@ -31,6 +31,7 @@ export interface EventSummary {
   tiers: TicketTier[];
   customFields?: CustomField[];
   registrationMode?: RegistrationMode;
+  consentText?: string; // organizer's "Important information & consent" text, shown on the PDF acknowledgement
   salesTrend: SalesTrendPoint[]; // per-event daily revenue, scoped to the selected date range
 }
 

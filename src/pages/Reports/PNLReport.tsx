@@ -19,7 +19,7 @@ const PnlReportPageInner: React.FC = () => {
 
   const {
     events, eventsLoading, eventSearch, setEventSearch,
-    selectedEventId, setSelectedEventId, selectedEvent,
+    selectedEventId, setSelectedEventId, selectedEvent, isAllEvents,
     loading,
     startDate, endDate, appliedFilters,
     searchQuery, setSearchQuery,
@@ -56,12 +56,12 @@ const PnlReportPageInner: React.FC = () => {
 
       autoTable(doc, {
         startY: 38,
-        head: [['DATE', 'TYPE', 'DESCRIPTION', 'AMOUNT (Rs)']],
+        head: [[isAllEvents ? 'DATE' : 'DATE', isAllEvents ? 'RESULT' : 'TYPE', isAllEvents ? 'EVENT' : 'DESCRIPTION', isAllEvents ? 'NET PROFIT/LOSS (Rs)' : 'AMOUNT (Rs)']],
         body: filtered.map(r => [
           formatDate(r.date),
-          r.type,
+          r.type === 'Event' ? (r.amount >= 0 ? 'Profit' : 'Loss') : r.type,
           r.description,
-          `${r.type === 'Expense' ? '-' : '+'}${r.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+          `${r.type === 'Expense' || (r.type === 'Event' && r.amount < 0) ? '-' : '+'}${Math.abs(r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         ]),
         foot: [
           ['', '', 'Total Sales', `+${summary.totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
@@ -69,6 +69,7 @@ const PnlReportPageInner: React.FC = () => {
           ['', '', 'Total Expenses', `-${summary.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
           ['', '', 'NET PROFIT/LOSS', `${summary.netProfit >= 0 ? '+' : '-'}${Math.abs(summary.netProfit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
         ],
+        showFoot: 'lastPage',
         theme: 'plain',
         styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
         headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 0.75, bottom: 0.75 }, lineColor: [204, 251, 241] },
@@ -78,7 +79,7 @@ const PnlReportPageInner: React.FC = () => {
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 1) {
             const raw = data.cell.raw;
-            data.cell.styles.textColor = raw === 'Expense' ? [220, 38, 38] : raw === 'Income' ? [37, 99, 235] : [22, 163, 74];
+            data.cell.styles.textColor = raw === 'Expense' || raw === 'Loss' ? [220, 38, 38] : raw === 'Income' ? [37, 99, 235] : [22, 163, 74];
             data.cell.styles.fontStyle = 'bold';
           }
           if (data.section === 'foot' && data.row.index === 3) {
@@ -126,7 +127,8 @@ const PnlReportPageInner: React.FC = () => {
       COLS.forEach((c, i) => { aoa[6][i] = c.header; });
       filtered.forEach((r, idx) => {
         const row = dataStartRow + idx;
-        aoa[row] = [idx + 1, formatDate(r.date), r.type, r.description, r.type === 'Expense' ? -r.amount : r.amount];
+        const typeLabel = r.type === 'Event' ? (r.amount >= 0 ? 'Profit' : 'Loss') : r.type;
+        aoa[row] = [idx + 1, formatDate(r.date), typeLabel, r.description, r.type === 'Expense' ? -r.amount : r.amount];
       });
       const salesRow = dataStartRow + filtered.length;
       const incomeRow = salesRow + 1;
@@ -154,7 +156,7 @@ const PnlReportPageInner: React.FC = () => {
       filtered.forEach((r, idx) => {
         const row = dataStartRow + idx;
         const isAlt = idx % 2 === 1;
-        const amountColor = r.type === 'Expense' ? 'DC2626' : r.type === 'Income' ? '2563EB' : '16A34A';
+        const amountColor = r.type === 'Expense' ? 'DC2626' : r.type === 'Income' ? '2563EB' : r.type === 'Event' ? (r.amount >= 0 ? '16A34A' : 'DC2626') : '16A34A';
         for (let ci = 0; ci < colCount; ci++) {
           const addr = XLSX.utils.encode_cell({ r: row, c: ci });
           styleCell(addr, s({ sz: 9, color: { rgb: ci === 4 ? amountColor : '1E293B' } }, solidFill(isAlt ? 'F8FAFC' : 'FFFFFF'), { horizontal: ci === 3 ? 'left' : 'center', vertical: 'center' }, bblr));
@@ -202,7 +204,9 @@ const PnlReportPageInner: React.FC = () => {
           </div>
           <div className="absolute left-1/2 -translate-x-1/2 text-center max-w-[60%] min-w-0">
             <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Profit &amp; Loss</h1>
-            {selectedEvent && (
+            {isAllEvents ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">All events</p>
+            ) : selectedEvent && (
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
                 {stripHtmlTags(selectedEvent.title)}
               </p>
@@ -260,6 +264,7 @@ const PnlReportPageInner: React.FC = () => {
             searchValue={eventSearch}
             onSearchChange={setEventSearch}
             loading={eventsLoading}
+            allEventsOption
           />
 
           <EventDateFilter />
@@ -340,11 +345,21 @@ const PnlReportPageInner: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-                    {([
-                      { key: 'date', label: 'date' },
-                      { key: 'type', label: 'type' },
-                      { key: 'amount', label: 'amount' },
-                    ] as const).map(col => {
+                    {isAllEvents && (
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">event</th>
+                    )}
+                    {(isAllEvents
+                      ? [
+                        { key: 'date', label: 'date' },
+                        { key: 'amount', label: 'net profit/loss' },
+                        { key: 'type', label: 'result' },
+                      ] as const
+                      : [
+                        { key: 'date', label: 'date' },
+                        { key: 'type', label: 'type' },
+                        { key: 'amount', label: 'amount' },
+                      ] as const
+                    ).map(col => {
                       const isSorted = sortConfig.key === col.key;
                       const directionIcon = sortConfig.direction === 'asc' ? '∧' : '∨';
                       return (
@@ -366,7 +381,9 @@ const PnlReportPageInner: React.FC = () => {
                         </th>
                       );
                     })}
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">description</th>
+                    {!isAllEvents && (
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">description</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -388,24 +405,36 @@ const PnlReportPageInner: React.FC = () => {
                         No entries found for selected period.
                       </td>
                     </tr>
-                  ) : filtered.map((r, i) => (
-                    <tr key={r.id} className={i % 2 === 0 ? 'bg-white dark:bg-[#1E293B]' : 'bg-slate-50 dark:bg-[#182234]'}>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatDate(r.date)}</td>
-                      <td className="px-4 py-3">
+                  ) : filtered.map((r, i) => {
+                    const resultCell = (
+                      <td key="type" className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${r.type === 'Sale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                             : r.type === 'Income' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-                          {r.type}
+                              : r.type === 'Event' ? (r.amount >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300')
+                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                          {r.type === 'Event' ? (r.amount >= 0 ? 'Profit' : 'Loss') : r.type}
                         </span>
                       </td>
-                      <td className={`px-4 py-3 font-semibold ${r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
+                    );
+                    const amountCell = (
+                      <td key="amount" className={`px-4 py-3 font-semibold ${r.type === 'Expense' ? 'text-red-600 dark:text-red-400'
                           : r.type === 'Income' ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {r.type === 'Expense' ? '-' : '+'}₹{r.amount.toLocaleString('en-IN')}
+                            : r.type === 'Event' ? (r.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
+                              : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {r.type === 'Expense' || (r.type === 'Event' && r.amount < 0) ? '-' : '+'}₹{Math.abs(r.amount).toLocaleString('en-IN')}
                       </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.description}</td>
-                    </tr>
-                  ))}
+                    );
+                    const dateCell = <td key="date" className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatDate(r.date)}</td>;
+                    const descriptionCell = <td key="desc" className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.description}</td>;
+
+                    return (
+                      <tr key={r.id} className={i % 2 === 0 ? 'bg-white dark:bg-[#1E293B]' : 'bg-slate-50 dark:bg-[#182234]'}>
+                        {isAllEvents
+                          ? <>{descriptionCell}{dateCell}{amountCell}{resultCell}</>
+                          : <>{dateCell}{resultCell}{amountCell}{descriptionCell}</>}
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 {selectedEventId && !loading && filtered.length > 0 && (
                   <tfoot>

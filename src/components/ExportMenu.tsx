@@ -174,13 +174,13 @@ function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, disabled }:
         <div className="absolute right-0 top-full mt-1.5 w-52 rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl z-30 overflow-hidden">
           <button
             onClick={handleExportPdf}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
           >
             <FileText size={15} className="text-red-500" /> Download as PDF
           </button>
           <button
             onClick={handleExportExcel}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-800"
           >
             <FileSpreadsheet size={15} className="text-green-600" /> Download as Excel
           </button>

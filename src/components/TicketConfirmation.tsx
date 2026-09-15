@@ -3,6 +3,7 @@ import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown } from '
 import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { stripHtmlTags } from '../lib/utils';
+import { shareTicketImage } from '../lib/shareTicket';
 
 const TICKET_CANVAS_SCALE = 2;      // was 3 inside buildTicketCanvas — still crisp, ~55% fewer pixels
 const TICKET_IMAGE_QUALITY = 0.85;  // JPEG quality used everywhere a ticket image is produced
@@ -199,26 +200,16 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         setSharingId(ticketId);
 
         try {
-            const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
             // title ab text me repeat nahi hota — sirf ek jagah info jaayegi
             const text = `Ticket: ${ticketId}\nAttendee: ${attendeeName}`;
-
-            if (canvas && navigator.share) {
-                canvas.toBlob(async (blob) => {
-                    if (!blob) return;
-                    const file = new File([blob], `${ticketId}.jpg`, { type: 'image/jpeg' });
-                    try {
-                        if (navigator.canShare?.({ files: [file] })) {
-                            await navigator.share({ files: [file] });
-                        } else {
-                            await navigator.share({ title: cleanEventTitle, text });
-                        }
-                    } catch {
-                        /* user cancelled share — ignore */
-                    }
-                }, 'image/jpeg', TICKET_IMAGE_QUALITY);
-            } else {
-                navigator.clipboard?.writeText(text);
+            const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
+            if (canvas) {
+                await shareTicketImage(
+                    canvas.toDataURL('image/jpeg', TICKET_IMAGE_QUALITY),
+                    `${ticketId}.jpg`,
+                    'image/jpeg',
+                    { title: cleanEventTitle, text }
+                );
             }
         } finally {
             setSharingId(null);

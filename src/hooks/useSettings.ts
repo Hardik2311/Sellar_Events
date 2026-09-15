@@ -65,7 +65,7 @@ const DEFAULT_TICKET_DISPLAY: TicketDisplaySettings = {
 
 // NEW
 const DEFAULT_PAYMENTS: PaymentSettings = {
-  allowManualQR: false,
+  allowManualQR: true,
 };
 
 const DEFAULT_SETTINGS: CompanySettings = {

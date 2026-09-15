@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Wallet } from 'lucide-react';
+import { Calendar, Clock, Wallet, AlertTriangle } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
@@ -17,7 +17,7 @@ import { EVENT_CATEGORIES, DEFAULT_TEXT_STYLE, type EventFormState, type TicketT
 import { useCompanySettings } from '../hooks/useSettings';
 import { collection, doc, runTransaction, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isProfileComplete } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { DEFAULT_MAX_TICKETS_PER_ORDER, EVENT_CREDIT_VALIDITY_DAYS, getNewCreditExpiry } from '../data/events';
 import { saveDraft, loadDraft, deleteDraft } from '../lib/draftStore';
@@ -177,18 +177,36 @@ const CreateEvent: React.FC = () => {
     form.paymentCollectionMode !== 'manual_qr' ||
     isValidUpi(form.upiId);
 
-  const isPublishable =
-    stripHtml(form.title).length > 0 &&
-    Boolean(form.date) &&
-    Boolean(form.time) &&
-    (form.isOnline || form.venue.trim().length > 0) &&
-    (!req.endDate || form.endDate) &&
-    (!form.date || !form.endDate || form.endDate >= form.date) &&
-    (!req.description || stripHtml(form.description).length > 0) &&
-    (!req.images || form.images.length > 0 || Boolean(form.coverImageDesktop) || Boolean(form.coverImageMobile)) &&
-    (!isOtherCategory || form.customCategory.trim().length > 0) &&
-    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink)) &&
-    isManualQRReady;
+  // Ordered top-to-bottom to match the form's visual layout, so "scroll to
+  // the first problem" lands on whichever one the user would hit first.
+  const publishChecks: { field: string; valid: boolean; message: string }[] = [
+    { field: 'cover-photo', valid: !req.images || form.images.length > 0 || Boolean(form.coverImageDesktop) || Boolean(form.coverImageMobile), message: 'Add a cover image before publishing.' },
+    { field: 'title', valid: stripHtml(form.title).length > 0, message: 'Enter an event title before publishing.' },
+    { field: 'custom-category', valid: !isOtherCategory || form.customCategory.trim().length > 0, message: 'Enter a custom category before publishing.' },
+    { field: 'description', valid: !req.description || stripHtml(form.description).length > 0, message: 'Add a description before publishing.' },
+    { field: 'date', valid: Boolean(form.date), message: 'Pick a start date before publishing.' },
+    { field: 'end-date', valid: (!req.endDate || Boolean(form.endDate)) && (!form.date || !form.endDate || form.endDate >= form.date), message: 'Pick a valid end date before publishing.' },
+    { field: 'time', valid: Boolean(form.time), message: 'Pick a start time before publishing.' },
+    { field: 'venue', valid: form.isOnline || form.venue.trim().length > 0, message: 'Enter a venue before publishing.' },
+    { field: 'rsvp-link', valid: form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink), message: 'Enter a valid RSVP link before publishing.' },
+    { field: 'upi-id', valid: isManualQRReady, message: 'Enter a valid UPI ID before publishing.' },
+  ];
+
+  const isPublishable = publishChecks.every((c) => c.valid);
+
+  // Scroll/focus whichever field is currently invalid instead of leaving the
+  // organizer to hunt through the form for it.
+  const scrollToField = (fieldKey: string) => {
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>(`[data-field-anchor="${fieldKey}"]`)
+    );
+    // Both a mobile and a desktop copy of some fields exist in the DOM at
+    // once (toggled via CSS); pick whichever one is actually visible.
+    const target = candidates.find((el) => el.offsetParent !== null) ?? candidates[0];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.focus?.({ preventScroll: true });
+  };
 
   const saveEvent = async (status: 'draft' | 'published') => {
     if (!user || !profile?.companyId) {
@@ -283,7 +301,9 @@ const CreateEvent: React.FC = () => {
         rsvpLink: isRsvp ? form.rsvpLink.trim() : null,
         rsvpButtonLabel: isRsvp ? (form.rsvpButtonLabel.trim() || 'RSVP Now') : null,
         promoCode: form.promoCode || null,
-        customFields: form.customFields,
+        // Drop any question the organizer never labeled — an empty label
+        // would otherwise still render as a blank input at checkout.
+        customFields: form.customFields.filter((f) => f.label.trim()),
         promoDiscountPercent: form.promoDiscountPercent || 0,
         consentText: form.consentText.trim() || null,
         consentStyle: form.consentText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.consentFontSize } : null,
@@ -347,7 +367,15 @@ const CreateEvent: React.FC = () => {
     saveEvent('draft');
   };
   const handlePublish = () => {
-    if (!isPublishable || !can(Permission.PUBLISH_EVENT)) return;
+    if (!can(Permission.PUBLISH_EVENT)) return;
+    if (!isPublishable) {
+      const firstInvalid = publishChecks.find((c) => !c.valid);
+      if (firstInvalid) {
+        setSaveError(firstInvalid.message);
+        scrollToField(firstInvalid.field);
+      }
+      return;
+    }
     if (isPastEventDateTime()) {
       setShowPastEventConfirm(true);
       return;
@@ -380,7 +408,7 @@ const CreateEvent: React.FC = () => {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Start date *" htmlFor="date">
-            <div className="relative">
+            <div className="relative" data-field-anchor="date" tabIndex={-1}>
               <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
               <DatePicker
                 id="date"
@@ -403,7 +431,7 @@ const CreateEvent: React.FC = () => {
           </FormField>
 
           <FormField label={req.endDate ? 'End date *' : 'End date'} htmlFor="end-date">
-            <div className="relative">
+            <div className="relative" data-field-anchor="end-date" tabIndex={-1}>
               <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
               <DatePicker
                 id="end-date"
@@ -424,7 +452,7 @@ const CreateEvent: React.FC = () => {
         </div>
 
         <FormField label="Time *" htmlFor="time">
-          <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+          <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800" data-field-anchor="time" tabIndex={-1}>
             <Clock size={16} className="text-gray-400 shrink-0" />
             <TimeSelect
               value={form.time ? form.time.split(':')[0] : '00'}
@@ -441,7 +469,7 @@ const CreateEvent: React.FC = () => {
         </FormField>
 
         {!form.isOnline && (
-          <div>
+          <div data-field-anchor="venue" tabIndex={-1}>
             <FloatingLabelInput
               id="venue"
               label="Venue *"
@@ -462,19 +490,31 @@ const CreateEvent: React.FC = () => {
                 </a>
               )}
             </div>
-            {form.venue.trim().length > 2 && (
-              <iframe
-                title="venue-map-preview"
-                className="w-full h-32 mt-2 rounded-sm border border-gray-200 dark:border-slate-700"
-                loading="lazy"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
-              />
-            )}
           </div>
         )}
       </CardContent>
     </Card>
   );
+
+  if (!isProfileComplete(profile)) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-slate-100 dark:bg-[#0F172A] p-6 text-center">
+        <AlertTriangle size={32} className="text-amber-500" />
+        <div>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-white">Complete your profile first</h2>
+          <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
+            PAN and Aadhaar details are required before you can create or publish events.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/events/account/edit')}
+          className="rounded-sm bg-[#007A78] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#006361]"
+        >
+          Complete profile
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-24 md:mb-16">
@@ -520,7 +560,7 @@ const CreateEvent: React.FC = () => {
           <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* ── Left column ────────────────────────────────────── */}
             <div className="lg:col-span-2 flex flex-col gap-4">
-              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <Card data-field-anchor="cover-photo" tabIndex={-1} className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
@@ -560,7 +600,7 @@ const CreateEvent: React.FC = () => {
                   <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Basic Information</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
+                  <div data-field-anchor="title" tabIndex={-1}>
                     <TextStyleControls
                       fontSize={form.titleFontSize}
                       onFontSizeChange={(size) => update('titleFontSize', size)}
@@ -596,7 +636,7 @@ const CreateEvent: React.FC = () => {
                     </div>
 
                     {isOtherCategory && (
-                      <div>
+                      <div data-field-anchor="custom-category" tabIndex={-1}>
                         <FloatingLabelInput
                           id="custom-category"
                           label="Custom category *"
@@ -670,7 +710,7 @@ const CreateEvent: React.FC = () => {
                     </p>
                   </FormField>
 
-                  <div>
+                  <div data-field-anchor="description" tabIndex={-1}>
                     <TextStyleControls
                       fontSize={form.descriptionFontSize}
                       onFontSizeChange={(size) => update('descriptionFontSize', size)}
@@ -773,6 +813,7 @@ const CreateEvent: React.FC = () => {
                         </div> */}
                           <FloatingLabelInput
                             id="upi-id"
+                            data-field-anchor="upi-id"
                             label="UPI ID *"
                             value={form.upiId}
                             onChange={(e) => update('upiId', e.target.value)}
@@ -802,7 +843,7 @@ const CreateEvent: React.FC = () => {
                     </>
                   ) : (
                     <div className="space-y-3">
-                      <FloatingLabelInput id="rsvp-link" label="Registration link (Google Form, Typeform, etc.) *" value={form.rsvpLink} onChange={(e) => update('rsvpLink', e.target.value)} required />
+                      <FloatingLabelInput id="rsvp-link" data-field-anchor="rsvp-link" label="Registration link (Google Form, Typeform, etc.) *" value={form.rsvpLink} onChange={(e) => update('rsvpLink', e.target.value)} required />
                       {form.rsvpLink.trim().length > 0 && !isValidUrl(form.rsvpLink) && (
                         <p className="text-xs text-red-500 dark:text-red-400">Enter a valid link starting with http:// or https://</p>
                       )}
@@ -1013,8 +1054,8 @@ const CreateEvent: React.FC = () => {
             </button>
           )}
           {can(Permission.PUBLISH_EVENT) && (
-            <button onClick={handlePublish} disabled={!isPublishable || savingAction !== null}
-              className="flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40"
+            <button onClick={handlePublish} disabled={savingAction !== null}
+              className={`flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40 ${!isPublishable ? 'opacity-60' : ''}`}
             >
               {savingAction === 'published'
                 ? 'Publishing…'

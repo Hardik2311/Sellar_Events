@@ -5,6 +5,7 @@ import { FiCamera, FiCheck, FiX, FiUser } from 'react-icons/fi';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
+import { ROLES } from '../enum/enum';
 import { storage } from '../lib/firebase';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 import IdentityDocumentUpload, { type DocFile } from '../components/IdentityUpload';
@@ -118,6 +119,13 @@ const EditProfile: React.FC = () => {
     const { user, profile: authProfile, loading: authLoading, refreshProfile } = useAuth();
     const { profile, loading: dataLoading, saveData, refetch } =
         useProfileData(user?.uid, authProfile?.companyId);
+
+    // Org-level details (name, category, website, GST) are shared across
+    // the whole company — only the owner can edit them, everyone else sees
+    // them greyed out.
+    const isOwner = authProfile?.role === ROLES.ORGANIZER;
+    const orgFieldClass = `${inputClass} disabled:bg-slate-100 disabled:dark:bg-slate-800 disabled:text-slate-400 disabled:dark:text-slate-500 disabled:cursor-not-allowed`;
+    const orgSelectClass = `${selectClass} disabled:bg-slate-100 disabled:dark:bg-slate-800 disabled:text-slate-400 disabled:dark:text-slate-500 disabled:cursor-not-allowed`;
 
     const [formData, setFormData] = useState<ProfileFormData>(emptyProfile);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -508,7 +516,8 @@ const EditProfile: React.FC = () => {
                                             name="organizationName"
                                             value={formData.organizationName}
                                             onChange={handleInputChange}
-                                            className={inputClass}
+                                            disabled={!isOwner}
+                                            className={orgFieldClass}
                                             placeholder="Organization Name"
                                         />
                                     </LabeledField>
@@ -519,7 +528,8 @@ const EditProfile: React.FC = () => {
                                         name="eventCategory"
                                         value={formData.eventCategory}
                                         onChange={handleInputChange}
-                                        className={selectClass}
+                                        disabled={!isOwner}
+                                        className={orgSelectClass}
                                         style={selectArrowStyle}
                                     >
                                         <option value="">Select Primary Category</option>
@@ -538,7 +548,8 @@ const EditProfile: React.FC = () => {
                                             name="customEventCategory"
                                             value={formData.customEventCategory}
                                             onChange={handleInputChange}
-                                            className={inputClass}
+                                            disabled={!isOwner}
+                                            className={orgFieldClass}
                                             placeholder="Specify Category"
                                         />
                                     </LabeledField>
@@ -550,7 +561,8 @@ const EditProfile: React.FC = () => {
                                         name="website"
                                         value={formData.website}
                                         onChange={handleInputChange}
-                                        className={inputClass}
+                                        disabled={!isOwner}
+                                        className={orgFieldClass}
                                         placeholder="https://yourwebsite.com"
                                     />
                                 </LabeledField>
@@ -568,7 +580,8 @@ const EditProfile: React.FC = () => {
                                             }));
                                             if (value === 'none') setGstinError(null);
                                         }}
-                                        className={selectClass}
+                                        disabled={!isOwner}
+                                        className={orgSelectClass}
                                         style={selectArrowStyle}
                                     >
                                         <option value="regular_inclusive">Regular (Tax Inclusive)</option>
@@ -585,8 +598,8 @@ const EditProfile: React.FC = () => {
                                             value={formData.gstinNumber}
                                             onChange={handleGstinChange}
                                             maxLength={15}
-                                            disabled={formData.gstType === 'none'}
-                                            className={`${inputClass} uppercase pr-8 ${formData.gstType === 'none' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            disabled={!isOwner || formData.gstType === 'none'}
+                                            className={`${orgFieldClass} uppercase pr-8 ${formData.gstType === 'none' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             placeholder="15-character GSTIN"
                                         />
                                         {formData.gstinNumber && (

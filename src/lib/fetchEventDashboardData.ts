@@ -138,6 +138,7 @@ export async function fetchEventDashboardData(
                 venue: e.venue,
                 description: e.description,
                 accentColor: e.accentColor,
+                consentText: e.consentText,
                 coverImage: e.coverImageDesktop || e.coverImageMobile || e.coverImageUrl,
                 ticketsSold,
                 ticketsTotal: tiers.reduce((sum, t) => sum + t.total, 0),

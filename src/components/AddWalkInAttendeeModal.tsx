@@ -73,8 +73,10 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
   };
 
   const isValidPhone = /^[6-9]\d{9}$/.test(phone.trim());
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const customFields = event.customFields ?? [];
+  const isValidEmail = email.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  // Drop questions the organizer never actually labeled — otherwise an
+  // empty custom field still renders as a blank, pointless input.
+  const customFields = (event.customFields ?? []).filter((f) => f.label?.trim());
 
   const formComplete =
     name.trim().length > 0 &&
@@ -144,7 +146,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Email</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Email (optional)</label>
             <input
               type="email"
               value={email}
@@ -232,14 +234,14 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
 
           {customFields.map((field) => {
             const value = customAnswers[field.id] ?? '';
-            const baseClass = 'w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]';
+            const baseClass = 'w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]';
             return (
               <div key={field.id}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
                   {field.label}{field.required ? ' *' : ''}
                 </label>
                 {field.type === 'checkbox' ? (
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <input
                       type="checkbox"
                       checked={value === 'true'}

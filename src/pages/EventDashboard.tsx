@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RefreshCw, Loader2, Eye, EyeOff, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isProfileComplete } from '../context/AuthContext';
+import ProfileIncompleteBanner from '../components/ui/ProfileIncompleteBanner';
 import { useEventCredits } from '../hooks/useEventCredits';
 import { fetchEventDashboardData, CACHE_DURATION } from '../lib/fetchEventDashboardData';
 import type { WithCacheMeta } from '../lib/fetchEventDashboardData';
@@ -107,6 +108,8 @@ const EventDashboardContent: React.FC = () => {
           )}
         </div>
       </header>
+
+      {!isProfileComplete(profile) && <ProfileIncompleteBanner />}
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
       <main className="grow overflow-y-auto p-1.5 sm:p-5">
