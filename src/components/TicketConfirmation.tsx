@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown } from 'lucide-react';
+import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown, MapPin } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { stripHtmlTags } from '../lib/utils';
@@ -18,6 +18,7 @@ interface PurchasedTicket {
 interface TicketConfirmationProps {
     eventTitle: string;
     eventDate: string;
+    eventVenue?: string;   // optional — powers the location row under the title
     tickets: PurchasedTicket[];
     onDone: () => void;
 }
@@ -25,13 +26,21 @@ interface TicketConfirmationProps {
 const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     eventTitle,
     eventDate,
+    eventVenue,
     tickets,
     onDone,
 }) => {
     const cleanEventTitle = stripHtmlTags(eventTitle);
     const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
-    const buildTicketCanvas = (ticketId: string, tierName: string, attendeeName: string): HTMLCanvasElement | null => {
+        const buildTicketCanvas = (
+        ticketId: string,
+        tierName: string,
+        attendeeName: string,
+        eventTitle: string,
+        eventDate: string,
+        eventVenue?: string
+    ): HTMLCanvasElement | null => {
         const qrCanvas = canvasRefs.current[ticketId];
         if (!qrCanvas) return null;
 
@@ -39,13 +48,13 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const width = 380;
         const cardMargin = 14;
         const cardW = width - cardMargin * 2;
-        const headerH = 96;
-        const stubPadTop = 22;
-        const qrSize = 168;
-        const qrBoxPad = 14;
+        const headerH = 172;          // taller — room for title + location + divider + columns
+        const stubPadTop = 24;
+        const qrSize = 176;
+        const qrBoxPad = 16;
         const boxSize = qrSize + qrBoxPad * 2;
-        const notchR = 10;
-        const height = cardMargin + headerH + stubPadTop + boxSize + 26 + 18 + 24 + cardMargin;
+        const notchR = 11;
+        const height = cardMargin + headerH + stubPadTop + boxSize + 30 + 20 + 26 + cardMargin;
 
         const out = document.createElement('canvas');
         out.width = width * SCALE;
@@ -54,10 +63,14 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         if (!ctx) return null;
         ctx.scale(SCALE, SCALE);
 
-        const PAGE_BG = '#F1F1EF';
+        const PAGE_BG = '#0A1614';    // dark outer background — only affects the downloaded/shared image
         const CARD_BG = '#FFFFFF';
         const INK = '#0B3B3A';
-        const TEAL = '#007A78';
+        const TEAL = '#00A896';
+        const WHITE_16 = 'rgba(255,255,255,0.16)';
+        const WHITE_35 = 'rgba(255,255,255,0.35)';
+        const WHITE_55 = 'rgba(255,255,255,0.55)';
+        const WHITE_70 = 'rgba(255,255,255,0.7)';
 
         ctx.fillStyle = PAGE_BG;
         ctx.fillRect(0, 0, width, height);
@@ -65,19 +78,19 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         const cardX = cardMargin;
         const cardY = cardMargin;
         const cardH = height - cardMargin * 2;
-        const radius = 20;
+        const radius = 22;
 
         ctx.save();
-        ctx.shadowColor = 'rgba(11,59,58,0.18)';
-        ctx.shadowBlur = 24;
-        ctx.shadowOffsetY = 10;
+        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetY = 12;
         ctx.fillStyle = CARD_BG;
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, radius);
         ctx.fill();
         ctx.restore();
 
-        ctx.save();
+                ctx.save();
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, radius);
         ctx.clip();
@@ -94,34 +107,107 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.save();
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(cardX + cardW - 20, cardY + 18, 46, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(cardX + 18, cardY + headerH - 6, 30, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cardX + cardW - 24, cardY + 20, 50, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cardX + 20, cardY + headerH - 8, 34, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
         ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText('E · T I C K E T', cardX + 20, cardY + 24);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText(attendeeName, cardX + 20, cardY + 50);
-
-        ctx.font = 'bold 11px sans-serif';
-        const pillText = tierName.toUpperCase();
-        const pillW = ctx.measureText(pillText).width + 20;
-        const pillH = 22;
-        const pillX = cardX + 20;
-        const pillY = cardY + 62;
-        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        // "E-TICKET" pill + "LIVE PASS" label
+        const eyebrowY = cardY + 24;
+        ctx.font = 'bold 9px sans-serif';
+        const eyebrowText = 'E-TICKET';
+        const eyebrowW = ctx.measureText(eyebrowText).width + 16;
+        ctx.fillStyle = WHITE_16;
         ctx.beginPath();
-        ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+        ctx.roundRect(cardX + 20, eyebrowY - 12, eyebrowW, 18, 9);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(eyebrowText, cardX + 28, eyebrowY);
+        ctx.fillStyle = WHITE_70;
+        ctx.font = '9px sans-serif';
+        ctx.fillText('LIVE PASS', cardX + 28 + eyebrowW + 6, eyebrowY);
+
+        // tier pill, top-right (stands in for "GENERAL")
+        ctx.font = 'bold 9px sans-serif';
+        const tierText = tierName.toUpperCase();
+        const tierW = ctx.measureText(tierText).width + 18;
+        const tierX = cardX + cardW - 20 - tierW;
+        ctx.fillStyle = WHITE_16;
+        ctx.strokeStyle = WHITE_35;
         ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(tierX, eyebrowY - 12, tierW, 18, 9);
+        ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(pillText, pillX + 10, pillY + 15);
+        ctx.fillText(tierText, tierX + 9, eyebrowY);
+
+        // event title, wraps to 2 lines max
+        const wrapText = (text: string, maxWidth: number): string[] => {
+            const words = text.split(' ');
+            const lines: string[] = [];
+            let line = '';
+            for (const w of words) {
+                const test = line ? `${line} ${w}` : w;
+                if (line && ctx.measureText(test).width > maxWidth) {
+                    lines.push(line);
+                    line = w;
+                } else {
+                    line = test;
+                }
+            }
+            if (line) lines.push(line);
+            return lines.slice(0, 2);
+        };
+
+        ctx.font = 'bold 20px sans-serif';
+        const titleLines = wrapText(eventTitle, cardW - 40);
+        let ty = cardY + 58;
+        ctx.fillStyle = '#ffffff';
+        titleLines.forEach((line, i) => ctx.fillText(line, cardX + 20, ty + i * 24));
+        ty += (titleLines.length - 1) * 24;
+
+        // location row with a small pin glyph (only if venue is known)
+        if (eventVenue) {
+            const pinCx = cardX + 24;
+            const pinCy = ty + 20;
+            ctx.fillStyle = WHITE_70;
+            ctx.beginPath();
+            ctx.arc(pinCx, pinCy - 2, 4, 0, Math.PI * 2);
+            ctx.moveTo(pinCx - 3.4, pinCy + 1);
+            ctx.lineTo(pinCx, pinCy + 7);
+            ctx.lineTo(pinCx + 3.4, pinCy + 1);
+            ctx.closePath();
+            ctx.fill();
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            ctx.fillText(eventVenue, cardX + 34, ty + 24);
+            ty += 20;
+        }
+
+        // divider
+        ty += 14;
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cardX + 20, ty);
+        ctx.lineTo(cardX + cardW - 20, ty);
+        ctx.stroke();
+
+        // two-column info: Attendee / Date
+        const colY = ty + 22;
+        const colGap = (cardW - 40) / 2;
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = WHITE_55;
+        ctx.fillText('ATTENDEE', cardX + 20, colY);
+        ctx.fillText('DATE', cardX + 20 + colGap, colY);
+
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        const nameText = attendeeName.length > 18 ? `${attendeeName.slice(0, 16)}…` : attendeeName;
+        ctx.fillText(nameText, cardX + 20, colY + 16);
+        ctx.fillText(eventDate || '—', cardX + 20 + colGap, colY + 16);
 
         ctx.restore();
 
@@ -149,13 +235,13 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.fillStyle = CARD_BG;
         ctx.strokeStyle = 'rgba(11,59,58,0.12)';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(boxX, y, boxSize, boxSize, 14);
+                ctx.beginPath();
+        ctx.roundRect(boxX, y, boxSize, boxSize, 16);
         ctx.fill();
         ctx.stroke();
         ctx.drawImage(qrCanvas, boxX + qrBoxPad, y + qrBoxPad, qrSize, qrSize);
 
-        const bracket = 14;
+        const bracket = 16;
         ctx.strokeStyle = TEAL;
         ctx.lineWidth = 2.5;
         const bx = boxX + 6, by = y + 6, bw = boxSize - 12, bh = boxSize - 12;
@@ -177,16 +263,16 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ctx.font = '600 13px monospace';
         ctx.fillText(ticketId.split('').join('\u200a'), width / 2, y);
 
-        y += 18;
-        ctx.fillStyle = 'rgba(11,59,58,0.4)';
-        ctx.font = '10px sans-serif';
+                y += 18;
+        ctx.fillStyle = 'rgba(11,59,58,0.45)';
+        ctx.font = '600 10px sans-serif';
         ctx.fillText('SCAN AT ENTRY · NON-TRANSFERABLE', width / 2, y);
 
         return out;
     };
 
-    const handleDownload = (ticketId: string, tierName: string, attendeeName: string) => {
-        const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
+        const handleDownload = (ticketId: string, tierName: string, attendeeName: string) => {
+        const canvas = buildTicketCanvas(ticketId, tierName, attendeeName, cleanEventTitle, eventDate, eventVenue);
         if (!canvas) return;
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/jpeg', TICKET_IMAGE_QUALITY);
@@ -200,9 +286,8 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         setSharingId(ticketId);
 
         try {
-            // title ab text me repeat nahi hota — sirf ek jagah info jaayegi
-            const text = `Ticket: ${ticketId}\nAttendee: ${attendeeName}`;
-            const canvas = buildTicketCanvas(ticketId, tierName, attendeeName);
+                        const text = `Ticket: ${ticketId}\nAttendee: ${attendeeName}`;
+            const canvas = buildTicketCanvas(ticketId, tierName, attendeeName, cleanEventTitle, eventDate, eventVenue);
             if (canvas) {
                 await shareTicketImage(
                     canvas.toDataURL('image/jpeg', TICKET_IMAGE_QUALITY),
@@ -218,8 +303,8 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     const handleDownloadAllPdf = () => {
         const pdf = new jsPDF({ unit: 'px', format: [360, 380], compress: true });
 
-        tickets.forEach((t, index) => {
-            const canvas = buildTicketCanvas(t.ticketId, t.tierName, t.attendeeName);
+                tickets.forEach((t, index) => {
+            const canvas = buildTicketCanvas(t.ticketId, t.tierName, t.attendeeName, cleanEventTitle, eventDate, eventVenue);
             if (!canvas) return;
 
             const logicalW = canvas.width / TICKET_CANVAS_SCALE;
@@ -273,21 +358,44 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                 <div className="flex w-full flex-col gap-6">
                     {tickets.map((t) => (
                         <div key={t.ticketId} className="w-full">
-                            {/* Header band — gradient, name + tier pill inside (matches canvas) */}
+                                                        {/* Header band — gradient, eyebrow + tier pill, title, venue, attendee/date columns */}
                             <div
-                                className="relative overflow-hidden rounded-sm px-5 py-4"
-                                style={{ background: 'linear-gradient(135deg, #0B3B3A 0%, #007A78 100%)' }}
+                                className="relative overflow-hidden rounded-sm px-5 py-5"
+                                style={{ background: 'linear-gradient(135deg, #0B3B3A 0%, #00A896 100%)' }}
                             >
                                 <div className="pointer-events-none absolute -right-3 -top-3 h-24 w-24 rounded-full bg-white/[0.08]" />
                                 <div className="pointer-events-none absolute -left-3 bottom-[-24px] h-16 w-16 rounded-full bg-white/[0.08]" />
 
-                                <span className="relative block text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">
-                                    E · T I C K E T
-                                </span>
-                                <p className="relative mt-1 text-lg font-bold text-white">{t.attendeeName}</p>
-                                <span className="relative mt-2 inline-flex items-center gap-1 rounded-sm border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-                                    <TicketIcon size={11} /> {t.tierName}
-                                </span>
+                                <div className="relative flex items-center justify-between">
+                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-white">
+                                        <span className="rounded-full bg-white/16 px-2 py-0.5 tracking-wide">E-TICKET</span>
+                                        <span className="text-white/70 tracking-[0.15em] uppercase">Live Pass</span>
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full border border-white/35 bg-white/16 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                                        <TicketIcon size={11} className="mr-1" /> {t.tierName}
+                                    </span>
+                                </div>
+
+                                <p className="relative mt-3 text-xl font-extrabold leading-tight text-white">{cleanEventTitle}</p>
+
+                                {eventVenue && (
+                                    <p className="relative mt-1 flex items-center gap-1 text-[11px] text-white/75">
+                                        <MapPin size={12} /> {eventVenue}
+                                    </p>
+                                )}
+
+                                <div className="relative mt-3 border-t border-white/15" />
+
+                                <div className="relative mt-3 flex gap-8">
+                                    <div>
+                                        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/55">Attendee</p>
+                                        <p className="mt-1 text-sm font-bold text-white">{t.attendeeName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/55">Date</p>
+                                        <p className="mt-1 text-sm font-bold text-white">{eventDate}</p>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Perforated seam */}

@@ -60,7 +60,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   eventConsentText,
   customFields = [],
 }) => {
-   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
   const { profile } = useAuth();
 
@@ -75,16 +75,16 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     if (!qrCanvas) return null;
 
     const SCALE = 3;
-    const width = 360;
+    const width = 380;
     const cardMargin = 14;
     const cardW = width - cardMargin * 2;
-    const headerH = 112;
-    const stubPadTop = 22;
-    const qrSize = 160;
-    const qrBoxPad = 14;
+    const headerH = 172;          // taller — room for title + location + divider + columns
+    const stubPadTop = 24;
+    const qrSize = 176;
+    const qrBoxPad = 16;
     const boxSize = qrSize + qrBoxPad * 2;
-    const notchR = 10;
-    const height = cardMargin + headerH + stubPadTop + boxSize + 26 + 18 + 24 + cardMargin;
+    const notchR = 11;
+    const height = cardMargin + headerH + stubPadTop + boxSize + 30 + 20 + 26 + cardMargin;
 
     const out = document.createElement('canvas');
     out.width = width * SCALE;
@@ -93,10 +93,14 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     if (!ctx) return null;
     ctx.scale(SCALE, SCALE);
 
-    const PAGE_BG = '#F1F1EF';
+    const PAGE_BG = '#0A1614';    // dark outer background — only affects the downloaded/shared image
     const CARD_BG = '#FFFFFF';
     const INK = '#0B3B3A';
-    const TEAL = '#007A78';
+    const TEAL = '#00A896';
+    const WHITE_16 = 'rgba(255,255,255,0.16)';
+    const WHITE_35 = 'rgba(255,255,255,0.35)';
+    const WHITE_55 = 'rgba(255,255,255,0.55)';
+    const WHITE_70 = 'rgba(255,255,255,0.7)';
 
     ctx.fillStyle = PAGE_BG;
     ctx.fillRect(0, 0, width, height);
@@ -104,13 +108,13 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     const cardX = cardMargin;
     const cardY = cardMargin;
     const cardH = height - cardMargin * 2;
-    const radius = 20;
+    const radius = 22;
 
     // soft drop shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(11,59,58,0.18)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 10;
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 12;
     ctx.fillStyle = CARD_BG;
     ctx.beginPath();
     ctx.roundRect(cardX, cardY, cardW, cardH, radius);
@@ -137,47 +141,108 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ctx.save();
     ctx.globalAlpha = 0.08;
     ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(cardX + cardW - 20, cardY + 18, 46, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cardX + 18, cardY + headerH - 6, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cardX + cardW - 24, cardY + 20, 50, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cardX + 20, cardY + headerH - 8, 34, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    // header text
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = 'bold 10px sans-serif';
-    ctx.fillText('E · T I C K E T', cardX + 20, cardY + 22);
 
-        ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px sans-serif';
-    const titleText = stripHtmlTags(eventTitle || '') || 'Event Ticket';
-    ctx.fillText(titleText.length > 26 ? titleText.slice(0, 24) + '…' : titleText, cardX + 20, cardY + 44);
-
-    if (eventDate) {
-      ctx.fillStyle = 'rgba(255,255,255,0.65)';
-      ctx.font = '11px sans-serif';
-      ctx.fillText(eventDate, cardX + 20, cardY + 60);
-    }
-
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = '600 12px sans-serif';
-    ctx.fillText(attendee.name, cardX + 20, cardY + 80);
-
-    // tier pill
-    ctx.font = 'bold 10px sans-serif';
-    const pillText = attendee.tierName.toUpperCase();
-    const pillW = ctx.measureText(pillText).width + 18;
-    const pillH = 20;
-    const pillX = cardX + 20;
-    const pillY = cardY + 88;
-    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    // "E-TICKET" pill + "LIVE PASS" label
+    const eyebrowY = cardY + 24;
+    ctx.font = 'bold 9px sans-serif';
+    const eyebrowText = 'E-TICKET';
+    const eyebrowW = ctx.measureText(eyebrowText).width + 16;
+    ctx.fillStyle = WHITE_16;
     ctx.beginPath();
-    ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+    ctx.roundRect(cardX + 20, eyebrowY - 12, eyebrowW, 18, 9);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(eyebrowText, cardX + 28, eyebrowY);
+    ctx.fillStyle = WHITE_70;
+    ctx.font = '9px sans-serif';
+    ctx.fillText('LIVE PASS', cardX + 28 + eyebrowW + 6, eyebrowY);
+
+    // tier pill, top-right (stands in for "GENERAL")
+    ctx.font = 'bold 9px sans-serif';
+    const tierText = attendee.tierName.toUpperCase();
+    const tierW = ctx.measureText(tierText).width + 18;
+    const tierX = cardX + cardW - 20 - tierW;
+    ctx.fillStyle = WHITE_16;
+    ctx.strokeStyle = WHITE_35;
     ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(tierX, eyebrowY - 12, tierW, 18, 9);
+    ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(pillText, pillX + 9, pillY + 14);
+    ctx.fillText(tierText, tierX + 9, eyebrowY);
+
+    // event title, wraps to 2 lines max
+    const wrapText = (text: string, maxWidth: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (line && ctx.measureText(test).width > maxWidth) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines.slice(0, 2);
+    };
+
+    ctx.font = 'bold 20px sans-serif';
+    const titleText = stripHtmlTags(eventTitle || '') || 'Event Ticket';
+    const titleLines = wrapText(titleText, cardW - 40);
+    let ty = cardY + 58;
+    ctx.fillStyle = '#ffffff';
+    titleLines.forEach((line, i) => ctx.fillText(line, cardX + 20, ty + i * 24));
+    ty += (titleLines.length - 1) * 24;
+
+    // location row with a small pin glyph (only if venue is known)
+    if (eventVenue) {
+      const pinCx = cardX + 24;
+      const pinCy = ty + 20;
+      ctx.fillStyle = WHITE_70;
+      ctx.beginPath();
+      ctx.arc(pinCx, pinCy - 2, 4, 0, Math.PI * 2);
+      ctx.moveTo(pinCx - 3.4, pinCy + 1);
+      ctx.lineTo(pinCx, pinCy + 7);
+      ctx.lineTo(pinCx + 3.4, pinCy + 1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText(eventVenue, cardX + 34, ty + 24);
+      ty += 20;
+    }
+
+    // divider
+    ty += 14;
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cardX + 20, ty);
+    ctx.lineTo(cardX + cardW - 20, ty);
+    ctx.stroke();
+
+    // two-column info: Attendee / Date
+    const colY = ty + 22;
+    const colGap = (cardW - 40) / 2;
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = WHITE_55;
+    ctx.fillText('ATTENDEE', cardX + 20, colY);
+    ctx.fillText('DATE', cardX + 20 + colGap, colY);
+
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    const nameText = attendee.name.length > 18 ? `${attendee.name.slice(0, 16)}…` : attendee.name;
+    ctx.fillText(nameText, cardX + 20, colY + 16);
+    ctx.fillText(eventDate || '—', cardX + 20 + colGap, colY + 16);
 
     ctx.restore();
 
@@ -208,12 +273,12 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ctx.strokeStyle = 'rgba(11,59,58,0.12)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(boxX, y, boxSize, boxSize, 14);
+    ctx.roundRect(boxX, y, boxSize, boxSize, 16);
     ctx.fill();
     ctx.stroke();
     ctx.drawImage(qrCanvas, boxX + qrBoxPad, y + qrBoxPad, qrSize, qrSize);
 
-    const bracket = 14;
+    const bracket = 16;
     ctx.strokeStyle = TEAL;
     ctx.lineWidth = 2.5;
     const bx = boxX + 6, by = y + 6, bw = boxSize - 12, bh = boxSize - 12;
@@ -237,8 +302,8 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ctx.fillText(attendee.ticketId.split('').join('\u200a'), width / 2, y);
 
     y += 18;
-    ctx.fillStyle = 'rgba(11,59,58,0.4)';
-    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(11,59,58,0.45)';
+    ctx.font = '600 10px sans-serif';
     ctx.fillText('SCAN AT ENTRY · NON-TRANSFERABLE', width / 2, y);
 
     return out;
@@ -278,187 +343,341 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     link.click();
   };
 
-  // A small, compact single-page acknowledgement — event cover banner (if
-  // pre-fetched), company header, attendee/ticket/payment details laid out
-  // two-per-row to use the width, the same QR the ticket uses, and the
-  // organizer's own consent/important-information text (nothing else).
   const buildAcknowledgementPdf = (): jsPDF => {
     const cleanEventTitle = eventTitle ? stripHtmlTags(eventTitle) : 'Event';
-    const companyName = profile?.organizationName || 'Event Organizer';
     const pageW = 360;
-    const marginX = 24;
-    const topMargin = 28; // top inset used on any continuation page
+    const marginX = 20;
+    const topMargin = 24;
     const bottomMargin = 30;
     const hasBanner = !!eventBannerDataUrl;
-    const bannerH = hasBanner ? 104 : 0;
-    const headerH = 58;
     const hasQr = !!qrCanvasRef.current;
     const consentText = eventConsentText ? stripHtmlTags(eventConsentText).trim() : '';
 
-    // Wrapped line count depends on font metrics, so measure against a
-    // throwaway doc first — needed up front since the first page's height
-    // has to be fixed at construction.
-    const consentFontSize = 8;
-    const consentLineHeight = consentFontSize * 1.3;
+    // ---------- palette (brand teal-green — unchanged) ----------
+    const PAGE_BG: [number, number, number] = [255, 255, 255];
+    const CARD_BG: [number, number, number] = [236, 253, 245]; // emerald-50
+    const CARD_BORDER: [number, number, number] = [167, 243, 208]; // emerald-200
+    const INK: [number, number, number] = [11, 59, 58]; // brand ink
+    const TEAL: [number, number, number] = [0, 122, 120]; // brand teal
+    const TEXT_DARK: [number, number, number] = [17, 24, 39];
+    const MUTED: [number, number, number] = [107, 114, 128];
+    const GREEN_BG: [number, number, number] = [209, 250, 229];
+    const GREEN_TXT: [number, number, number] = [4, 120, 87];
+    const RED_BG: [number, number, number] = [254, 226, 226];
+    const RED_TXT: [number, number, number] = [185, 28, 28];
+    const BLUE_BG: [number, number, number] = [219, 234, 254];
+    const BLUE_TXT: [number, number, number] = [29, 78, 216];
+
+    const isCancelled = attendee.status === 'cancelled';
+    const statusLabel = isCancelled ? 'Cancelled' : 'Confirmed';
+    const statusBg = isCancelled ? RED_BG : GREEN_BG;
+    const statusTxt = isCancelled ? RED_TXT : GREEN_TXT;
+
+    // shared measuring doc (used for word-wrap line counts before drawing)
     const measureDoc = new jsPDF({ unit: 'pt', format: [pageW, 100] });
-    measureDoc.setFont('helvetica', 'normal');
-    measureDoc.setFontSize(consentFontSize);
-    const consentLines = consentText ? (measureDoc.splitTextToSize(consentText, pageW - marginX * 2) as string[]) : [];
-    const consentHeadingHeight = consentLines.length > 0 ? 22 : 0;
-    const hasConsent = consentLines.length > 0;
+    const wrap = (text: string, fontSize: number, bold: boolean, maxWidth: number): string[] => {
+      measureDoc.setFont('helvetica', bold ? 'bold' : 'normal');
+      measureDoc.setFontSize(fontSize);
+      return measureDoc.splitTextToSize(text || '—', maxWidth) as string[];
+    };
 
-    // Page 1 is always just the ticket itself (banner/header/fields/QR) —
-    // sized to fit that exactly. Consent/important-information, if any,
-    // always starts fresh on page 2 (and overflows onto further pages if
-    // it's long), rather than being appended to the bottom of page 1.
+    // ---------- "Before you head out" — one numbered item per line the organizer wrote ----------
+    const termFontSize = 8.5;
+    const termLineHeight = termFontSize * 1.4;
+    const termNumW = 16;
+    const termLines = consentText
+      ? consentText.split(/\r?\n+/).map((t) => t.trim()).filter(Boolean)
+      : [];
+    const wrappedTerms = termLines.map((t) => wrap(t, termFontSize, false, pageW - marginX * 2 - termNumW));
+    const hasTerms = wrappedTerms.length > 0;
+    const termsBlockH = wrappedTerms.reduce((sum, lines) => sum + lines.length * termLineHeight + 6, 0);
+
+    // ---- NEW: title now overlays the banner itself, so banner + title = one header block ----
+    const titleLines = wrap(cleanEventTitle.toUpperCase(), 15, true, pageW - marginX * 2 - 70);
+    const headerBlockH = (hasBanner ? 132 : 96) + (titleLines.length - 1) * 18;
+
+    const eventDateObj = eventDate ? new Date(eventDate) : null;
+    const dayNum = eventDateObj ? eventDateObj.getDate().toString() : '--';
+    const monthAbbr = eventDateObj ? eventDateObj.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase() : '';
+    const weekday = eventDateObj ? eventDateObj.toLocaleDateString('en-IN', { weekday: 'long' }) : '';
+    const timeStr = eventDateObj
+      ? eventDateObj.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+      : null;
+
+    const dateBoxW = 92;
+    const venueBoxW = pageW - marginX * 2 - dateBoxW - 8;
+    const venueLines = eventVenue ? wrap(eventVenue, 11, true, venueBoxW - 24) : [];
+    const dateVenueRowH = Math.max(80, 34 + venueLines.length * 14 + (timeStr ? 14 : 0));
+
+    // ---- NEW: attendee details + QR now share a single card (text left, QR right) ----
+    const qrBoxSize = 108;
+    const nameLines = wrap(attendee.name, 13, true, pageW - marginX * 2 - qrBoxSize - 48);
+    const tierLabel = attendee.tierName || '—';
+    const paymentPillText = `Rs. ${(attendee.amountPaid ?? 0).toLocaleString('en-IN')} · ${(displayPaymentMode || '—').toUpperCase()}`;
+    const bookedMs = attendee.purchasedAt ?? attendee.createdAt;
+    const bookedStr = bookedMs
+      ? new Date(bookedMs).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null;
+    const ticketIdLines = wrap(attendee.ticketId, 9, true, qrBoxSize);
+
+    const leftColH = 16 + 18 + nameLines.length * 16 + 8 + 12 + 12 + (bookedStr ? 12 : 0) + 8 + 10;
+    const rightColH = hasQr
+      ? 14 + qrBoxSize + 10 + ticketIdLines.length * 11 + 6 + 9 + 8 + 8
+      : 0;
+    const attendeeCardH = 14 + Math.max(leftColH, rightColH) + 4;
+
+    // ---------- page height ----------
     const page1Height =
-      bannerH + headerH +
-      20 /* gap after header */ + 16 /* title */ + 18 /* meta */ +
-      14 /* divider */ + 30 * 3 /* attendee/ticket/payment pairs */ +
-      14 /* divider */ + 34 /* amount paid */ +
-      14 /* divider */ + (hasQr ? 132 : 0) /* qr + caption */ +
-      16 /* bottom padding */ +
-      (hasConsent ? 0 : 14 + 10 /* generated-on line, only if it's staying on page 1 */);
+      headerBlockH +
+      16 +
+      dateVenueRowH + 14 +
+      18 /* perforation gap */ +
+      attendeeCardH + 16 +
+      (hasTerms ? 30 + termsBlockH : 0) +
+      40 /* footer */ +
+      bottomMargin;
 
-    const STANDARD_PAGE_H = 700;
+    const STANDARD_PAGE_H = 780;
     const doc = new jsPDF({ unit: 'pt', format: [pageW, page1Height] });
     let pageH = page1Height;
+    let y = 0;
 
-    // Adds a new page (same width, standard height) if the next block won't
-    // fit in the remaining space on the current page.
-    const ensureSpace = (neededHeight: number) => {
-      if (y + neededHeight <= pageH - bottomMargin) return;
+    const fillPageBg = () => {
+      doc.setFillColor(...PAGE_BG);
+      doc.rect(0, 0, pageW, pageH, 'F');
+    };
+    fillPageBg();
+
+    const ensureSpace = (needed: number) => {
+      if (y + needed <= pageH - bottomMargin) return;
       doc.addPage([pageW, STANDARD_PAGE_H]);
       pageH = STANDARD_PAGE_H;
+      fillPageBg();
       y = topMargin;
     };
 
-    let y = 0;
+    const card = (x: number, yPos: number, w: number, h: number, r = 4) => {
+      doc.setFillColor(...CARD_BG);
+      doc.setDrawColor(...CARD_BORDER);
+      doc.setLineWidth(0.75);
+      doc.roundedRect(x, yPos, w, h, r, r, 'FD');
+    };
+
+    const pill = (
+      text: string,
+      x: number,
+      yPos: number,
+      bg: [number, number, number],
+      textColor: [number, number, number]
+    ) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      const w = doc.getTextWidth(text.toUpperCase()) + 12;
+      doc.setFillColor(...bg);
+      doc.roundedRect(x, yPos, w, 14, 7, 7, 'F');
+      doc.setTextColor(...textColor);
+      doc.text(text.toUpperCase(), x + 6, yPos + 10);
+      return w;
+    };
+
+    // ---- NEW: header block — banner image (or ink/teal fallback) with eyebrow, status pill
+    // and title overlaid directly on top, like the app's ticket card ----
     if (hasBanner && eventBannerDataUrl) {
       try {
-        doc.addImage(eventBannerDataUrl, 'JPEG', 0, 0, pageW, bannerH);
-        y = bannerH;
+        doc.addImage(eventBannerDataUrl, 'JPEG', 0, 0, pageW, headerBlockH);
       } catch {
-        /* skip the banner if it somehow fails to embed */
+        doc.setFillColor(...INK);
+        doc.rect(0, 0, pageW, headerBlockH, 'F');
       }
+      // dark scrim, banded from transparent (top) to translucent (bottom),
+      // so the overlaid white text stays readable over any image
+      const bands = 8;
+      const bandH = headerBlockH / bands;
+      for (let i = 0; i < bands; i++) {
+        const opacity = (i / (bands - 1)) * 0.6;
+        doc.saveGraphicsState();
+        doc.setGState(new (doc as any).GState({ opacity }));
+        doc.setFillColor(...INK);
+        doc.rect(0, i * bandH, pageW, bandH + 1, 'F');
+        doc.restoreGraphicsState();
+      }
+    } else {
+      doc.setFillColor(...INK);
+      doc.rect(0, 0, pageW, headerBlockH, 'F');
     }
 
-    doc.setFillColor(11, 59, 58);
-    doc.rect(0, y, pageW, headerH, 'F');
+    pill(statusLabel, pageW - marginX - 66, 14, statusBg, statusTxt);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
     doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text(companyName, pageW / 2, y + 24, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.text('PAYMENT ACKNOWLEDGEMENT & E-TICKET', pageW / 2, y + 40, { align: 'center' });
-    y += headerH + 20;
+    doc.text('E-TICKET', marginX, 22);
 
-    doc.setTextColor(17, 24, 39);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(cleanEventTitle, marginX, y, { maxWidth: pageW - marginX * 2 });
-    y += 16;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(107, 114, 128);
-    const eventMeta = [eventDate ? new Date(eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null, eventVenue]
-      .filter(Boolean)
-      .join('  ·  ');
-    if (eventMeta) doc.text(eventMeta, marginX, y, { maxWidth: pageW - marginX * 2 });
-    y += 18;
-
-    const divider = () => {
-      doc.setDrawColor(229, 231, 235);
-      doc.line(marginX, y, pageW - marginX, y);
-      y += 14;
-    };
-
-    // Two-column field grid — makes better use of the width than one field per row.
-    const colGap = 12;
-    const colW = (pageW - marginX * 2 - colGap) / 2;
-    const rightX = marginX + colW + colGap;
-    const cell = (x: number, label: string, value: string) => {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(107, 114, 128);
-      doc.text(label.toUpperCase(), x, y);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(17, 24, 39);
-      doc.text(value || '—', x, y + 13, { maxWidth: colW });
-    };
-    const pairRow = (labelL: string, valueL: string, labelR: string, valueR: string) => {
-      cell(marginX, labelL, valueL);
-      cell(rightX, labelR, valueR);
-      y += 30;
-    };
-
-    divider();
-    pairRow('Attendee', attendee.name, 'Ticket tier', attendee.tierName);
-    pairRow('Email', attendee.email || '—', 'Ticket ID', attendee.ticketId);
-    pairRow('Phone', attendee.phone || '—', 'Payment mode', displayPaymentMode || '—');
-    divider();
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    doc.text('AMOUNT PAID', marginX, y);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
-    doc.setTextColor(0, 122, 120);
-    doc.text(`Rs. ${(attendee.amountPaid ?? 0).toLocaleString('en-IN')}`, marginX, y + 18);
-    y += 34;
-    divider();
+    const titleBaseY = headerBlockH - 20 - (titleLines.length - 1) * 18;
+    titleLines.forEach((line, i) => doc.text(line, marginX, titleBaseY + i * 18));
+    y = headerBlockH + 16;
 
-    const qrCanvas = qrCanvasRef.current;
-    if (qrCanvas) {
-      const qrSize = 100;
-      const qrX = (pageW - qrSize) / 2;
-      doc.addImage(qrCanvas.toDataURL('image/png'), 'PNG', qrX, y, qrSize, qrSize);
-      y += qrSize + 12;
+    // ---------- date box + venue, side by side (unchanged) ----------
+    doc.setFillColor(...TEAL);
+    doc.roundedRect(marginX, y, dateBoxW, dateVenueRowH, 10, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    const dateContentH = 60;
+    const dateOffsetY = Math.max(12, (dateVenueRowH - dateContentH) / 2);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(26);
+    doc.text(dayNum, marginX + 14, y + dateOffsetY + 26);
+    doc.setFontSize(11);
+    doc.text(monthAbbr, marginX + 14, y + dateOffsetY + 44);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(weekday, marginX + 14, y + dateOffsetY + 60, { maxWidth: dateBoxW - 20 });
+
+    card(marginX + dateBoxW + 8, y, venueBoxW, dateVenueRowH);
+    let vy = y + 18;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED);
+    doc.text('VENUE', marginX + dateBoxW + 20, vy);
+    vy += 14;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TEXT_DARK);
+    venueLines.forEach((line) => {
+      doc.text(line, marginX + dateBoxW + 20, vy);
+      vy += 13;
+    });
+    if (timeStr) {
+      vy += 6;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      doc.setTextColor(156, 163, 175);
-      doc.text('SCAN AT ENTRY · NON-TRANSFERABLE', pageW / 2, y, { align: 'center' });
-      y += 20;
+      doc.setTextColor(...MUTED);
+      doc.text('SHOW STARTS', marginX + dateBoxW + 20, vy);
+      vy += 12;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(...TEAL);
+      doc.text(timeStr, marginX + dateBoxW + 20, vy);
     }
+    y += dateVenueRowH + 8;
 
-    // Organizer's consent/important-information text — the only free-text
-    // block on this PDF. Always starts on a fresh page after the ticket,
-    // and overflows onto further pages of its own if it's long.
-    if (hasConsent) {
-      doc.addPage([pageW, STANDARD_PAGE_H]);
-      pageH = STANDARD_PAGE_H;
-      y = topMargin;
+    // ---------- perforation (dashed line + notch cutouts) ----------
+    doc.setFillColor(...PAGE_BG);
+    doc.circle(marginX - 6, y, 8, 'F');
+    doc.circle(pageW - marginX + 6, y, 8, 'F');
+    doc.setDrawColor(...CARD_BORDER);
+    doc.setLineWidth(1);
+    doc.setLineDashPattern([4, 4], 0);
+    doc.line(marginX + 6, y, pageW - marginX - 6, y);
+    doc.setLineDashPattern([], 0);
+    y += 18;
 
+    // ---- NEW: single ticket-holder card — attendee details (left) + QR (right) together ----
+    card(marginX, y, pageW - marginX * 2, attendeeCardH);
+    const cardTop = y;
+    const qrRight = pageW - marginX - 14;
+    const qrLeft = qrRight - qrBoxSize;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED);
+    doc.text('TICKET HOLDER', marginX + 14, cardTop + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...TEXT_DARK);
+    let ny = cardTop + 34;
+    nameLines.forEach((line) => {
+      doc.text(line, marginX + 14, ny, { maxWidth: qrLeft - marginX - 28 });
+      ny += 16;
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(attendee.email || '—', marginX + 14, ny);
+    ny += 12;
+    doc.text(attendee.phone || '—', marginX + 14, ny);
+    if (bookedStr) {
+      ny += 12;
+      doc.text(`Booked ${bookedStr}`, marginX + 14, ny);
+    }
+    ny += 10;
+    const tierPillW = pill(tierLabel, marginX + 14, ny, GREEN_BG, GREEN_TXT);
+    pill(paymentPillText, marginX + 14 + tierPillW + 6, ny, BLUE_BG, BLUE_TXT);
+
+    if (hasQr && qrCanvasRef.current) {
+      const qrTop = cardTop + 14;
+      doc.setFillColor(...PAGE_BG);
+      doc.setDrawColor(...CARD_BORDER);
+      doc.roundedRect(qrLeft, qrTop, qrBoxSize, qrBoxSize, 4, 4, 'FD');
+      const pad = 10;
+      doc.addImage(
+        qrCanvasRef.current.toDataURL('image/png'),
+        'PNG',
+        qrLeft + pad,
+        qrTop + pad,
+        qrBoxSize - pad * 2,
+        qrBoxSize - pad * 2
+      );
+
+      let qy = qrTop + qrBoxSize + 12;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      doc.setTextColor(17, 24, 39);
-      doc.text('CONSENT & IMPORTANT INFORMATION', marginX, y);
-      y += consentHeadingHeight;
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(consentFontSize);
-      doc.setTextColor(75, 85, 99);
-      for (const line of consentLines) {
-        ensureSpace(consentLineHeight);
-        doc.text(line, marginX, y);
-        y += consentLineHeight;
-      }
-      y += 14;
+      doc.setTextColor(...INK);
+      ticketIdLines.forEach((line) => {
+        doc.text(`#${line}`, qrLeft + qrBoxSize / 2, qy, { align: 'center' });
+        qy += 11;
+      });
+      qy += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...TEAL);
+      doc.text('SCAN AT ENTRY', qrLeft + qrBoxSize / 2, qy, { align: 'center' });
+      qy += 10;
+      pill('Admits 1', qrLeft + qrBoxSize / 2 - 24, qy, GREEN_BG, GREEN_TXT);
     }
 
-    ensureSpace(10);
+    y = cardTop + attendeeCardH + 24;
+
+    // ---------- "Before you head out" — numbered terms (unchanged) ----------
+    if (hasTerms) {
+      ensureSpace(30 + termsBlockH);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...INK);
+      doc.text('BEFORE YOU HEAD OUT', marginX, y);
+      y += 18;
+
+      wrappedTerms.forEach((lines, idx) => {
+        ensureSpace(lines.length * termLineHeight + 6);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(termFontSize);
+        doc.setTextColor(...TEAL);
+        doc.text(`${idx + 1}.`, marginX, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...MUTED);
+        lines.forEach((line, i) => doc.text(line, marginX + termNumW, y + i * termLineHeight));
+        y += lines.length * termLineHeight + 6;
+      });
+      y += 6;
+    }
+
+    // ---------- footer (unchanged) ----------
+    ensureSpace(40);
+    doc.setDrawColor(...CARD_BORDER);
+    doc.setLineWidth(0.5);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 14;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);
-    doc.setTextColor(156, 163, 175);
-    doc.text(`Generated on ${new Date().toLocaleString('en-IN')}`, pageW / 2, y, { align: 'center' });
+    doc.setTextColor(...MUTED);
+    doc.text(`TICKET #${attendee.ticketId}`, marginX, y);
+    y += 11;
+    doc.text(`GENERATED: ${new Date().toLocaleString('en-IN')}`, marginX, y);
+    pill('Verified', pageW - marginX - 56, y - 20, GREEN_BG, GREEN_TXT);
 
     return doc;
   };
-
   const handleDownloadPdf = () => {
     const doc = buildAcknowledgementPdf();
     doc.save(`${attendee.ticketId}-receipt.pdf`);
@@ -591,7 +810,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                     {displayPaymentMode.toUpperCase()}
                   </span>
                 )}
-                               {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
+                {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
                   <button
                     type="button"
                     onClick={() => setScreenshotModalOpen(true)}
@@ -648,7 +867,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
               </button>
             )}
           </div>
-                </div>
+        </div>
       )}
 
       {shareMenuOpen && (

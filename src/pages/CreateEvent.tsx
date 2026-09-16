@@ -329,12 +329,12 @@ const CreateEvent: React.FC = () => {
             throw new Error('NO_CREDITS');
           }
 
-                  transaction.set(newEventRef, {
-          ...eventPayload,
-          everPublished: true,
-          creditExpiresAt: getNewCreditExpiry(), // NEW — 3-month validity starts now
-        });
-        transaction.update(companyRef, { eventCredits: currentCredits - 1 });
+          transaction.set(newEventRef, {
+            ...eventPayload,
+            everPublished: true,
+            creditExpiresAt: getNewCreditExpiry(), // NEW — 3-month validity starts now
+          });
+          transaction.update(companyRef, { eventCredits: currentCredits - 1 });
         });
       } else {
         // Draft free — no credit check, no decrement
@@ -490,6 +490,23 @@ const CreateEvent: React.FC = () => {
                 </a>
               )}
             </div>
+
+            {/* NEW — inline map preview, no API key needed. Must stay inside an
+        <iframe>: Google's embed endpoint rejects non-iframe loads with
+        "The Google Maps Embed API must be used in an iframe." */}
+            {form.venue.trim().length > 2 && (
+              <div className="mt-2 overflow-hidden rounded-sm border border-gray-300 dark:border-slate-700">
+                <iframe
+                  title="venue-map-preview"
+                  width="100%"
+                  height="180"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
+                />
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -1015,7 +1032,7 @@ const CreateEvent: React.FC = () => {
             <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">
               Use 1 event credit to publish?
             </h3>
-                       <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
               Publishing this event will use <span className="font-semibold">1 event credit</span> from your balance
               ({credits} remaining). This keeps the event live for{' '}
               <span className="font-semibold">{EVENT_CREDIT_VALIDITY_DAYS} days (3 months)</span> — after that it'll

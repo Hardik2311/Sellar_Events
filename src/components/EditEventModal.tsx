@@ -391,6 +391,23 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         </a>
                       )}
                     </div>
+
+                    {/* NEW — inline map preview, no API key needed. Must stay inside an
+        <iframe>: Google's embed endpoint rejects non-iframe loads with
+        "The Google Maps Embed API must be used in an iframe." */}
+                    {form.venue.trim().length > 2 && (
+                      <div className="mt-2 overflow-hidden rounded-sm border border-gray-300 dark:border-slate-700">
+                        <iframe
+                          title="edit-venue-map-preview"
+                          width="100%"
+                          height="180"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent(form.venue)}&output=embed`}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
