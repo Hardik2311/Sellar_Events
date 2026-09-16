@@ -473,6 +473,7 @@ const CheckoutPage: React.FC = () => {
       <TicketConfirmation
         eventTitle={event.title}
         eventDate={event.date}
+        eventVenue={event.venue}
         tickets={purchasedTickets}
         onDone={() =>
           navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/')

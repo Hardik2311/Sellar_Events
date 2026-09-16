@@ -380,16 +380,13 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     }
   };
 
-  // Once submitted, the buyer already has a valid ticket (status is set to
-  // 'valid' immediately, not held pending) — show it the same way a gateway
-  // checkout does, with the QR and a download option, instead of just a
-  // plain "request submitted" message with nothing to take away.
   if (submitted) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-[#0F172A]">
         <TicketConfirmation
           eventTitle={event.title}
           eventDate={event.date}
+          eventVenue={event.venue}
           tickets={purchasedTickets}
           onDone={onClose}
         />

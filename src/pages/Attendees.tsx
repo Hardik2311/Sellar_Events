@@ -704,6 +704,7 @@ const Attendees: React.FC = () => {
             <TicketConfirmation
               eventTitle={selectedEvent.title}
               eventDate={selectedEvent.startDate}
+              eventVenue={selectedEvent.venue}
               tickets={[walkInTicket]}
               onDone={() => setWalkInTicket(null)}
             />
