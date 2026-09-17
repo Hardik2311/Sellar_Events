@@ -131,3 +131,12 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important; /* slate-800 */
   -webkit-text-fill-color: #f1f5f9 !important; /* slate-100 */
 }
+button:not(:disabled),
+[role="switch"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="switch"]:disabled {
+  cursor: not-allowed;
+}
