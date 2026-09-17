@@ -125,7 +125,7 @@ const EventsLayout = () => {
   }, [loadEvents]);
 
   const sidebarLinkClass = (isActive: boolean) =>
-    `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${isActive
+    `flex items-center gap-3 px-4 py-3 rounded-sm text-sm font-bold transition-all ${isActive
       ? 'bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shadow-xs'
       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100'
     }`;
@@ -256,7 +256,7 @@ const EventsLayout = () => {
                 to={to}
                 end
                 className={({ isActive }) =>
-                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
+                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-sm text-[10px] font-bold transition-colors ${isActive
                     ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
                   }`
@@ -290,7 +290,7 @@ const EventsLayout = () => {
                 to={to}
                 end
                 className={({ isActive }) =>
-                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-colors ${isActive
+                  `flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-sm text-[10px] font-bold transition-colors ${isActive
                     ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
                   }`
