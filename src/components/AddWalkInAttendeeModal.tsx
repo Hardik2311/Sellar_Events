@@ -8,7 +8,15 @@ interface AddWalkInAttendeeModalProps {
   onClose: () => void;
   event: EventSummary | null;
   companyId: string | undefined;
-  onSuccess: (name: string, ticketId: string, tierName: string) => void;
+  onSuccess: (data: {
+    name: string;
+    ticketId: string;
+    tierName: string;
+    email: string;
+    phone: string;
+    amountPaid: number;
+    paymentMode: string;
+  }) => void;
 }
 
 const PAYMENT_MODES = ['Cash', 'UPI', 'Card', 'Other'] as const;
@@ -109,7 +117,15 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
         allowOverbook,
         customFieldAnswers: customAnswers,
       });
-      onSuccess(name.trim(), ticketId, selectedTier.name);
+      onSuccess({
+        name: name.trim(),
+        ticketId,
+        tierName: selectedTier.name,
+        email: email.trim(),
+        phone: phone.trim(),
+        amountPaid,
+        paymentMode,
+      });
       reset();
       onClose();
     } catch (err: any) {

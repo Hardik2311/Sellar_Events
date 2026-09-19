@@ -1,4 +1,5 @@
 import React from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import type { TicketTier } from '../types/event.types';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 
@@ -8,21 +9,67 @@ interface TicketTierBreakdownProps {
   loading?: boolean;
 }
 
-/**
- * Mirrors TopSoldItemsCard/TopFiveOrder's list style: numbered circle
- * badge, name on the left, value right-aligned. Adds a slim progress
- * bar underneath since sold-vs-total is unique to ticket tiers.
- */
-export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({ tiers, isDataVisible, loading = false }) => {
+const SOLD_COLOR = '#007A78';
+const REMAINING_COLOR = '#E2E8F0';
+const ROW_HEIGHT = 56;
+
+export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({
+  tiers,
+  isDataVisible,
+  loading = false,
+}) => {
+  const chartData = tiers.map((t) => ({
+    id: t.id,
+    name: t.name,
+    price: t.price,
+    sold: t.sold,
+    total: t.total,
+    remaining: Math.max(0, t.total - t.sold),
+    percent: t.total > 0 ? Math.min(100, Math.round((t.sold / t.total) * 100)) : 0,
+  }));
+
+  const TierTick = ({ x, y, payload }: any) => {
+    const tier = chartData.find((d) => d.name === payload.value);
+    return (
+      <text x={x} y={y} textAnchor="end">
+        <tspan x={x - 8} dy="-4" fontSize={15} fontWeight={600} fill="#1e293b">
+          {payload.value}
+        </tspan>
+        <tspan x={x - 8} dy="18" fontSize={12} fill="#94a3b8">
+          ₹{tier?.price} per ticket
+        </tspan>
+      </text>
+    );
+  };
+
+  const EndLabel = ({ x, y, width, height, index }: any) => {
+    const d = chartData[index];
+    if (!d) return null;
+    return (
+      <g>
+        <text x={x + width + 12} y={y + height / 2 - 8} dominantBaseline="middle" fontSize={15} fontWeight={700} fill="#0f172a">
+          {d.sold}/{d.total}
+        </text>
+        <text x={x + width + 12} y={y + height / 2 + 10} dominantBaseline="middle" fontSize={12} fontWeight={700} fill={SOLD_COLOR}>
+          {d.percent}%
+        </text>
+      </g>
+    );
+  };
+
   return (
-    <Card className="shadow-sm border-gray-200">
+    <Card className="h-full flex flex-col shadow-sm border-gray-200">
       <CardHeader>
         <CardTitle className="text-base font-semibold text-gray-900">Ticket tiers</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="flex-1 flex flex-col justify-center">
         {loading ? (
-          [1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)
+          <div className="space-y-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />
+            ))}
+          </div>
         ) : tiers.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm text-gray-500">No ticket tiers set up yet</p>
@@ -30,30 +77,37 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({ tiers,
         ) : !isDataVisible ? (
           <div className="text-center py-8 text-gray-400 text-sm">Data hidden</div>
         ) : (
-          tiers.map((tier, index) => {
-            const percent = tier.total > 0 ? Math.min(100, Math.round((tier.sold / tier.total) * 100)) : 0;
-            return (
-              <div key={tier.id}>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="shrink-0 h-6 w-6 rounded-full bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] flex items-center justify-center text-xs font-extrabold">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{tier.name}</span>
-                  </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap shrink-0">
-                    ₹{tier.price} · {tier.sold}/{tier.total}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="shrink-0 w-6" aria-hidden="true" />
-                  <div className="h-1.5 flex-1 rounded-sm bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div className="h-full rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] transition-all" style={{ width: `${percent}%` }} />
-                  </div>
-                </div>  
-              </div>
-            );
-          })
+          <div style={{ width: '100%', height: Math.max(chartData.length * ROW_HEIGHT, 200) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 8, right: 70, bottom: 8, left: 8 }}
+                barSize={26}
+                barCategoryGap="15%"
+              >
+                <XAxis type="number" hide domain={[0, 'dataMax']} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={120}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={<TierTick />}
+                />
+                <Tooltip cursor={{ fill: 'transparent' }} />
+                <Bar dataKey="sold" name="Sold" stackId="a" fill={SOLD_COLOR} radius={[6, 0, 0, 6]} />
+                <Bar
+                  dataKey="remaining"
+                  name="Remaining"
+                  stackId="a"
+                  fill={REMAINING_COLOR}
+                  radius={[0, 6, 6, 0]}
+                  label={<EndLabel />}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </CardContent>
     </Card>

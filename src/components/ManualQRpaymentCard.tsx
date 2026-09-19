@@ -7,13 +7,24 @@ import { compressImageToTargetSize } from '../lib/imageCompression';
 import { stripHtmlTags } from '../lib/utils';
 import type { AccessCodeEntry, PublicEvent } from '../data/events';
 import QRCode from 'qrcode';
+import { loadImageAsCoverBanner } from '../lib/imageBanner';
 import TicketConfirmation from './TicketConfirmation';
+import { buildEventSlugId } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
+
+const PDF_BANNER_WIDTH = 760;
+const PDF_BANNER_HEIGHT = 220;
 
 interface PurchasedTicket {
   ticketId: string;
   tierName: string;
   attendeeName: string;
   accessCode?: string;
+  attendeeEmail?: string;
+  attendeePhone?: string;
+  amountPaid?: number;
+  paymentMode?: string;
+  purchasedAt?: number;
 }
 
 interface Breakdown {
@@ -155,6 +166,47 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
   const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
   const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
   const taxRate = taxSettings?.defaultTaxRate || 0;
+
+  const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
+
+  const bannerSrc =
+    event.coverImageDesktop ||
+    event.coverImageMobile ||
+    event.coverImage ||
+    event.images?.[0] ||
+    null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setPdfBannerDataUrl(null);
+    if (!bannerSrc) return;
+    loadImageAsCoverBanner(bannerSrc, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+      if (!cancelled) setPdfBannerDataUrl(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [bannerSrc]);
+
+  // "Book more tickets" link inside the ticket PDF — same URL organizer's
+  // "Live view" opens (organizer's base URL + /e/<slug-id>) for THIS event only.
+  const [bookMoreTicketsUrl, setBookMoreTicketsUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setBookMoreTicketsUrl(null);
+    if (event.status !== 'published') return;
+
+    const slug = buildEventSlugId(event.title, event.id);
+    const resolveBase = event.companyId
+      ? getShareBaseUrl(event.companyId)
+      : Promise.resolve(window.location.origin);
+
+    resolveBase
+      .catch(() => window.location.origin)
+      .then((baseUrl) => {
+        if (!cancelled) setBookMoreTicketsUrl(`${baseUrl}/e/${slug}`);
+      });
+
+    return () => { cancelled = true; };
+  }, [event.companyId, event.id, event.title, event.status]);
 
   const { taxedBreakdown, totalTaxAmount, finalTotal, roundOffAmt } = React.useMemo(() => {
     let tax = 0;
@@ -356,7 +408,17 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               screenshotUrl,
               accessCode: accessCode || null,
             });
-            created.push({ ticketId, tierName: tier.name, attendeeName: attendee.name.trim(), accessCode });
+            created.push({
+              ticketId,
+              tierName: tier.name,
+              attendeeName: attendee.name.trim(),
+              accessCode,
+              attendeeEmail: attendee.email.trim(),
+              attendeePhone: attendee.phone.trim(),
+              amountPaid: Number(unitTotal.toFixed(2)),
+              paymentMode: 'UPI',
+              purchasedAt: orderStamp,
+            });
             index += 1;
           }
         });
@@ -386,9 +448,19 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         <TicketConfirmation
           eventTitle={event.title}
           eventDate={event.date}
+          eventTime={event.time}
           eventVenue={event.venue}
           tickets={purchasedTickets}
           onDone={onClose}
+          eventBannerDataUrl={pdfBannerDataUrl}
+          eventConsentText={event.consentText}
+          eventGoodToKnowText={event.goodToKnowText}
+          eventIsOnline={event.isOnline}
+          eventIsPrivate={event.isPrivate}
+          eventArriveBy={event.arriveByTime}
+          eventAgeLimit={event.ageLimit}
+          eventHelplineNumber={event.helplineNumber}
+          bookMoreTicketsUrl={bookMoreTicketsUrl}
         />
       </div>
     );

@@ -78,6 +78,12 @@ const useEvent = (companyId?: string, id?: string) => {
           descriptionStyle: d.descriptionStyle ?? undefined,
           consentText: d.consentText ?? undefined,
           consentStyle: d.consentStyle ?? undefined,
+          goodToKnowText: d.goodToKnowText ?? undefined,
+          goodToKnowStyle: d.goodToKnowStyle ?? undefined,
+          arriveByTime: d.arriveByTime ?? undefined,
+          ageLimit: d.ageLimit ?? undefined,
+          helplineNumber: d.helplineNumber ?? undefined,
+          maxTicketsPerOrder: d.maxTicketsPerOrder ?? undefined,
         });
       } else {
         setEvent(undefined);
@@ -206,16 +212,29 @@ const OrganizerEventDetail: React.FC = () => {
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
         coverImageMobile: coverImageMobileUrl,
+        pastEventsGallery: updated.pastEventsGallery || [],
         isPrivate: updated.isPrivate,
+        maxTicketsPerOrder:
+          typeof updated.maxTicketsPerOrder === 'number' && updated.maxTicketsPerOrder > 0
+            ? updated.maxTicketsPerOrder
+            : null,
+        arriveByTime: updated.arriveByTime || null,
+        ageLimit: updated.ageLimit.trim() || null,
+        helplineNumber: updated.helplineNumber.trim() || null,
         registrationMode: updated.registrationMode,
         tiers: isRsvp ? [] : updated.tiers,
         rsvpLink: isRsvp ? updated.rsvpLink.trim() : null,
         rsvpButtonLabel: isRsvp ? (updated.rsvpButtonLabel.trim() || 'RSVP Now') : null,
+        customFields: (updated.customFields || []).filter((f) => f.label.trim()),
         titleStyle: { ...DEFAULT_TEXT_STYLE, ...event.titleStyle, fontSize: updated.titleFontSize },
         descriptionStyle: { ...DEFAULT_TEXT_STYLE, ...event.descriptionStyle, fontSize: updated.descriptionFontSize },
         consentText: updated.consentText.trim() || null,
         consentStyle: updated.consentText.trim()
           ? { ...DEFAULT_TEXT_STYLE, ...event.consentStyle, fontSize: updated.consentFontSize }
+          : null,
+        goodToKnowText: updated.goodToKnowText.trim() || null,
+        goodToKnowStyle: updated.goodToKnowText.trim()
+          ? { ...DEFAULT_TEXT_STYLE, ...event.goodToKnowStyle, fontSize: updated.goodToKnowFontSize }
           : null,
         paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
         upiId: isManualQR ? updated.upiId.trim() : null,

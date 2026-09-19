@@ -9,12 +9,16 @@ import { usePublicEvent } from '../hooks/usePublicEvents';
 import type { AccessCodeEntry } from '../data/events';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
+import { buildEventSlugId } from '../data/events';
+import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
 import MockPGModal from '../components/MockPGModal';
 import { stripHtmlTags } from '../lib/utils';
+import { loadImageAsCoverBanner } from '../lib/imageBanner';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
-
+const PDF_BANNER_WIDTH = 760;
+const PDF_BANNER_HEIGHT = 220;
 const PAYMENT_MODE_LABELS: Record<PaymentMethod, 'UPI' | 'Card' | 'Netbanking' | 'Free'> = {
   upi: 'UPI',
   card: 'Card',
@@ -88,6 +92,12 @@ const CheckoutPage: React.FC = () => {
     tierName: string;
     attendeeName: string;
     accessCode?: string;
+    attendeeEmail?: string;
+    attendeePhone?: string;
+    amountPaid?: number;
+    paymentMode?: string;
+    purchasedAt?: number;
+    status?: 'valid' | 'checked_in' | 'cancelled';
   }
 
   const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
@@ -144,6 +154,52 @@ const CheckoutPage: React.FC = () => {
     };
     fetchTaxSettings();
   }, [event?.companyId]);
+
+  const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
+
+  // Banner is wide (760x220), so prefer the desktop cover; fall back to the rest.
+  const bannerSrc =
+    event?.coverImageDesktop ||
+    event?.coverImageMobile ||
+    event?.coverImage ||
+    event?.images?.[0] ||
+    null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setPdfBannerDataUrl(null);
+    if (!bannerSrc) return;
+    loadImageAsCoverBanner(bannerSrc, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+      if (!cancelled) setPdfBannerDataUrl(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [bannerSrc]);
+
+  // "Book more tickets" link inside the ticket PDF — same URL organizer's
+  // "Live view" opens (organizer's base URL + /e/<slug-id>) for THIS event only.
+  const [bookMoreTicketsUrl, setBookMoreTicketsUrl] = useState<string | null>(null);
+  const eventCompanyId = event?.companyId;
+  const eventIdForLink = event?.id;
+  const eventTitleForLink = event?.title;
+  const eventStatusForLink = event?.status;
+  useEffect(() => {
+    let cancelled = false;
+    setBookMoreTicketsUrl(null);
+    if (!eventIdForLink || !eventTitleForLink || eventStatusForLink !== 'published') return;
+
+    const slug = buildEventSlugId(eventTitleForLink, eventIdForLink);
+    const resolveBase = eventCompanyId
+      ? getShareBaseUrl(eventCompanyId)
+      : Promise.resolve(window.location.origin);
+
+    resolveBase
+      .catch(() => window.location.origin)
+      .then((baseUrl) => {
+        if (!cancelled) setBookMoreTicketsUrl(`${baseUrl}/e/${slug}`);
+      });
+
+    return () => { cancelled = true; };
+  }, [eventCompanyId, eventIdForLink, eventTitleForLink, eventStatusForLink]);
 
   if (loading) {
     return (
@@ -447,7 +503,18 @@ const CheckoutPage: React.FC = () => {
               accessCode: accessCode || null,
             });
 
-            created.push({ ticketId, tierName, attendeeName, accessCode });
+            created.push({
+              ticketId,
+              tierName,
+              attendeeName,
+              accessCode,
+              attendeeEmail,
+              attendeePhone,
+              amountPaid: amountCollected,
+              paymentMode: PAYMENT_MODE_LABELS[method],
+              purchasedAt: Date.now(), // approx — serverTimestamp() nahi resolve hua client pe abhi
+              status: 'valid',
+            });
           }
         );
       });
@@ -473,11 +540,21 @@ const CheckoutPage: React.FC = () => {
       <TicketConfirmation
         eventTitle={event.title}
         eventDate={event.date}
+        eventTime={event.time}
         eventVenue={event.venue}
         tickets={purchasedTickets}
         onDone={() =>
           navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/')
         }
+        eventBannerDataUrl={pdfBannerDataUrl}
+        eventConsentText={event.consentText}
+        eventGoodToKnowText={event.goodToKnowText}
+        eventIsOnline={event.isOnline}
+        eventIsPrivate={event.isPrivate}
+        eventArriveBy={event.arriveByTime}
+        eventAgeLimit={event.ageLimit}
+        eventHelplineNumber={event.helplineNumber}
+        bookMoreTicketsUrl={bookMoreTicketsUrl}
       />
     );
   }
@@ -553,7 +630,7 @@ const CheckoutPage: React.FC = () => {
                     type="checkbox"
                     checked={sameForAll}
                     onChange={(e) => handleToggleSameForAll(e.target.checked)}
-                    className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-[#007A78] focus:ring-[#007A78]"
+                    className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
                   />
                   Use the same details for all {totalQty} tickets
                 </label>

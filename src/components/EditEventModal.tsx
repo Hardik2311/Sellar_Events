@@ -46,6 +46,9 @@ const toFormState = (event: EventItem): EventFormState => ({
   images: event.images ?? (event.coverImage ? [event.coverImage] : []),
   isPrivate: event.isPrivate ?? false,
   maxTicketsPerOrder: event.maxTicketsPerOrder ?? null,
+  arriveByTime: event.arriveByTime ?? '',
+  ageLimit: event.ageLimit ?? '',
+  helplineNumber: event.helplineNumber ?? '',
   // NEW
   coverImageDesktop: event.coverImageDesktop ?? null,
   coverImageMobile: event.coverImageMobile ?? null,
@@ -72,6 +75,8 @@ const toFormState = (event: EventItem): EventFormState => ({
   descriptionFontSize: event.descriptionStyle?.fontSize ?? 14,
   consentText: event.consentText ?? '',
   consentFontSize: event.consentStyle?.fontSize ?? 14,
+  goodToKnowText: event.goodToKnowText ?? '',
+  goodToKnowFontSize: event.goodToKnowStyle?.fontSize ?? 14,
   // NEW
   paymentCollectionMode: event.paymentCollectionMode ?? 'gateway',
   //qrImage: event.qrImageUrl ?? null,
@@ -307,6 +312,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </p>
                 </FormField>
 
+                                {/* Arrive by, Age limit, Helpline moved next to Time — see Time field below */}
+
                 <div className="grid grid-cols-2 gap-3">
                   <FormField label="Start date *" htmlFor="edit-date">
                     <div className="relative">
@@ -352,22 +359,57 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   </FormField>
                 </div>
 
-                <FormField label="Time *" htmlFor="edit-time">
-                  <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
-                    <Clock size={16} className="text-gray-400 shrink-0" />
-                    <TimeSelect
-                      value={form.time ? form.time.split(':')[0] : '00'}
-                      options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
-                      onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
-                    />
-                    <span className="text-slate-400">:</span>
-                    <TimeSelect
-                      value={form.time ? form.time.split(':')[1] : '00'}
-                      options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
-                      onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
-                    />
-                  </div>
-                </FormField>
+                                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Time *" htmlFor="edit-time">
+                    <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+                      <Clock size={16} className="text-gray-400 shrink-0" />
+                      <TimeSelect
+                        value={form.time ? form.time.split(':')[0] : '00'}
+                        options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                        onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
+                      />
+                      <span className="text-slate-400">:</span>
+                      <TimeSelect
+                        value={form.time ? form.time.split(':')[1] : '00'}
+                        options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                        onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
+                      />
+                    </div>
+                  </FormField>
+
+                  <FormField label="Arrive by" htmlFor="edit-arrive-by">
+                    <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+                      <Clock size={16} className="text-gray-400 shrink-0" />
+                      <TimeSelect
+                        value={form.arriveByTime ? form.arriveByTime.split(':')[0] : '00'}
+                        options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                        onChange={(h) => update('arriveByTime', `${h}:${form.arriveByTime?.split(':')[1] || '00'}`)}
+                      />
+                      <span className="text-slate-400">:</span>
+                      <TimeSelect
+                        value={form.arriveByTime ? form.arriveByTime.split(':')[1] : '00'}
+                        options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                        onChange={(m) => update('arriveByTime', `${form.arriveByTime?.split(':')[0] || '00'}:${m}`)}
+                      />
+                    </div>
+                  </FormField>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FloatingLabelInput
+                    id="edit-helpline-number"
+                    label="Helpline number"
+                    value={form.helplineNumber}
+                    onChange={(e) => update('helplineNumber', e.target.value)}
+                  />
+
+                  <FloatingLabelInput
+                    id="edit-age-limit"
+                    label="Age limit"
+                    value={form.ageLimit}
+                    onChange={(e) => update('ageLimit', e.target.value)}
+                  />
+                </div>
 
                 {!form.isOnline && (
                   <div>
@@ -594,7 +636,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                   value={form.consentText}
                   onChange={(html) => update('consentText', html)}
                   fontSize={form.consentFontSize}
-                  label="Important information & consent text (optional)"
                   multiline
                 />
                 <p className="text-xs text-gray-500 dark:text-slate-500">
@@ -602,7 +643,26 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 </p>
               </CardContent>
             </Card>
-
+            {/* NEW — printed on the ticket as "Before the Event" */}
+            <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Before the Event</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <textarea
+                  id="edit-good-to-know-text"
+                  aria-label="What should attendees bring or do beforehand?"
+                  placeholder="What should attendees bring or do beforehand? (optional)"
+                  value={form.goodToKnowText}
+                  onChange={(e) => update('goodToKnowText', e.target.value)}
+                  rows={6}
+                  className="w-full min-h-[140px] rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-500">
+                  Printed on the ticket for every attendee. Leave blank to skip.
+                </p>
+              </CardContent>
+            </Card>
             {companySettings.attendeeQuestionsEnabled && (
               <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
                 <CardHeader>
