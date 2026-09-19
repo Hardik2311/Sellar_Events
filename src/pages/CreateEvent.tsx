@@ -59,10 +59,12 @@ const INITIAL_STATE: EventFormState = {
   rsvpLink: '',
   rsvpButtonLabel: 'RSVP Now',
   consentText: '',
+  goodToKnowText: '',
   customFields: [],
   titleFontSize: DEFAULT_TEXT_STYLE.fontSize,
   descriptionFontSize: 14,
   consentFontSize: 14,
+  goodToKnowFontSize: 14,
   // Payment gateway isn't wired up to a real processor yet — default new
   // events to the one collection mode that actually works.
   paymentCollectionMode: 'manual_qr',
@@ -71,6 +73,9 @@ const INITIAL_STATE: EventFormState = {
   payeeName: '',
   isPrivate: false,
   maxTicketsPerOrder: null,
+  arriveByTime: '',
+  ageLimit: '',
+  helplineNumber: '',
 };
 const stripHtml = (html: string) =>
   html
@@ -291,6 +296,9 @@ const CreateEvent: React.FC = () => {
         isOnline: form.isOnline,
         isPrivate: form.isPrivate,
         maxTicketsPerOrder: form.maxTicketsPerOrder && form.maxTicketsPerOrder > 0 ? form.maxTicketsPerOrder : null,
+        arriveByTime: form.arriveByTime || null,
+        ageLimit: form.ageLimit.trim() || null,
+        helplineNumber: form.helplineNumber.trim() || null,
         coverImageUrl: coverImageUrls[0] ?? null,
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
@@ -307,6 +315,8 @@ const CreateEvent: React.FC = () => {
         promoDiscountPercent: form.promoDiscountPercent || 0,
         consentText: form.consentText.trim() || null,
         consentStyle: form.consentText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.consentFontSize } : null,
+        goodToKnowText: form.goodToKnowText.trim() || null,
+        goodToKnowStyle: form.goodToKnowText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.goodToKnowFontSize } : null,
         paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
         upiId: isManualQR ? form.upiId.trim() : null,
         payeeName: isManualQR ? form.payeeName.trim() : null,
@@ -451,22 +461,41 @@ const CreateEvent: React.FC = () => {
           </FormField>
         </div>
 
-        <FormField label="Time *" htmlFor="time">
-          <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800" data-field-anchor="time" tabIndex={-1}>
-            <Clock size={16} className="text-gray-400 shrink-0" />
-            <TimeSelect
-              value={form.time ? form.time.split(':')[0] : '00'}
-              options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
-              onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
-            />
-            <span className="text-slate-400">:</span>
-            <TimeSelect
-              value={form.time ? form.time.split(':')[1] : '00'}
-              options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
-              onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
-            />
-          </div>
-        </FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Time *" htmlFor="time">
+            <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800" data-field-anchor="time" tabIndex={-1}>
+              <Clock size={16} className="text-gray-400 shrink-0" />
+              <TimeSelect
+                value={form.time ? form.time.split(':')[0] : '00'}
+                options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                onChange={(h) => update('time', `${h}:${form.time?.split(':')[1] || '00'}`)}
+              />
+              <span className="text-slate-400">:</span>
+              <TimeSelect
+                value={form.time ? form.time.split(':')[1] : '00'}
+                options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                onChange={(m) => update('time', `${form.time?.split(':')[0] || '00'}:${m}`)}
+              />
+            </div>
+          </FormField>
+
+          <FormField label="Arrive by" htmlFor="arrive-by">
+            <div className="flex items-center gap-2 rounded-sm border border-gray-300 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-800">
+              <Clock size={16} className="text-gray-400 shrink-0" />
+              <TimeSelect
+                value={form.arriveByTime ? form.arriveByTime.split(':')[0] : '00'}
+                options={Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))}
+                onChange={(h) => update('arriveByTime', `${h}:${form.arriveByTime?.split(':')[1] || '00'}`)}
+              />
+              <span className="text-slate-400">:</span>
+              <TimeSelect
+                value={form.arriveByTime ? form.arriveByTime.split(':')[1] : '00'}
+                options={Array.from({ length: 60 }, (_, m) => String(m).padStart(2, '0'))}
+                onChange={(m) => update('arriveByTime', `${form.arriveByTime?.split(':')[0] || '00'}:${m}`)}
+              />
+            </div>
+          </FormField>
+        </div>
 
         {!form.isOnline && (
           <div data-field-anchor="venue" tabIndex={-1}>
@@ -509,6 +538,22 @@ const CreateEvent: React.FC = () => {
             )}
           </div>
         )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <FloatingLabelInput
+            id="helpline-number"
+            label="Helpline number"
+            value={form.helplineNumber}
+            onChange={(e) => update('helplineNumber', e.target.value)}
+          />
+
+          <FloatingLabelInput
+            id="age-limit"
+            label="Age limit"
+            value={form.ageLimit}
+            onChange={(e) => update('ageLimit', e.target.value)}
+          />
+        </div>
       </CardContent>
     </Card>
   );
@@ -908,7 +953,6 @@ const CreateEvent: React.FC = () => {
               <div className="hidden lg:block">
                 {eventLogisticsCard}
               </div>
-              {/* Consent & Important Information — moved to sidebar for desktop */}
               <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
                 <CardHeader>
                   <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Consent &amp; Important Information</CardTitle>
@@ -926,7 +970,6 @@ const CreateEvent: React.FC = () => {
                     value={form.consentText}
                     onChange={(html) => update('consentText', html)}
                     fontSize={form.consentFontSize}
-                    label="Important information & consent text"
                     multiline
                   />
                   <p className="text-xs text-gray-500 dark:text-slate-500">
@@ -934,6 +977,27 @@ const CreateEvent: React.FC = () => {
                   </p>
                 </CardContent>
               </Card>
+              {/* NEW — shown as "Before the Event" on every ticket, online or offline, public or private */}
+              <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Good to Do Before the Event</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <textarea
+                    id="good-to-know-text"
+                    aria-label="What should attendees bring or do beforehand?"
+                    placeholder="What should attendees bring or do beforehand?"
+                    value={form.goodToKnowText}
+                    onChange={(e) => update('goodToKnowText', e.target.value)}
+                    rows={6}
+                    className="w-full min-h-[140px] rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-slate-500">
+                    Printed on the ticket for every attendee — e.g. "Bring a valid ID", "Carry a printed copy", "Wear comfortable shoes". Leave blank to skip.
+                  </p>
+                </CardContent>
+              </Card>
+
               <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
                 <CardContent className="pt-4">
                   <p className="text-sm font-semibold text-[#007A78] dark:text-[#2DD4BF] mb-2">Organizer Pro-Tips</p>

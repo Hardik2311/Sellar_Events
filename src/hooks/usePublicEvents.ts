@@ -46,14 +46,18 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   customFields: d.customFields || [],
   titleStyle: d.titleStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
-  consentText: d.consentText ?? undefined,
+    consentText: d.consentText ?? undefined,
   consentStyle: d.consentStyle ?? undefined,
-  // NEW
+  goodToKnowText: d.goodToKnowText ?? undefined,
+  goodToKnowStyle: d.goodToKnowStyle ?? undefined,
   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
-  maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
+   maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
+  arriveByTime: d.arriveByTime ?? null,
+  ageLimit: d.ageLimit ?? null,
+  helplineNumber: d.helplineNumber ?? null,
 });
 
 export function usePublicEvents(targetCompanyId?: string | null) {

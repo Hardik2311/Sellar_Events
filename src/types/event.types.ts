@@ -21,6 +21,7 @@ export interface EventSummary {
   coverImage?: string;
   category: string;
   status: EventStatus;
+  time?: string;
   startDate: string; // ISO date string
   venue: string;
   ticketsSold: number;
@@ -31,7 +32,13 @@ export interface EventSummary {
   tiers: TicketTier[];
   customFields?: CustomField[];
   registrationMode?: RegistrationMode;
+  isOnline?: boolean;        // NEW — hides "Get directions" on the ticket PDF
+  isPrivate?: boolean;       // NEW — hides "Book more tickets" on the ticket PDF
+  goodToKnowText?: string;   // NEW — "Before the Event" checklist
   consentText?: string; // organizer's "Important information & consent" text, shown on the PDF acknowledgement
+  arriveByTime?: string | null;    // NEW — shown on the PDF acknowledgement
+  ageLimit?: string | null;        // NEW — shown on the PDF acknowledgement
+  helplineNumber?: string | null;  // NEW — shown on the PDF acknowledgement
   salesTrend: SalesTrendPoint[]; // per-event daily revenue, scoped to the selected date range
 }
 
@@ -98,6 +105,7 @@ export interface EventFormState {
   titleFontSize: number;
   descriptionFontSize: number;
   consentFontSize: number;
+  goodToKnowFontSize: number;
   coverImageDesktop: string | null;
   coverImageMobile: string | null;
   pastEventsGallery: GalleryMediaItem[];
@@ -109,8 +117,13 @@ export interface EventFormState {
   rsvpLink: string;
   rsvpButtonLabel: string;
   consentText: string;
+  goodToKnowText: string;
   isPrivate: boolean;
   maxTicketsPerOrder: number | null; // null = default cap
+  // NEW — shown on the attendee's acknowledgement ticket/PDF
+  arriveByTime: string;      // HH:mm, 24hr — "please arrive by" time; blank = not shown
+  ageLimit: string;          // free text e.g. "16+", "All ages"; blank = not shown
+  helplineNumber: string;    // organizer contact number for "Need help?"; blank = not shown
   // NEW — only relevant when registrationMode === 'tickets'
   paymentCollectionMode: PaymentCollectionMode;
   //qrImage: string | null;   // base64 preview until uploaded, then https URL after save

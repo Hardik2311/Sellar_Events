@@ -14,9 +14,11 @@ interface EventListCardProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   loading?: boolean;
-  /** Optional. When true, shows an "All Events" option at the top of the list.
-   *  Default false so existing usages elsewhere are unaffected. */
   allEventsOption?: boolean;
+  /** Optional element rendered beside the dropdown trigger (e.g. the date filter chip). */
+  rightSlot?: React.ReactNode;
+  /** Overrides the container's max-width classes. Defaults to 'max-w-lg lg:max-w-4xl'. */
+  maxWidthClassName?: string;
 }
 
 export const EventListCard: React.FC<EventListCardProps> = ({
@@ -27,6 +29,8 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   onSearchChange,
   loading = false,
   allEventsOption = false,
+  rightSlot,
+  maxWidthClassName = 'max-w-lg lg:max-w-4xl',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,26 +84,36 @@ export const EventListCard: React.FC<EventListCardProps> = ({
     setIsOpen(false);
   };
 
-  return (
-    <div className="relative w-full max-w-lg lg:max-w-4xl mx-auto" ref={containerRef}>
-      <button
-        onClick={() => setIsOpen((o) => !o)}
-        className="w-full flex items-center justify-between rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-      >
-        <div className="min-w-0 text-left">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Your events</p>
-          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-            {loading
-              ? 'Loading...'
-              : selectedEventId === ALL_EVENTS_ID
-                ? 'All Events'
-                : selectedEvent
-                  ? stripHtmlTags(selectedEvent.title)
-                  : 'Select an event'}
-          </p>
-        </div>
-        <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+    return (
+    <div className={`relative w-full ${maxWidthClassName} mx-auto`} ref={containerRef}>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsOpen((o) => !o)}
+          className="flex-1 min-w-0 flex items-center justify-between rounded-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        >
+          <div className="min-w-0 text-left">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Your events</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+              {loading
+                ? 'Loading...'
+                : selectedEventId === ALL_EVENTS_ID
+                  ? 'All Events'
+                  : selectedEvent
+                    ? stripHtmlTags(selectedEvent.title)
+                    : 'Select an event'}
+            </p>
+            {!loading && selectedEvent && selectedEventId !== ALL_EVENTS_ID && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {new Date(selectedEvent.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} ·{' '}
+                {selectedEvent.venue}
+              </p>
+            )}
+          </div>
+          <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {rightSlot}
+      </div>
 
       {isOpen && (
         <div className="absolute top-full left-0 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-xl z-30 p-3">

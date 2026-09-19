@@ -83,6 +83,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     category: data.category,
     status: data.status,
     startDate: data.date,
+     time: data.time ?? undefined,
     venue: data.isOnline ? 'Online' : data.venue,
     ticketsSold: tiers.reduce((sum: number, t: any) => sum + t.sold, 0),
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
@@ -92,7 +93,13 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     customFields: data.customFields ?? [],
     salesTrend: data.salesTrend ?? [],
     registrationMode: data.registrationMode,
+    isOnline: data.isOnline ?? false,
+    isPrivate: data.isPrivate ?? false,
     consentText: data.consentText,
+    goodToKnowText: data.goodToKnowText,
+    arriveByTime: data.arriveByTime ?? null,
+    ageLimit: data.ageLimit ?? null,
+    helplineNumber: data.helplineNumber ?? null,
   };
 };
 
@@ -133,7 +140,16 @@ const Attendees: React.FC = () => {
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
-  const [walkInTicket, setWalkInTicket] = useState<{ ticketId: string; tierName: string; attendeeName: string } | null>(null);
+  const [walkInTicket, setWalkInTicket] = useState<{
+    ticketId: string;
+    tierName: string;
+    attendeeName: string;
+    attendeeEmail?: string;
+    attendeePhone?: string;
+    amountPaid?: number;
+    paymentMode?: string;
+    purchasedAt?: number;
+  } | null>(null);
   const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
   const [pendingReviveAttendee, setPendingReviveAttendee] = useState<Attendee | null>(null);
   const [pendingEditAttendee, setPendingEditAttendee] = useState<Attendee | null>(null);
@@ -171,9 +187,6 @@ const Attendees: React.FC = () => {
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
-  // Pre-fetched once per event (not once per attendee card) and shared by
-  // every AttendeeCard's "Share PDF" acknowledgement, so building that PDF
-  // at click time is instant and has no network dependency of its own.
   const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +197,32 @@ const Attendees: React.FC = () => {
     });
     return () => { cancelled = true; };
   }, [selectedEvent?.coverImage]);
+
+  // "Book more tickets" link inside the ticket PDF — same URL that "Live view"
+  // opens (organizer's own base URL + /e/<slug-id>) for THIS event only.
+  // Resolved once per event so PDF generation at click time stays instant.
+  const [bookMoreTicketsUrl, setBookMoreTicketsUrl] = useState<string | null>(null);
+  const selectedEventId_ = selectedEvent?.id;
+  const selectedEventTitle = selectedEvent?.title;
+  const selectedEventStatus = selectedEvent?.status;
+  useEffect(() => {
+    let cancelled = false;
+    setBookMoreTicketsUrl(null);
+    if (!selectedEventId_ || !selectedEventTitle || selectedEventStatus !== 'published') return;
+
+    const slug = buildEventSlugId(selectedEventTitle, selectedEventId_);
+    const resolveBase = profile?.companyId
+      ? getShareBaseUrl(profile.companyId)
+      : Promise.resolve(window.location.origin);
+
+    resolveBase
+      .catch(() => window.location.origin)
+      .then((baseUrl) => {
+        if (!cancelled) setBookMoreTicketsUrl(`${baseUrl}/e/${slug}`);
+      });
+
+    return () => { cancelled = true; };
+  }, [profile?.companyId, selectedEventId_, selectedEventTitle, selectedEventStatus]);
 
   // Check-in should only be allowed on/after the event's date (date-only comparison, time ignored)
   const isEventDateInFuture = useCallback((event: EventSummary | null): boolean => {
@@ -380,10 +419,30 @@ const Attendees: React.FC = () => {
     setPendingAttendee(null);
   }, []);
 
-  const handleWalkInAdded = useCallback((name: string, ticketId: string, tierName: string) => {
-    setScanFeedback({ type: 'success', message: `${name} added as walk-in (${ticketId}).` });
-    setWalkInTicket({ ticketId, tierName, attendeeName: name });
-  }, []);
+  const handleWalkInAdded = useCallback(
+    (data: {
+      name: string;
+      ticketId: string;
+      tierName: string;
+      email: string;
+      phone: string;
+      amountPaid: number;
+      paymentMode: string;
+    }) => {
+      setScanFeedback({ type: 'success', message: `${data.name} added as walk-in (${data.ticketId}).` });
+      setWalkInTicket({
+        ticketId: data.ticketId,
+        tierName: data.tierName,
+        attendeeName: data.name,
+        attendeeEmail: data.email,
+        attendeePhone: data.phone,
+        amountPaid: data.amountPaid,
+        paymentMode: data.paymentMode,
+        purchasedAt: Date.now(),
+      });
+    },
+    []
+  );
 
   // Auto-clear the scan feedback banner after a few seconds
   useEffect(() => {
@@ -636,9 +695,17 @@ const Attendees: React.FC = () => {
                       onEdit={can(Permission.EDIT_ATTENDEE) ? requestEdit : undefined}
                       eventTitle={selectedEvent.title}
                       eventDate={selectedEvent.startDate}
+                      eventTime={selectedEvent.time}
                       eventVenue={selectedEvent.venue}
                       eventBannerDataUrl={pdfBannerDataUrl}
                       eventConsentText={selectedEvent.consentText}
+                      eventGoodToKnowText={selectedEvent.goodToKnowText}
+                      eventIsOnline={selectedEvent.isOnline}
+                      eventIsPrivate={selectedEvent.isPrivate}
+                      eventArriveBy={selectedEvent.arriveByTime}
+                      eventAgeLimit={selectedEvent.ageLimit}
+                      eventHelplineNumber={selectedEvent.helplineNumber}
+                      bookMoreTicketsUrl={bookMoreTicketsUrl}
                       customFields={selectedEvent.customFields}
                     />
                   ))}
@@ -706,8 +773,18 @@ const Attendees: React.FC = () => {
               eventTitle={selectedEvent.title}
               eventDate={selectedEvent.startDate}
               eventVenue={selectedEvent.venue}
-              tickets={[walkInTicket]}
+               eventTime={selectedEvent.time}
+              tickets={[{ ...walkInTicket, status: 'valid' }]}
               onDone={() => setWalkInTicket(null)}
+              eventBannerDataUrl={pdfBannerDataUrl}
+              eventConsentText={selectedEvent.consentText}
+              eventGoodToKnowText={selectedEvent.goodToKnowText}
+              eventIsOnline={selectedEvent.isOnline}
+              eventIsPrivate={selectedEvent.isPrivate}
+              eventArriveBy={selectedEvent.arriveByTime}
+              eventAgeLimit={selectedEvent.ageLimit}
+              eventHelplineNumber={selectedEvent.helplineNumber}
+              bookMoreTicketsUrl={bookMoreTicketsUrl}
             />
           </div>
         </div>

@@ -48,6 +48,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   titleStyle: d.titleStyle ?? undefined,
   consentText: d.consentText ?? undefined,
   consentStyle: d.consentStyle ?? undefined,
+  goodToKnowText: d.goodToKnowText ?? undefined,
+  goodToKnowStyle: d.goodToKnowStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
   paymentCollectionMode: d.paymentCollectionMode || 'gateway',
   //qrImageUrl: d.qrImageUrl ?? null,
@@ -56,6 +58,9 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   accessCodes: d.accessCodes ?? [],
   maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
   everPublished: d.everPublished || false, // NEW — true once event has been published at least once; drives free re-toggle logic
+  arriveByTime: d.arriveByTime ?? null,
+  ageLimit: d.ageLimit ?? null,
+  helplineNumber: d.helplineNumber ?? null,
 });
 
 export const useOrganizerEvents = () => {
@@ -71,7 +76,7 @@ export const useOrganizerEvents = () => {
       orderBy('createdAt', 'desc')
     );
 
-        const unsubscribe = onSnapshot(eventsQuery, (snapshot) => {
+    const unsubscribe = onSnapshot(eventsQuery, (snapshot) => {
       const organizerName = profile.organizationName || '';
       const mapped = snapshot.docs.map((docSnap) =>
         mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, profile.companyId)
@@ -79,7 +84,7 @@ export const useOrganizerEvents = () => {
       setEvents(mapped);
       setLoading(false);
 
-            mapped
+      mapped
         .filter((e) => e.status === 'published' && isCreditExpired(e))
         .forEach((e) => {
           updateDoc(doc(db, 'companies', profile.companyId, 'events', e.id), {
@@ -108,7 +113,7 @@ export const useOrganizerEvents = () => {
     const newStatus = currentStatus === 'published' ? 'draft' : 'published';
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
 
-        if (newStatus === 'published') {
+    if (newStatus === 'published') {
       const companyRef = doc(db, 'companies', profile.companyId);
       await runTransaction(db, async (transaction) => {
         // Read the event doc INSIDE the transaction — never trust local
@@ -234,6 +239,10 @@ export const useOrganizerEvents = () => {
       pastEventsGallery: original.pastEventsGallery || [],
       titleStyle: original.titleStyle ?? null,
       descriptionStyle: original.descriptionStyle ?? null,
+      consentText: original.consentText ?? null,
+      consentStyle: original.consentStyle ?? null,
+      goodToKnowText: original.goodToKnowText ?? null,
+      goodToKnowStyle: original.goodToKnowStyle ?? null,
       status: 'draft',
       featured: false,
       registrationMode: original.registrationMode,
@@ -315,6 +324,10 @@ export const useOrganizerEvents = () => {
       consentStyle: form.consentText.trim()
         ? { ...DEFAULT_TEXT_STYLE, ...existingEvent?.consentStyle, fontSize: form.consentFontSize }
         : null,
+      goodToKnowText: form.goodToKnowText.trim() || null,
+      goodToKnowStyle: form.goodToKnowText.trim()
+        ? { ...DEFAULT_TEXT_STYLE, ...existingEvent?.goodToKnowStyle, fontSize: form.goodToKnowFontSize }
+        : null,
       // NEW — only meaningful for ticketed events; null-out otherwise so stale
       // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
       paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
@@ -327,15 +340,14 @@ export const useOrganizerEvents = () => {
       payeeName: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
         ? form.payeeName.trim()
         : null,
-      // Cap on tickets a single buyer can select in one order. Firestore
-      // rejects `undefined`, so an empty/unset value is stored as null
-      // (falls back to the default cap when reading).
       maxTicketsPerOrder:
         typeof form.maxTicketsPerOrder === 'number' && form.maxTicketsPerOrder > 0
           ? form.maxTicketsPerOrder
           : null,
+      arriveByTime: form.arriveByTime || null,
+      ageLimit: form.ageLimit.trim() || null,
+      helplineNumber: form.helplineNumber.trim() || null,
     };
-
     if (form.registrationMode === 'tickets') {
       payload.tiers = tiers;
     }
