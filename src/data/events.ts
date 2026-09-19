@@ -57,6 +57,8 @@ export interface PublicEvent {
   descriptionStyle?: TextStyleConfig;
   consentText?: string;
   consentStyle?: TextStyleConfig;
+  goodToKnowText?: string;        // NEW
+  goodToKnowStyle?: TextStyleConfig; // NEW
   paymentCollectionMode?: 'gateway' | 'manual_qr';
   //qrImageUrl?: string | null;
   upiId?: string;
@@ -64,6 +66,10 @@ export interface PublicEvent {
   creditExpiresAt?: string | null;
   accessCodes?: AccessCodeEntry[]; // ALL valid share codes ever generated for this event
   maxTicketsPerOrder?: number; // cap on tickets a single buyer can select in one order; undefined = default cap (10)
+  // NEW — shown on the attendee's acknowledgement ticket/PDF
+  arriveByTime?: string | null;
+  ageLimit?: string | null;
+  helplineNumber?: string | null;
 }
 // NEW — how long a single event credit keeps an event published for
 export const EVENT_CREDIT_VALIDITY_DAYS = 90; // ~3 months

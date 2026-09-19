@@ -7,15 +7,28 @@ import { useEventCredits } from '../hooks/useEventCredits';
 import { fetchEventDashboardData, CACHE_DURATION } from '../lib/fetchEventDashboardData';
 import type { WithCacheMeta } from '../lib/fetchEventDashboardData';
 import type { EventDashboardData } from '../types/event.types';
-import EventListCard from '../components/EventListCard';
-import EventOverviewCard from '../components/EventOverviewCard';
+import EventStatsOverview from '../components/EventStatsOverview';
 import TicketTierBreakdown from '../components/TicketTierBreakDown';
 import SalesTrendCard from '../components/SalesTrendCard';
-import { EventFilterProvider, EventDateFilter, useEventFilter } from '../components/ui/EventdateFilter';
+import EventListCard from '../components/EventListCard';
+import EventDateFilterChip from '../components/EventDateFilterChip';
+import { EventFilterProvider, useEventFilter } from '../components/ui/EventdateFilter';
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
+import EventFinanceCard from '../components/EventFinanceCard';
+import { stripHtmlTags } from '../lib/utils';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 
+const getPreselectedEventId = (events: EventDashboardData['events']): string | null => {
+  if (events.length === 0) return null;
+  const now = new Date();
+  const sortedByDate = [...events].sort(
+    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  );
+  const nextUpcoming = sortedByDate.find((e) => new Date(e.startDate) >= now);
+  // No upcoming event → fall back to most recent past event
+  return nextUpcoming?.id ?? sortedByDate[sortedByDate.length - 1].id;
+};
 const EventDashboardContent: React.FC = () => {
   const { profile } = useAuth();
   const { can } = usePermissions();
@@ -50,9 +63,7 @@ const EventDashboardContent: React.FC = () => {
         forceRefresh,
       });
       setData(result);
-      const now = new Date();
-      const firstUpcoming = result.events.find((e) => new Date(e.startDate) >= now);
-      setSelectedEventId((prev) => prev ?? firstUpcoming?.id ?? result.events[0]?.id ?? null);
+      setSelectedEventId((prev) => prev ?? getPreselectedEventId(result.events));
     } catch (e) {
       console.error('Event dashboard fetch error:', e);
       setError('Could not load your events. Please try again.');
@@ -90,7 +101,7 @@ const EventDashboardContent: React.FC = () => {
         <div className="flex items-center justify-end gap-2 ml-auto">
           <button
             onClick={() => navigate('/events/account/recharge')}
-            className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs cursor-pointer"
             title="Event credits — click to recharge"
           >
             <Wallet size={16} />
@@ -100,7 +111,7 @@ const EventDashboardContent: React.FC = () => {
           {can(Permission.TOGGLE_SENSITIVE_DATA) && (
             <button
               onClick={() => setIsDataVisible(!isDataVisible)}
-              className="p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+              className="p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs cursor-pointer"
               title={isDataVisible ? 'Hide Sensitive Data' : 'Show Sensitive Data'}
             >
               {isDataVisible ? <Eye size={16} /> : <EyeOff size={18} />}
@@ -124,21 +135,22 @@ const EventDashboardContent: React.FC = () => {
                   : 'Never'}
               </span>
             </p>
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
               <button
                 onClick={handleRefresh}
-                className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all ${loading ? 'animate-spin' : ''
+                className={`p-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-all ${loading ? 'animate-spin' : ''
                   }`}
                 title="Refresh data"
               >
                 {loading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
               </button>
+              <EventDateFilterChip />
             </div>
           </div>
         </div>
 
         <div className="mx-auto max-w-7xl relative">
-          <div className="mb-1">
+          <div className="mb-2">
             <EventListCard
               events={data?.events ?? []}
               selectedEventId={selectedEventId}
@@ -149,9 +161,6 @@ const EventDashboardContent: React.FC = () => {
             />
           </div>
 
-          <div className="mb-2">
-            <EventDateFilter />
-          </div>
           {error && (
             <div className="mb-2 rounded-sm border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-900 px-3 py-2 text-sm text-red-700 dark:text-red-300">
               {error}
@@ -164,8 +173,22 @@ const EventDashboardContent: React.FC = () => {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <EventOverviewCard event={selectedEvent} isDataVisible={isDataVisible} loading={loading} />
-
+              <EventStatsOverview
+                companyId={profile?.companyId}
+                event={selectedEvent}
+                isDataVisible={isDataVisible}
+                loading={loading}
+              />
+               <EventFinanceCard
+                companyId={profile?.companyId}
+                eventId={selectedEvent?.id}
+                eventName={selectedEvent?.title}
+                events={data?.events ?? []}
+                eventsLoading={loading}
+                isDataVisible={isDataVisible}
+                startDate={filters.startDate}
+                endDate={filters.endDate}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <TicketTierBreakdown
                   tiers={selectedEvent?.tiers ?? []}
@@ -174,6 +197,7 @@ const EventDashboardContent: React.FC = () => {
                 />
                 <SalesTrendCard data={selectedEvent?.salesTrend ?? []} isDataVisible={isDataVisible} loading={loading} />
               </div>
+
             </div>
           )}
         </div>
