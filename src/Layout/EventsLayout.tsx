@@ -1,6 +1,6 @@
 import { Suspense, useRef, useEffect, useState, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2, Landmark } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Plus, X, Users, UserCircle, Compass, IndianRupee, UserPlus, Share2, Landmark } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { usePermissions } from '../hooks/usePermissions';
@@ -50,29 +50,29 @@ const EventsLayout = () => {
   const fanActions = [
     {
       key: 'add-event',
-      label: 'Add Event',
-      icon: <PlusCircle size={20} />,
+      label: '+ Event',
+      icon: <PlusCircle size={16} />,
       onClick: () => navigate('/events/create'),
     },
     showManageUsers && {
       key: 'add-user',
-      label: USER_MANAGEMENT_ITEM.label,
-      icon: USER_MANAGEMENT_ITEM.icon,
+      label: '+ User',
+      icon: <UserPlus size={16} />,
       onClick: () => setIsUserAddModalOpen(true),
     },
     {
       key: 'add-expense',
-      label: 'Add Expense',
-      icon: <IndianRupee size={18} />,
+      label: '+ Expense',
+      icon: <IndianRupee size={16} />,
       onClick: () => {
         setIsExpenseModalOpen(true);
-        loadEvents(true); // fresh fetch — naya event turant list me dikhe
+        loadEvents(true);
       },
     },
     {
       key: 'add-income',
-      label: 'Add Income',
-      icon: <Landmark size={18} />,
+      label: '+ Income',
+      icon: <Landmark size={16} />,
       onClick: () => {
         setIsIncomeModalOpen(true);
         loadEvents(true);
@@ -81,7 +81,7 @@ const EventsLayout = () => {
     {
       key: 'share',
       label: 'Share',
-      icon: <Share2 size={18} />,
+      icon: <Share2 size={16} />,
       onClick: () => setIsShareLinkModalOpen(true),
     },
   ].filter(Boolean) as { key: string; label: string; icon: JSX.Element; onClick: () => void }[];
@@ -221,33 +221,41 @@ const EventsLayout = () => {
 
       {/* --- MOBILE BOTTOM NAV --- */}
       <nav className="md:hidden fixed bottom-0 left-0 w-full z-40">
-        {/* Backdrop — tap outside to close the quick actions popup */}
         {isQuickActionsOpen && (
           <div
-            className="fixed inset-0 z-30 bg-black/20"
+            className="fixed inset-x-0 top-0 bottom-16 z-30 bg-black/20 backdrop-blur-sm"
             onClick={() => setIsQuickActionsOpen(false)}
           />
         )}
 
         {isQuickActionsOpen && (
-          <div className="absolute bottom-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-40 flex flex-col-reverse items-center gap-2 w-52">
-            {fanActions.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => {
-                  setIsQuickActionsOpen(false);
-                  item.onClick();
-                }}
-                className="w-full flex items-center justify-center gap-2 rounded-sm bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-lg px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 active:scale-95 transition-transform"
-              >
-                <span className="text-[#007A78] dark:text-[#2DD4BF]">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+          <div className="absolute bottom-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-40 w-56 rounded-md bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-800 shadow-xl p-2">
+            <p className="text-center text-sm font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+              Add
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {fanActions.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => {
+                    setIsQuickActionsOpen(false);
+                    item.onClick();
+                  }}
+                  className="flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-md bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-transform"
+                >
+                  <span className="h-8 w-8 rounded-full bg-[#007A78]/10 dark:bg-[#2DD4BF]/15 text-[#007A78] dark:text-[#2DD4BF] flex items-center justify-center">
+                    {item.icon}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 text-center leading-tight">
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="relative flex justify-around items-center gap-1 px-2 py-2 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] shadow-lg">
+        <div className="relative flex justify-around items-center gap-1 h-16 px-2 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] shadow-lg">
           {/* Left group */}
           <div className="flex-1 flex items-center gap-1">
             {visibleMobileLeft.map(({ to, icon, label }) => (
@@ -273,12 +281,9 @@ const EventsLayout = () => {
             <button
               onClick={() => setIsQuickActionsOpen((v) => !v)}
               aria-label="Quick actions"
-              className="relative -top-5 h-14 w-14 rounded-full bg-[#007A78] dark:bg-[#2DD4BF] text-white dark:text-slate-950 shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              className="relative z-50 -top-4 h-12 w-12 rounded-full bg-[#007A78] dark:bg-[#2DD4BF] text-white dark:text-slate-950 shadow-lg flex items-center justify-center active:scale-95 transition-transform"
             >
-              <PlusCircle
-                size={28}
-                className={`transition-transform duration-200 ${isQuickActionsOpen ? 'rotate-45' : ''}`}
-              />
+              {isQuickActionsOpen ? <X size={26} /> : <Plus size={26} />}
             </button>
           </div>
 
