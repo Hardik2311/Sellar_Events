@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import BackButton from '../components/ui/BackButton';
+import { useAuth } from '../context/AuthContext';
 
 import {
   ChevronDown,
@@ -57,39 +57,21 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, icon, children, is
 // --- MAIN PAGE COMPONENT ---
 const SupportPage: React.FC = () => {
   const [openSection, setOpenSection] = useState<string | null>('faq-1');
+  const { profile } = useAuth();
 
-  const [userProfile, setUserProfile] = useState({ fullName: '', email: '', phone: '' });
+  // AuthContext already resolves the current user's own profile efficiently
+  // (via their ID token's companyId claim, not a scan) — no need for a
+  // second, separate lookup here.
+  const userProfile = {
+    fullName: profile?.fullName || profile?.email || 'Unknown',
+    email: profile?.email || 'N/A',
+    phone: profile?.phone || 'N/A',
+  };
+
   const [formData, setFormData] = useState({ subject: '', description: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [ticketRef, setTicketRef] = useState<string | null>(null);
-
-  useEffect(() => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    const fetchProfile = async () => {
-      const companiesSnapshot = await getDocs(collection(db, "companies"));
-
-      for (const companyDoc of companiesSnapshot.docs) {
-        const userDoc = await getDoc(doc(db, "companies", companyDoc.id, "users", currentUser.uid));
-
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-
-          setUserProfile({
-            fullName: data.name || currentUser.email || 'Unknown',
-            email: currentUser.email || 'N/A',
-            phone: data.phoneNumber || 'N/A',
-          });
-          break;
-        }
-      }
-    };
-
-    fetchProfile();
-  }, []);
 
   const generateRefNumber = async () => {
     const counterRef = doc(db, "counters", "event_support_tickets");

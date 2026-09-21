@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Users, ChevronRight, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Ticket, Users, Building2, ChevronRight, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/card';
 import { ROUTES } from '../../constants/routes.constants';
 
@@ -18,6 +18,13 @@ const TILES = [
         description: 'Leads generated from the Recharge / Buy Credits page',
         icon: Users,
         path: ROUTES.EVENTS_SUPER_ADMIN_LEADS,
+    },
+    {
+        key: 'companies',
+        title: 'Manage Companies',
+        description: 'Delete a company and its users',
+        icon: Building2,
+        path: ROUTES.EVENTS_SUPER_ADMIN_COMPANIES,
     },
 ];
 

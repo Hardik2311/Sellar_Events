@@ -13,7 +13,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({
   message = 'Please refresh the page. If the problem continues, try again in a moment.',
   icon = '⚠️',
 }) => (
-  <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
+  <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
     <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
       <span className="text-2xl">{icon}</span>
     </div>

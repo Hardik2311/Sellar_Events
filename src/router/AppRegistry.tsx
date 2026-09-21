@@ -15,7 +15,6 @@ const EventFieldSettings = lazy(() => import('../pages/EventSettings'));
 const CompanySettings = lazy(() => import('../pages/CompanySetting'));
 const AppSettings = lazy(() => import('../pages/AppSettings'));
 const ManageUsersPage = lazy(() => import('../pages/Reports/ManageUsersPage'));
-const UserAdd = lazy(() => import('../pages/UserAdd'));
 const SupportPage = lazy(() => import('../pages/SupportPage'));
 const AddOns = lazy(() => import('../pages/AddOns'));
 const WhatsAppIntegration = lazy(() => import('../pages/Whatsapp/WhatsAppIntegration'));
@@ -72,7 +71,6 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_SETTINGS_APP, component: guarded(Permission.EDIT_APP_SETTINGS, AppSettings) },
       { path: ROUTES.EVENTS_SETTINGS_USER_SETTINGS, component: UserSettingsHub }, // owner/manage-user check is inside the page itself
       { path: ROUTES.EVENTS_SETTINGS_USERS, component: ManageUsersPage },
-      { path: ROUTES.EVENTS_USER_ADD, component: UserAdd },
       { path: ROUTES.EVENTS_SETTINGS_PERMISSIONS, component: PermissionsSettings }, // owner-only check is inside the page itself
       { path: ROUTES.EVENTS_SUPPORT, component: SupportPage },
       { path: ROUTES.EVENTS_ACCOUNT_ADDONS, component: AddOns },

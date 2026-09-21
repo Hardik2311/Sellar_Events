@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
+import { logDebug } from '../lib/debugLog';
 
 export interface UserProfile {
   fullName: string;
@@ -59,15 +60,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = async (firebaseUser: User | null, retryCount = 0) => {
+  // Guards against overlapping loadProfile() calls racing each other — e.g.
+  // onAuthStateChanged firing again (token refresh, a login right after a
+  // logout) while a SLOWER earlier call (still in its 1200ms companyId
+  // retry loop) is still in flight. Without this, the older call can
+  // resolve AFTER the newer one and silently overwrite the correct profile
+  // with stale data — no error, just the UI quietly reverting to wrong
+  // state. Only the invocation matching the current generation is allowed
+  // to commit its result.
+  const generationRef = useRef(0);
+
+  const loadProfile = async (firebaseUser: User | null, myGeneration: number, retryCount = 0) => {
     if (!firebaseUser) {
-      setProfile(null);
+      if (myGeneration === generationRef.current) setProfile(null);
       return;
     }
 
     let companyId: string | undefined = undefined;
     try {
-      const tokenResult = await firebaseUser.getIdTokenResult(true);
+      // No forced refresh — `true` reissues the ID token over the network
+      // on every single auth resolution even when the cached one is still
+      // valid, adding a full round-trip to every load for no benefit here.
+      // Custom-claim changes (e.g. a fresh signup's companyId claim) are
+      // refreshed explicitly elsewhere (SignUp.tsx calls getIdToken(true)
+      // itself right after creating the company).
+      const tokenResult = await firebaseUser.getIdTokenResult();
       companyId = tokenResult.claims.companyId as string | undefined;
     } catch (e) {
       console.warn('Could not read id token claims:', e);
@@ -85,21 +102,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    if (myGeneration !== generationRef.current) return; // superseded while awaiting above
+
     if (!companyId) {
       // Claim propagation ya ownerUID query dono transient ho sakte hain
       // (fresh signup / newly created company). Turant permanent fallback
       // set karne se pehle 2 baar thoda ruk ke retry karo.
       if (retryCount < 2) {
         await new Promise((res) => setTimeout(res, 1200));
-        return loadProfile(firebaseUser, retryCount + 1);
+        return loadProfile(firebaseUser, myGeneration, retryCount + 1);
       }
       // Retries ke baad bhi company nahi mili — ab genuinely "no company yet".
-      setProfile({
-        fullName: firebaseUser.displayName || 'Organizer User',
-        email: firebaseUser.email || '',
-        role: 'admin',
-        companyId: '',
-      });
+      if (myGeneration === generationRef.current) {
+        setProfile({
+          fullName: firebaseUser.displayName || 'Organizer User',
+          email: firebaseUser.email || '',
+          role: 'admin',
+          companyId: '',
+        });
+      }
       return;
     }
 
@@ -113,6 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getDoc(companyDocRef).catch(() => null),
         getDoc(companyRootRef).catch(() => null),
       ]);
+
+      if (myGeneration !== generationRef.current) return; // superseded while awaiting above
 
       const userData = userSnap && userSnap.exists() ? userSnap.data() : {};
       const companyData = companySnap && companySnap.exists() ? companySnap.data() : {};
@@ -150,27 +173,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (e) {
       console.warn('Error reading user document:', e);
-      setProfile({
-        fullName: firebaseUser.displayName || 'Organizer User',
-        email: firebaseUser.email || '',
-        role: 'admin',
-        companyId,
-      });
+      if (myGeneration === generationRef.current) {
+        setProfile({
+          fullName: firebaseUser.displayName || 'Organizer User',
+          email: firebaseUser.email || '',
+          role: 'admin',
+          companyId,
+        });
+      }
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const myGeneration = ++generationRef.current;
+      logDebug('auth:stateChanged', { hasUser: !!firebaseUser, generation: myGeneration });
       setUser(firebaseUser);
-      await loadProfile(firebaseUser);
-      setLoading(false);
+      await loadProfile(firebaseUser, myGeneration);
+      if (myGeneration === generationRef.current) {
+        setLoading(false);
+        logDebug('auth:loadingResolved', { generation: myGeneration });
+      }
     });
 
     return () => unsubscribe();
   }, []);
 
   const refreshProfile = async () => {
-    await loadProfile(auth.currentUser);
+    const myGeneration = ++generationRef.current;
+    await loadProfile(auth.currentUser, myGeneration);
   };
 
   return (

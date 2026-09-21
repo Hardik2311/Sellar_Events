@@ -39,6 +39,7 @@ export function usePnlReport(companyId: string | undefined, initialEventId?: str
           startDate: '2000-01-01',
           endDate: formatDateForInput(new Date()),
           cacheKey: `pnl-report-events-${companyId}`,
+          includeSalesTrend: false, // just the event picker — trend isn't read here
         });
         setEvents(data.events || []);
       } catch (e) {

@@ -15,6 +15,7 @@ import { canManageUsers } from '../enum/enum';
 import type { JSX } from 'react';
 import ShowWrapper from '../components/ShowWrapper';
 import { useIncomes } from '../hooks/useIncomes';
+import { logDebug } from '../lib/debugLog';
 
 const NAV_ITEMS = [
   { to: '/events', label: 'Dashboard', icon: <LayoutDashboard size={18} />, permission: Permission.VIEW_DASHBOARD },
@@ -106,15 +107,29 @@ const EventsLayout = () => {
     (forceRefresh = false) => {
       if (!profile?.companyId) return;
       setEventsLoading(true);
+      const startedAt = performance.now();
       return fetchEventDashboardData({
         companyId: profile.companyId,
         startDate: '2000-01-01',
         endDate: '2100-01-01',
         cacheKey: `event_list_cache_v2_${profile.companyId}`,
         forceRefresh,
+        // Just a picker list for the Expense/Income/Share modals — EventListCard
+        // never renders salesTrend, so skip building it (see fetchEventDashboardData).
+        includeSalesTrend: false,
       })
-        .then((result) => setEvents(result.events))
-        .catch((e) => console.error('Failed to load events for expense modal:', e))
+        .then((result) => {
+          setEvents(result.events);
+          logDebug('layout:loadEvents:done', {
+            ms: Math.round(performance.now() - startedAt),
+            eventCount: result.events.length,
+            forceRefresh,
+          });
+        })
+        .catch((e) => {
+          console.error('Failed to load events for expense modal:', e);
+          logDebug('layout:loadEvents:error', { message: String(e), ms: Math.round(performance.now() - startedAt) });
+        })
         .finally(() => setEventsLoading(false));
     },
     [profile?.companyId]
@@ -131,7 +146,7 @@ const EventsLayout = () => {
     }`;
 
   return (
-    <div className="h-dvh w-screen flex flex-col md:flex-row overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
+    <div className="h-screen w-screen flex flex-col md:flex-row overflow-hidden bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC]">
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-[#1E293B] border-r border-slate-200 dark:border-slate-800 h-full shrink-0 z-20">
         <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800">

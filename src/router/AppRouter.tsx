@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration } from 'react-router-dom';
 import EventsLayout from '../Layout/EventsLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
-import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorScreen from '../components/ErrorScreen';
 import { ROUTES } from '../constants/routes.constants';
 import { AppRegistry } from './AppRegistry';
@@ -20,6 +19,7 @@ const CheckoutPage = lazy(() => import('../pages/Checkout'));
 const SuperAdminHub = lazy(() => import('../pages/SuperAdmin/SuperAdminHub'));
 const SuperAdminSupportTickets = lazy(() => import('../pages/SuperAdmin/SupportAdminSupportTickets'));
 const SuperAdminPlanLeads = lazy(() => import('../pages/SuperAdmin/SuperAdminPlanLeads'));
+const SuperAdminCompanies = lazy(() => import('../pages/SuperAdmin/SuperAdminCompanies'));
 
 const Loading = () => <div>Loading...</div>;
 
@@ -93,6 +93,7 @@ const router = subdomain
               { index: true, element: <SuperAdminHub /> },
               { path: 'support-tickets', element: <SuperAdminSupportTickets /> },
               { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
+              { path: 'companies', element: <SuperAdminCompanies /> },
             ],
           },
 
@@ -114,11 +115,9 @@ const router = subdomain
 
 const AppRouter = () => {
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<Loading />}>
-        <RouterProvider router={router} />
-      </Suspense>
-    </ErrorBoundary>
+    <Suspense fallback={<Loading />}>
+      <RouterProvider router={router} />
+    </Suspense>
   );
 };
 

@@ -38,6 +38,7 @@ export function useCustomerReport(companyId: string | undefined, initialEventId?
           startDate: '2000-01-01',
           endDate: formatDateForInput(new Date()),
           cacheKey: `customer-report-events-${companyId}`,
+          includeSalesTrend: false, // just the event picker — trend isn't read here
         });
         setEvents(data.events || []);
       } catch (e) {

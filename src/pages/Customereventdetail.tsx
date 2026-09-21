@@ -94,7 +94,7 @@ const CustomerEventDetail: React.FC = () => {
   }, [quantities, event?.id]);
   if (loading) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
+      <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
         <Loader2 className="animate-spin text-slate-400" size={24} />
       </div>
     );
@@ -102,7 +102,7 @@ const CustomerEventDetail: React.FC = () => {
 
   if (domainError || (!loading && !event)) {
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
         <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
           <span className="text-2xl">🎟️</span>
         </div>
@@ -146,7 +146,7 @@ const CustomerEventDetail: React.FC = () => {
     const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
 
     return (
-      <div className="fixed inset-0 z-50 h-dvh w-full overflow-hidden bg-slate-100 dark:bg-[#0F172A]">
+      <div className="fixed inset-0 z-50 h-screen w-full overflow-hidden bg-slate-100 dark:bg-[#0F172A]">
         {bgImage && (
           <div
             className="absolute inset-0 scale-110 bg-cover bg-center blur-xl"

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { useAuth } from '../context/AuthContext';
 import {
   FloatingLabelInput,
   Spinner,
@@ -16,11 +17,20 @@ import FloatingEventIcons from '../components/ui/FloatingEventIcons';
  */
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Navigate once AuthContext's own auth-state listener has actually picked
+  // up the new session — navigating straight from the submit handler races
+  // that listener, so ProtectedRoute can render with the still-stale old
+  // `user` value and bounce the freshly-logged-in user right back to /login.
+  useEffect(() => {
+    if (user) navigate('/events', { replace: true });
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +45,7 @@ const Login: React.FC = () => {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/events');
+      // Redirect happens via the effect above once `user` updates.
     } catch (err: any) {
       console.error('Login error:', err);
       if (
@@ -49,7 +59,6 @@ const Login: React.FC = () => {
       } else {
         setError('Login failed. Please try again.');
       }
-    } finally {
       setLoading(false);
     }
   };

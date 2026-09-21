@@ -35,7 +35,8 @@ export const ROUTES = {
   // Super Admin (protected inside the pages themselves via SUPER_ADMIN_UIDS check)
   EVENTS_SUPER_ADMIN: '/super-admin', 
   EVENTS_SUPER_ADMIN_TICKETS: '/super-admin/support-tickets',   // NEW – support tickets raised from Support page
-  EVENTS_SUPER_ADMIN_LEADS: '/super-admin/plan-leads',  
+  EVENTS_SUPER_ADMIN_LEADS: '/super-admin/plan-leads',
+  EVENTS_SUPER_ADMIN_COMPANIES: '/super-admin/companies', // NEW – manage/delete companies
 
   // Public, customer-facing routes
   // :slug is "event-title--<firestoreId>" — id is parsed out after the last "--"

@@ -6,7 +6,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '../lib/firebase'
+import { auth, getFunctionsInstance } from '../lib/firebase'
 
 import {
   FiUser,
@@ -291,6 +291,7 @@ const Signup: React.FC = () => {
 
       // Execute Cloud Function
 
+      const functions = await getFunctionsInstance();
       const createCompany = httpsCallable(functions, 'createCompany');
       await createCompany({
         token,
