@@ -105,11 +105,11 @@ const OrganizerEventCard: React.FC<{
           />
         )}
         <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-          <span className="rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white shadow-sm">
+          <span className="brand-mono rounded-sm bg-[#007A78] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
             {label}
           </span>
           {event.isPrivate && (
-            <span className="flex items-center gap-1 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
+            <span className="brand-mono flex items-center gap-1 rounded-sm bg-[#007A78] px-2 py-0.5 text-[10px] font-bold text-white">
               <Lock size={12} /> Private
             </span>
           )}
@@ -202,7 +202,7 @@ const OrganizerEventCard: React.FC<{
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
-        <h3 className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100 cursor-pointer" onClick={onOpen}>
+        <h3 className="brand-display line-clamp-2 text-base leading-tight text-slate-800 dark:text-slate-100 cursor-pointer" onClick={onOpen}>
           {stripHtmlTags(event.title)}
         </h3>
 
@@ -233,7 +233,7 @@ const OrganizerEventCard: React.FC<{
         </div>
 
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-sm font-semibold text-[#007A78]">
+          <span className="brand-display text-lg text-[#007A78]">
             {event.registrationMode === 'rsvp' ? 'RSVP' : getPriceLabel(event.tiers)}
           </span>
           {event.registrationMode === 'rsvp' ? (
@@ -490,7 +490,7 @@ const OrganizerEventDiscover: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
+    <div className="brand-theme flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 shadow-xs">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">

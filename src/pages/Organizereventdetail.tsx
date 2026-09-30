@@ -281,7 +281,7 @@ const OrganizerEventDetail: React.FC = () => {
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
+    <div className="brand-theme flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
       <div className={`relative h-74 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
@@ -352,7 +352,7 @@ const OrganizerEventDetail: React.FC = () => {
 
         {/* category badge — back to its original spot, overlaid on the image */}
         <div className="absolute inset-x-0 bottom-0 p-4">
-          <span className="inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="brand-mono inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-700">
             {label}
           </span>
         </div>
@@ -364,7 +364,7 @@ const OrganizerEventDetail: React.FC = () => {
           {/* Title */}
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
             <CardContent className="pt-4">
-              <RichTextDisplay as="h1" html={event.title} className="text-2xl font-bold text-slate-900 dark:text-white" />
+              <RichTextDisplay as="h1" html={event.title} className="brand-display text-3xl leading-tight text-slate-900 dark:text-white" />
             </CardContent>
           </Card>
 

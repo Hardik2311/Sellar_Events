@@ -14,7 +14,7 @@ interface CompanyData {
   eventCredits?: number;
 }
 
-const SUPER_ADMIN_UIDS: string[] = ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
+const SUPER_ADMIN_UIDS: string[] = ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2', '8ZanoQBNWbeKTfOIVrddKObJuP02'];
 
 const SuperAdminPlanLeads: React.FC = () => {
   const navigate = useNavigate();
