@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -62,10 +62,9 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
 
 export function usePublicEvents(targetCompanyId?: string | null) {
   const { profile } = useAuth();
-  // allEvents = published events including private ones (needed so a direct
-  // shared link + code can still resolve to the event).
-  const [allEvents, setAllEvents] = useState<PublicEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rawEvents, setRawEvents] = useState<PublicEvent[]>([]);
+const [loading, setLoading] = useState(true);
+const [nowTick, setNowTick] = useState(0); // forces re-filter when a credit expires
 
   useEffect(() => {
     const effectiveCompanyId = targetCompanyId || profile?.companyId;
@@ -99,13 +98,10 @@ export function usePublicEvents(targetCompanyId?: string | null) {
       );
 
       unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
-        const mapped = snapshot.docs
-          .map((docSnap) => mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId))
-          // NEW — hide events whose credit validity has run out even if the
-          // organizer hasn't opened their dashboard yet to trigger the
-          // status flip to 'draft'. Effectively "already unpublished".
-          .filter((e) => !isCreditExpired(e));
-        setAllEvents(mapped);
+                const mapped = snapshot.docs.map((docSnap) =>
+          mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId)
+        );
+        setRawEvents(mapped); // expiry filtering happens below, so it re-runs on a timer
         setLoading(false);
       });
     };
@@ -114,6 +110,27 @@ export function usePublicEvents(targetCompanyId?: string | null) {
 
     return () => unsubscribe();
   }, [targetCompanyId, profile?.companyId, profile?.organizationName]);
+
+    // Hide events whose credit validity has run out. Re-evaluated whenever
+  // data changes OR the expiry timer below fires.
+  const allEvents = useMemo(
+    () => rawEvents.filter((e) => !isCreditExpired(e)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawEvents, nowTick]
+  );
+
+  useEffect(() => {
+    const nextExpiry = rawEvents
+      .filter((e) => e.creditExpiresAt)
+      .map((e) => new Date(e.creditExpiresAt as string).getTime())
+      .filter((t) => !Number.isNaN(t) && t > Date.now())
+      .sort((a, b) => a - b)[0];
+    if (!nextExpiry) return;
+
+    const delay = Math.min(nextExpiry - Date.now() + 1000, 2147483647);
+    const timer = setTimeout(() => setNowTick((t) => t + 1), delay);
+    return () => clearTimeout(timer);
+  }, [rawEvents, nowTick]);
 
   // Customer-facing listing must never show private events — they should
   // only be reachable via a direct shared link + access code.
