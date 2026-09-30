@@ -5,12 +5,16 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
 import { stripHtmlTags } from '../lib/utils';
-import type { AccessCodeEntry, PublicEvent } from '../data/events';
+import { formatDateRange, formatTime, type AccessCodeEntry, type PublicEvent } from '../data/events';
 import QRCode from 'qrcode';
 import { loadImageAsCoverBanner } from '../lib/imageBanner';
 import TicketConfirmation from './TicketConfirmation';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
+import BrandNavHeader from './brand/BrandNavHeader';
+import SectionLabel from './brand/SectionLabel';
+import TicketOrderSummary from './brand/TicketOrderSummary';
+import CheckoutStepPills from './brand/CheckoutStepPills';
 
 const PDF_BANNER_WIDTH = 760;
 const PDF_BANNER_HEIGHT = 220;
@@ -41,6 +45,7 @@ interface Props {
   breakdown: Breakdown[];
   quantities: Record<string, number>;
   accessCode?: string;
+  organizationName?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -78,7 +83,7 @@ interface AttendeeFormEntry {
   phone: string;
 }
 
-const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, accessCode, onClose, onSuccess }) => {
+const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, accessCode, organizationName, onClose, onSuccess }) => {
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [consentChecked, setConsentChecked] = useState(false);
@@ -466,290 +471,352 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     );
   }
 
+  const submitDisabled =
+    !screenshot ||
+    !consentChecked ||
+    finalTotal <= 0 ||
+    !attendeeDetailsComplete ||
+    !customFieldsValid ||
+    submitting ||
+    isCompressing;
+
+  const steps = [
+    { id: 'manual-details', label: 'Details' },
+    ...(customFields.length > 0 ? [{ id: 'manual-questions', label: 'Questions' }] : []),
+    { id: 'manual-payment', label: 'Payment' },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-3" onClick={onClose}>
-      <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-sm bg-white dark:bg-[#1E293B] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 p-3">
-          <h2 className="text-base font-bold text-slate-800 dark:text-white">Complete payment</h2>
-          <button onClick={onClose} className="rounded-sm p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">
-            <X size={18} />
-          </button>
+    <div className="brand-theme fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[var(--brand-cream)]">
+      <BrandNavHeader organizationName={organizationName} variant="minimal" />
+
+      <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-8 lg:px-12">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <button
+              onClick={onClose}
+              className="brand-mono mb-1 flex items-center gap-1.5 text-xs font-bold text-black/50 hover:text-black"
+            >
+              &larr; Back to event
+            </button>
+            <h1 className="brand-display text-4xl leading-none text-[var(--brand-black)]">
+              Almost <span className="text-[var(--brand-teal)]">in.</span>
+            </h1>
+          </div>
+          <CheckoutStepPills steps={steps} />
         </div>
 
-        {(
-          <div className="grow overflow-y-auto p-4 space-y-4">
-            <div className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 space-y-1">
-              {taxedBreakdown.map((b) => (
-                <div key={b.id} className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
-                  <span>{b.qty}× {b.name}</span>
-                  <span>₹{b.itemBase.toFixed(2)}</span>
-                </div>
-              ))}
-              {totalTaxAmount > 0 && (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>{taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}</span>
-                  <span>₹{totalTaxAmount.toFixed(2)}</span>
-                </div>
-              )}
-              {roundOffAmt !== 0 && (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Round off</span>
-                  <span>₹{roundOffAmt.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1.5 text-sm font-bold text-slate-800 dark:text-white">
-                <span>Total</span>
-                <span>₹{finalTotal.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
+        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+          {/* ── Left: form ─────────────────────────────────────────────── */}
+          <div className="space-y-6 lg:w-[760px]">
+            {/* 01 Your details */}
+            <div id="manual-details">
+              <SectionLabel index={1} className="mb-3">Your details</SectionLabel>
+              <div className="rounded-lg border border-black/10 bg-white p-4 space-y-4">
+                {ticketSlots.length > 1 && (
+                  <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600">
+                    Use the same details for all {ticketSlots.length} tickets
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={sameForAll}
+                      onClick={() => handleToggleSameForAll(!sameForAll)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sameForAll ? 'bg-[var(--brand-teal)]' : 'bg-gray-300'
+                        }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${sameForAll ? 'translate-x-4' : 'translate-x-1'
+                          }`}
+                      />
+                    </button>
+                  </label>
+                )}
 
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              {event.payeeName || 'Kindly pay the exact amount on the below QR'}
-            </p>
-
-
-            {qrDataUrl ? (
-              <img src={qrDataUrl} alt="Payment QR" className="mx-auto w-48 h-48 rounded-sm border border-slate-200 dark:border-slate-700 object-contain bg-white" />
-            ) : (
-              <p className="text-xs text-red-500">QR not set up by the organizer.</p>
-            )}
-
-            {event.upiId && (
-              <button
-                onClick={handleCopyUpi}
-                className="mx-auto flex items-center gap-1.5 rounded-sm border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200"
-              >
-                {event.upiId} {copied ? <Check size={12} /> : <Copy size={12} />}
-              </button>
-            )}
-
-            {/* Attendee details — needed so each attendee doc is complete, like a normal ticket */}
-            {ticketSlots.length > 1 && (
-              <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                Use the same details for all {ticketSlots.length} tickets
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={sameForAll}
-                  onClick={() => handleToggleSameForAll(!sameForAll)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sameForAll ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
-                    }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${sameForAll ? 'translate-x-4' : 'translate-x-1'
-                      }`}
-                  />
-                </button>
-              </label>
-            )}
-
-            <div className="space-y-4">
-              {attendeeDetails.map((entry, index) => {
-                if (sameForAll && index > 0) return null;
-                return (
-                  <div key={index} className="space-y-2">
-                    {ticketSlots.length > 1 && !sameForAll && (
-                      <p className="text-xs font-bold text-[#007A78]">
-                        Ticket {index + 1} · {ticketSlots[index]?.tierName}
-                      </p>
-                    )}
-                    <input
-                      type="text"
-                      placeholder="Full name *"
-                      value={entry.name}
-                      onChange={(e) => updateAttendee(index, 'name', e.target.value)}
-                      className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          placeholder="Phone *"
-                          value={entry.phone}
-                          onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          maxLength={10}
-                          className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                        />
-                        {entry.phone && !isValidPhone(entry.phone) && (
-                          <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <input
-                          type="email"
-                          placeholder="Email (optional)"
-                          value={entry.email}
-                          onChange={(e) => updateAttendee(index, 'email', e.target.value)}
-                          className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]"
-                        />
-                        {entry.email && !isValidEmail(entry.email) && (
-                          <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {customFields.length > 0 && (
-              <div className="space-y-2">
-                {customFields.map((field) => {
-                  const value = customAnswers[field.id] ?? '';
-                  const baseClass =
-                    'w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-[#007A78]';
-
+                {attendeeDetails.map((entry, index) => {
+                  if (sameForAll && index > 0) return null;
                   return (
-                    <div key={field.id}>
-                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        {field.label}{field.required ? ' *' : ''}
-                      </label>
-
-                      {field.type === 'textarea' && (
-                        <textarea
-                          rows={3}
-                          value={value}
-                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                          placeholder={field.label}
-                          className={baseClass}
-                        />
+                    <div key={index} className="space-y-2">
+                      {ticketSlots.length > 1 && !sameForAll && (
+                        <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
+                          Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                        </p>
                       )}
-
-                      {field.type === 'select' && (
-                        <select
-                          value={value}
-                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                          className={baseClass}
-                        >
-                          <option value="">Select…</option>
-                          {(field.options ?? []).map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {field.type === 'checkbox' && (
-                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
                           <input
-                            type="checkbox"
-                            checked={value === 'true'}
-                            onChange={(e) => updateCustomAnswer(field.id, e.target.checked ? 'true' : 'false')}
-                            className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300"
+                            type="text"
+                            placeholder="As on your ID"
+                            value={entry.name}
+                            onChange={(e) => updateAttendee(index, 'name', e.target.value)}
+                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
                           />
-                          {field.label}
-                        </label>
-                      )}
-
-                      {field.type === 'text' && (
-                        <input
-                          type="text"
-                          value={value}
-                          onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                          placeholder={field.label}
-                          className={baseClass}
-                        />
-                      )}
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            placeholder="+91"
+                            value={entry.phone}
+                            onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            maxLength={10}
+                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
+                          />
+                          {entry.phone && !isValidPhone(entry.phone) && (
+                            <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                          <input
+                            type="email"
+                            placeholder="Tickets are sent here"
+                            value={entry.email}
+                            onChange={(e) => updateAttendee(index, 'email', e.target.value)}
+                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
+                          />
+                          {entry.email && !isValidEmail(entry.email) && (
+                            <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            )}
-
-            {/* Screenshot upload */}
-            <div>
-              <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">Upload the screenshot once done *</p>
-              <label
-                className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 ${screenshotError ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                  }`}
-              >
-                {isCompressing ? (
-                  <Loader2 size={18} className="animate-spin text-slate-400" />
-                ) : (
-                  <Upload size={18} className="text-slate-400" />
-                )}
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  {isCompressing
-                    ? 'Processing image…'
-                    : screenshot
-                      ? 'Screenshot selected tap to change'
-                      : 'Click to choose a file or drag here'}
-                </span>
-                <span className="text-[10px] text-slate-400">Size limit 1 MB</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={isCompressing}
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
-              </label>
-              {screenshotError && <p className="mt-1 text-xs font-medium text-red-500">{screenshotError}</p>}
-              {screenshot && (
-                <div className="relative mt-2 w-fit mx-auto">
-                  <img src={screenshot} alt="Screenshot preview" className="max-h-32 rounded-sm border border-slate-200 dark:border-slate-700" />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setScreenshot(null);
-                      setScreenshotError(null);
-                    }}
-                    className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow hover:bg-slate-900"
-                    aria-label="Remove screenshot"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
             </div>
 
-            <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={consentChecked}
-                onChange={(e) => setConsentChecked(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
-              />
-              This confirms the submission of your ticket request. Final entry/pass allocation is subject to the organizer’s approval and discretion. Any further communication will be shared by the organizer.
-            </label>
+            {/* 02 A few questions */}
+            {customFields.length > 0 && (
+              <div id="manual-questions">
+                <SectionLabel index={2} className="mb-3">A few questions</SectionLabel>
+                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-3">
+                  {customFields.map((field) => {
+                    const value = customAnswers[field.id] ?? '';
+                    const baseClass =
+                      'w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]';
 
-            {error && (
-              <div
-                ref={errorRef}
-                className="flex items-start gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
-              >
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <span>{error}</span>
+                    return (
+                      <div key={field.id}>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">
+                          {field.label}{field.required ? ' *' : ''}
+                        </label>
+
+                        {field.type === 'textarea' && (
+                          <textarea
+                            rows={3}
+                            value={value}
+                            onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                            placeholder={field.label}
+                            className={baseClass}
+                          />
+                        )}
+
+                        {field.type === 'select' && (
+                          <select
+                            value={value}
+                            onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                            className={baseClass}
+                          >
+                            <option value="">Select…</option>
+                            {(field.options ?? []).map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {field.type === 'checkbox' && (
+                          <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={value === 'true'}
+                              onChange={(e) => updateCustomAnswer(field.id, e.target.checked ? 'true' : 'false')}
+                              className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300"
+                            />
+                            {field.label}
+                          </label>
+                        )}
+
+                        {field.type === 'text' && (
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
+                            placeholder={field.label}
+                            className={baseClass}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {!submitted && (
-          <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-3">
-            <button
-              onClick={handleSubmit}
-              disabled={
-                !screenshot ||
-                !consentChecked ||
-                finalTotal <= 0 ||
-                !attendeeDetailsComplete ||
-                !customFieldsValid ||
-                submitting ||
-                isCompressing
-              }
-              className="w-full rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#006361] disabled:opacity-40"
-            >
-              {submitting ? 'Submitting…' : "I've paid confirm my ticket"}
-            </button>
+            {/* 03 Payment */}
+            <div id="manual-payment">
+              <SectionLabel index={customFields.length > 0 ? 3 : 2} className="mb-3">Payment</SectionLabel>
+              <div className="rounded-lg border border-black/10 bg-white p-4 space-y-4">
+                <div className="rounded-sm bg-[var(--brand-black)] p-4 text-center">
+                  <p className="brand-mono text-[10px] text-white/50">
+                    {event.payeeName ? '' : 'Label shown above QR'}
+                  </p>
+                  {qrDataUrl ? (
+                    <img src={qrDataUrl} alt="Payment QR" className="mx-auto mt-2 w-40 h-40 rounded-sm border border-white/10 object-contain bg-white" />
+                  ) : (
+                    <p className="mt-2 text-xs text-red-400">QR not set up by the organizer.</p>
+                  )}
+                  <p className="brand-display mt-3 text-2xl text-[var(--brand-yellow)]">
+                    Pay &#8377;{finalTotal.toLocaleString('en-IN')}
+                  </p>
+                </div>
+
+                {event.upiId && (
+                  <button
+                    onClick={handleCopyUpi}
+                    className="brand-mono mx-auto flex items-center gap-1.5 rounded-sm border border-slate-300 px-3 py-1.5 text-[11px] font-bold text-slate-700"
+                  >
+                    {event.upiId} {copied ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
+                )}
+
+                <ol className="space-y-1.5">
+                  {['Scan the QR with any UPI app', 'Pay the exact amount shown', 'Upload your payment screenshot below'].map((step, i) => (
+                    <li key={step} className="flex items-start gap-2 text-sm text-slate-700">
+                      <span className="brand-mono flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-[var(--brand-black)] text-[10px] font-bold text-white">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+
+                {/* Order breakdown, for transparency alongside the QR */}
+                <div className="rounded-sm bg-slate-50 p-3 space-y-1">
+                  {taxedBreakdown.map((b) => (
+                    <div key={b.id} className="flex justify-between text-xs text-slate-600">
+                      <span>{b.qty}&times; {b.name}</span>
+                      <span>&#8377;{b.itemBase.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {totalTaxAmount > 0 && (
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>{taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}</span>
+                      <span>&#8377;{totalTaxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {roundOffAmt !== 0 && (
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Round off</span>
+                      <span>&#8377;{roundOffAmt.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5 text-sm font-bold text-slate-800">
+                    <span>Total</span>
+                    <span>&#8377;{finalTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                {/* Screenshot upload */}
+                <div>
+                  <p className="mb-1 text-sm font-medium text-slate-700">Upload payment screenshot *</p>
+                  <label
+                    className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed p-4 text-center hover:bg-slate-50 ${screenshotError ? 'border-red-400' : 'border-slate-300'
+                      }`}
+                  >
+                    {isCompressing ? (
+                      <Loader2 size={18} className="animate-spin text-slate-400" />
+                    ) : (
+                      <Upload size={18} className="text-slate-400" />
+                    )}
+                    <span className="text-xs font-medium text-slate-600">
+                      {isCompressing
+                        ? 'Processing image…'
+                        : screenshot
+                          ? 'Screenshot selected — tap to change'
+                          : 'Click to choose a file or drag here'}
+                    </span>
+                    <span className="brand-mono text-[10px] text-slate-400">PNG or JPG &middot; under 1 MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isCompressing}
+                      onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                    />
+                  </label>
+                  {screenshotError && <p className="mt-1 text-xs font-medium text-red-500">{screenshotError}</p>}
+                  {screenshot && (
+                    <div className="relative mt-2 w-fit mx-auto">
+                      <img src={screenshot} alt="Screenshot preview" className="max-h-32 rounded-sm border border-slate-200" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setScreenshot(null);
+                          setScreenshotError(null);
+                        }}
+                        className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow hover:bg-slate-900"
+                        aria-label="Remove screenshot"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 bg-white accent-[var(--brand-teal)]"
+                  />
+                  You&rsquo;re added to the guest list as soon as you submit. Final entry/pass allocation is subject to the organizer&rsquo;s approval and discretion.
+                </label>
+
+                {error && (
+                  <div
+                    ref={errorRef}
+                    className="flex items-start gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
+                  >
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitDisabled}
+                  className="brand-mono w-full rounded-sm bg-[var(--brand-teal)] py-2.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-40"
+                >
+                  {submitting ? 'Submitting…' : "I've paid — confirm my ticket"}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* ── Right: sticky order summary ───────────────────────────── */}
+          <div className="lg:sticky lg:top-6 lg:flex-1 lg:self-start">
+            <TicketOrderSummary
+              eventTitle={stripHtmlTags(event.title)}
+              dateLabel={`${formatDateRange(event.date, event.endDate)} · ${formatTime(event.time)}`}
+              venueLabel={event.isOnline ? 'Online' : event.venue}
+              imageUrl={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
+              lineItems={taxedBreakdown.map((b) => ({
+                id: b.id,
+                label: `${b.qty}× ${b.name}`,
+                amountLabel: `₹${b.itemTotal.toLocaleString('en-IN')}`,
+              }))}
+              totalLabel={`₹${finalTotal.toLocaleString('en-IN')}`}
+              ctaLabel={submitting ? 'Submitting…' : screenshot ? "I've paid — confirm" : 'Upload screenshot to confirm'}
+              onCta={handleSubmit}
+              ctaDisabled={submitDisabled}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Minus, Plus, User, Loader2, Ticket, X } from 'lucide-react';
+import { ArrowLeft, MapPin, Wifi, Heart, Share2, X, Navigation } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
-import CoverImageDisplay from '../components/ui/CoverImageDisplay'; // NEW
+import CoverImageDisplay from '../components/ui/CoverImageDisplay';
 import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
@@ -21,6 +21,12 @@ import RichTextDisplay from '../components/ui/RichTextDisplay';
 import ManualQRPaymentCard from '../components/ManualQRpaymentCard';
 import { DEFAULT_TEXT_STYLE } from '../types/event.types';
 import { useSearchParams } from 'react-router-dom'; // NEW — reads ?code= from the shared link
+import BrandNavHeader from '../components/brand/BrandNavHeader';
+import SectionLabel from '../components/brand/SectionLabel';
+import PrivateAccessGate from '../components/brand/PrivateAccessGate';
+import TicketPanel from '../components/brand/TicketPanel';
+import CustomerFooter from '../components/CustomerFooter';
+import { stripHtmlTags } from '../lib/utils';
 
 const CustomerEventDetail: React.FC = () => {
   const { slug, companyId } = useParams<{ slug: string; companyId?: string }>();
@@ -40,6 +46,7 @@ const CustomerEventDetail: React.FC = () => {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showManualQR, setShowManualQR] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // NEW — access-code gate state
   const [codeInput, setCodeInput] = useState('');
@@ -94,20 +101,20 @@ const CustomerEventDetail: React.FC = () => {
   }, [quantities, event?.id]);
   if (loading) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center bg-slate-100 dark:bg-[#0F172A]">
-        <Loader2 className="animate-spin text-slate-400" size={24} />
+      <div className="brand-theme flex h-dvh w-full items-center justify-center bg-[var(--brand-cream)]">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-teal)] border-t-transparent" />
       </div>
     );
   }
 
   if (domainError || (!loading && !event)) {
     return (
-      <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-slate-100 p-4 text-center dark:bg-[#0F172A]">
-        <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
+      <div className="brand-theme flex h-dvh w-full flex-col items-center justify-center gap-4 bg-[var(--brand-cream)] p-4 text-center">
+        <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center">
           <span className="text-2xl">🎟️</span>
         </div>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Event Not Found</h2>
-        <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
+        <h2 className="brand-display text-xl text-[var(--brand-black)]">Event not found</h2>
+        <p className="max-w-xs text-sm text-black/50">
           We couldn&apos;t find this event. It might have been removed or the link is incorrect.
         </p>
         <button
@@ -116,7 +123,7 @@ const CustomerEventDetail: React.FC = () => {
               getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
             )
           }
-          className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-900 dark:hover:bg-[#22b8a5]"
+          className="brand-mono mt-2 rounded-sm bg-[var(--brand-yellow)] px-6 py-2.5 text-xs font-bold text-black shadow-sm hover:brightness-95"
         >
           Return to Events
         </button>
@@ -146,44 +153,14 @@ const CustomerEventDetail: React.FC = () => {
     const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
 
     return (
-      <div className="fixed inset-0 z-50 h-dvh w-full overflow-hidden bg-slate-100 dark:bg-[#0F172A]">
-        {bgImage && (
-          <div
-            className="absolute inset-0 scale-110 bg-cover bg-center blur-xl"
-            style={{ backgroundImage: `url(${bgImage})` }}
-            aria-hidden="true"
-          />
-        )}
-        <div className="absolute inset-0 bg-black/55" aria-hidden="true" />
-
-        {/* Popup card — frosted/translucent, floats over the dimmed backdrop */}
-        <div className="relative z-10 flex h-full w-full items-center justify-center p-6">
-          <div className="flex w-full max-w-xs flex-col items-center gap-4 rounded-lg border border-white/15 bg-white/10 p-6 text-center shadow-2xl backdrop-blur-xl">
-            <Ticket size={28} className="text-[#2DD4BF]" />
-            <div>
-              <h2 className="text-base font-semibold text-white">Enter access code</h2>
-              <p className="mt-1 text-sm text-slate-200">This event link is code-protected. Enter the code shared with you.</p>
-            </div>
-            <input
-              type="text"
-              value={codeInput}
-              onChange={(e) => { setCodeInput(e.target.value); setCodeError(false); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
-              placeholder="Enter code"
-              maxLength={6}
-              className="w-full rounded-sm border border-white/30 bg-white/95 py-2.5 px-3 text-center text-lg font-semibold tracking-widest uppercase text-slate-800 outline-none backdrop-blur-sm focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#2DD4BF]"
-            />
-            {codeError && <p className="text-xs text-red-300">Incorrect code. Please try again.</p>}
-            <button
-              onClick={handleVerify}
-              disabled={!codeInput.trim()}
-              className="w-full rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40"
-            >
-              Unlock event
-            </button>
-          </div>
-        </div>
-      </div>
+      <PrivateAccessGate
+        organizationName={settings.organizationName}
+        bgImage={bgImage}
+        codeInput={codeInput}
+        onCodeChange={(v) => { setCodeInput(v); setCodeError(false); }}
+        onVerify={handleVerify}
+        codeError={codeError}
+      />
     );
   }
 
@@ -216,7 +193,7 @@ const CustomerEventDetail: React.FC = () => {
   const setQty = (tierId: string, next: number) => {
     const max = remainingFor(tierId);
     const totalOtherTiers = Object.entries(quantities)
-      .filter(([id]) => id !== tierId)
+      .filter(([tid]) => tid !== tierId)
       .reduce((s, [, n]) => s + n, 0);
     const orderCap = Math.max(0, maxPerOrder - totalOtherTiers);
     const clamped = Math.max(0, Math.min(next, max, orderCap));
@@ -246,13 +223,24 @@ const CustomerEventDetail: React.FC = () => {
     }));
 
   const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
+
   const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
     navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/');
   };
+
+  const shareThisEvent = async () => {
+    const shareUrl = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: stripHtmlTags(event.title), url: shareUrl });
+      } catch {
+        // user cancelled share sheet, no-op
+      }
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+    }
+  };
+
   const handleGetTickets = () => {
     if (event.registrationMode === 'tickets' && event.paymentCollectionMode === 'manual_qr') {
       setShowManualQR(true); // inline QR card, no navigation to /checkout
@@ -266,10 +254,81 @@ const CustomerEventDetail: React.FC = () => {
       : undefined;
     navigate(checkoutPath, { state: { quantities, accessCode } });
   };
+
+  const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`;
+
+  // ── Ticket panel (right rail on desktop / right-after-title on mobile) ──
+  const ticketPanel =
+    event.registrationMode === 'rsvp' ? (
+      <div className="rounded-lg border border-black/10 bg-white p-4">
+        <h2 className="brand-display text-lg text-[var(--brand-black)]">RSVP</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          This event doesn&rsquo;t need a ticket — register through the organizer&rsquo;s form to attend.
+        </p>
+        {event.rsvpLink ? (
+          <a
+            href={consentBlocking ? undefined : event.rsvpLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={consentBlocking}
+            onClick={(e) => { if (consentBlocking) e.preventDefault(); }}
+            className={`brand-mono mt-3 inline-flex items-center gap-1.5 rounded-sm bg-[var(--brand-yellow)] px-4 py-2 text-xs font-bold text-black hover:brightness-95 ${consentBlocking ? 'opacity-40 pointer-events-none' : ''}`}
+          >
+            {event.rsvpButtonLabel || 'RSVP Now'}
+          </a>
+        ) : (
+          <p className="mt-3 text-xs text-red-500">RSVP link isn&rsquo;t set up yet — check back soon.</p>
+        )}
+        {consentBlocking && (
+          <p className="mt-2 text-xs text-red-500">Please acknowledge the important information above to continue.</p>
+        )}
+      </div>
+    ) : (
+      <TicketPanel
+        maxPerOrder={maxPerOrder}
+        allSoldOut={allSoldOut}
+        emptyMessage={visibleTiers.length === 0 ? 'No tickets are available for this event right now.' : 'All tickets for this event are sold out.'}
+        tiers={visibleTiers.map((tier) => {
+          const remaining = remainingFor(tier.id);
+          const soldOut = remaining <= 0;
+          const qty = quantities[tier.id] ?? 0;
+          return {
+            id: tier.id,
+            name: tier.name,
+            priceLabel: tier.price === 0 ? 'Free' : `₹${tier.price.toLocaleString('en-IN')}`,
+            remainingLabel: settings.ticketDisplay.showTicketsRemaining ? (soldOut ? 'Sold out' : `${displayRemainingFor(tier.id)} left`) : undefined,
+            qty,
+            soldOut,
+            salesEnded: soldOut && tier.sold >= tier.quantity,
+            onDecrement: () => setQty(tier.id, qty - 1),
+            onIncrement: () => setQty(tier.id, qty + 1),
+            decrementDisabled: qty === 0,
+            incrementDisabled: qty >= remaining || totalTickets >= maxPerOrder,
+          };
+        })}
+        consent={
+          hasConsent
+            ? { text: 'I acknowledge the important information above.', acknowledged: consentAcknowledged, onToggle: setConsentAcknowledged }
+            : undefined
+        }
+        lineItems={selectedTiersBreakdown.map((b) => ({
+          id: b.id,
+          label: `${b.qty}× ${b.name}`,
+          amountLabel: b.subtotal === 0 ? 'Free' : `₹${b.subtotal.toLocaleString('en-IN')}`,
+        }))}
+        totalLabel={totalAmount === 0 && totalTickets > 0 ? 'Free' : `₹${totalAmount.toLocaleString('en-IN')}`}
+        ctaLabel={consentBlocking ? 'Acknowledge to continue' : 'Continue to checkout'}
+        onCta={handleGetTickets}
+        ctaDisabled={totalTickets === 0 || consentBlocking}
+      />
+    );
+
   return (
-    <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200">
-      {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-74 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+    <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)] text-[var(--brand-black)]">
+      <BrandNavHeader organizationName={settings.organizationName} onBrowse={handleBack} />
+
+      {/* ── Cover banner ─────────────────────────────────────────────── */}
+      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br sm:h-[26rem] ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay
             desktopSrc={event.coverImageDesktop}
@@ -306,7 +365,7 @@ const CustomerEventDetail: React.FC = () => {
                 >
                   <ArrowLeft size={16} />
                 </button>
-                <div className="absolute bottom-14 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
                   {event.images.map((_, i) => (
                     <button
                       key={i}
@@ -321,322 +380,310 @@ const CustomerEventDetail: React.FC = () => {
             )}
           </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3 sm:p-4">
           <button
             onClick={handleBack}
-            aria-label="Go back"
-            className="rounded-sm border border-white/40 bg-white/90 p-2 text-slate-700 hover:bg-white transition-colors"
+            className="brand-mono flex items-center gap-1.5 rounded-sm bg-black/50 px-3 py-2 text-xs font-bold text-white hover:bg-black/70 transition-colors"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={14} /> All events
           </button>
-        </div>
-
-        {/* category badge — back to its original spot, overlaid on the image */}
-        <div className="absolute inset-x-0 bottom-0 p-4">
-          <span className="inline-block w-fit rounded-sm bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700">
-            {label}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSaved((v) => !v)}
+              aria-label="Save event"
+              className="rounded-sm bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+            >
+              <Heart size={16} className={saved ? 'fill-[var(--brand-yellow)] text-[var(--brand-yellow)]' : ''} />
+            </button>
+            <button
+              onClick={shareThisEvent}
+              aria-label="Share event"
+              className="rounded-sm bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+            >
+              <Share2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Main content ─────────────────────────────────────────────── */}
-      <main className="p-2 pb-24">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3">
-          {/* Title */}
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-            <CardContent className="pt-4">
-              <RichTextDisplay
-                as="h1"
-                html={event.title}
-                className="text-2xl font-bold text-slate-900 dark:text-white"
-                style={
-                  event.titleStyle
-                    ? {
-                      fontSize: event.titleStyle.fontSize + 8,
-                      fontWeight: event.titleStyle.fontWeight,
-                      fontStyle: event.titleStyle.fontStyle,
-                      color: event.titleStyle.color === '#FFFFFF' ? undefined : event.titleStyle.color,
-                    }
-                    : undefined
-                }
-              />
-            </CardContent>
-          </Card>
-
-          {/* Key details */}
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-            <CardContent className="space-y-3 pt-4">
-              <div className="flex items-start gap-3">
-                <Calendar size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{formatDateRange(event.date, event.endDate)}</p>
-                  <p className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                    <Clock size={12} /> {formatTime(event.time)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                {event.isOnline ? (
-                  <Wifi size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
-                ) : (
-                  <MapPin size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
-                )}
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{event.isOnline ? 'Online event' : event.venue}</p>
-                  {event.isOnline && <p className="text-xs text-slate-500 dark:text-slate-400">Link shared with ticket holders before the event</p>}
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <User size={18} className="mt-0.5 shrink-0 text-[#007A78] dark:text-[#2DD4BF]" />
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{event.organizerName}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Organizer</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* About */}
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-            <CardContent className="pt-4">
-              <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">About this event</h2>
-              <RichTextDisplay
-                as="p"
-                html={event.description}
-                className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
-                  ? 'text-slate-800 dark:text-slate-100'
-                  : ''
-                  }`}
-                style={event.descriptionStyle ? { fontSize: event.descriptionStyle.fontSize, fontWeight: event.descriptionStyle.fontWeight, fontStyle: event.descriptionStyle.fontStyle, color: event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color ? undefined : event.descriptionStyle.color } : undefined}
-              />
-            </CardContent>
-          </Card>
-
-          {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Past Events</h2>
-                <div className="grid grid-cols-3 gap-2">
-                  {event.pastEventsGallery.slice(0, 6).map((item, i) => {
-                    const remaining = event.pastEventsGallery.length - 6;
-                    const isLastVisible = i === 5 && remaining > 0;
-                    return (
-                      <button
-                        key={item.url + i}
-                        onClick={() => setLightboxIndex(i)}
-                        className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800"
-                      >
-                        {item.type === 'video' ? (
-                          <video src={item.url} className="h-full w-full object-cover" muted playsInline />
-                        ) : (
-                          <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                        )}
-                        {isLastVisible && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                            +{remaining} more
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Lightbox */}
-          {lightboxIndex !== null && event.pastEventsGallery && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-              onClick={() => setLightboxIndex(null)}
-            >
-              <button
-                onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
-                className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
-              {event.pastEventsGallery.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
-                    className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
-                    aria-label="Previous"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
-                    className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
-                    aria-label="Next"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                </>
-              )}
-              <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-                {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
-                  <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
-                ) : (
-                  <img
-                    src={event.pastEventsGallery[lightboxIndex].url}
-                    alt={`Past event ${lightboxIndex + 1}`}
-                    className="max-h-[85vh] max-w-[90vw] object-contain"
-                  />
-                )}
-              </div>
+      {/* ── Title band ───────────────────────────────────────────────── */}
+      <div className="border-b border-black/10 bg-white px-4 py-5 sm:px-8 lg:px-24">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="brand-mono flex items-center gap-2 text-[10px] font-bold">
+              <span className="rounded-sm bg-[var(--brand-yellow)] px-2 py-0.5 text-black">{label}</span>
+              <span className="rounded-sm bg-[var(--brand-teal)] px-2 py-0.5 text-white">{event.isOnline ? 'Online' : 'In person'}</span>
             </div>
-          )}
-
-          {/* Consent / Important Information */}
-          {hasConsent && (
-            <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-              <CardContent className="pt-4">
-                <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-slate-100">Important Information &amp; Consent</h2>
-                <RichTextDisplay
-                  as="p"
-                  html={event.consentText ?? ''}
-                  className={`whitespace-pre-line leading-relaxed mb-3 ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                    ? 'text-slate-800 dark:text-slate-100'
-                    : ''
-                    }`}
-                  style={
-                    event.consentStyle
-                      ? {
-                        fontSize: event.consentStyle.fontSize,
-                        fontWeight: event.consentStyle.fontWeight,
-                        fontStyle: event.consentStyle.fontStyle,
-                        color:
-                          event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                            ? undefined
-                            : event.consentStyle.color,
-                      }
-                      : undefined
+            <RichTextDisplay
+              as="h1"
+              html={event.title}
+              className="brand-display mt-2 text-3xl leading-tight text-[var(--brand-black)] sm:text-4xl"
+              style={
+                event.titleStyle
+                  ? {
+                    fontSize: event.titleStyle.fontSize + 8,
+                    fontWeight: event.titleStyle.fontWeight,
+                    fontStyle: event.titleStyle.fontStyle,
+                    color: event.titleStyle.color === '#FFFFFF' ? undefined : event.titleStyle.color,
                   }
-                />
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentAcknowledged}
-                    onChange={(e) => setConsentAcknowledged(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 bg-white accent-[#007A78] [color-scheme:light]"
+                  : undefined
+              }
+            />
+          </div>
+
+          <div className="brand-mono flex shrink-0 flex-wrap gap-x-5 gap-y-1 text-[11px] text-black/50 sm:text-right">
+            <span>
+              <span className="text-black/30">Runs</span> {formatDateRange(event.date, event.endDate)}
+            </span>
+            <span>
+              <span className="text-black/30">Starts</span> {formatTime(event.time)}
+            </span>
+            <span>
+              <span className="text-black/30">Where</span> {event.isOnline ? 'Online' : event.venue}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Body: main column + ticket panel ────────────────────────── */}
+      <main className="grow px-4 py-6 pb-24 sm:px-8 lg:px-24 lg:pb-10">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+          {/* Ticket panel — first on mobile (right after title), right rail on desktop */}
+          <div className="order-1 lg:order-2 lg:w-[380px] lg:shrink-0">
+            <div className="lg:sticky lg:top-6">{ticketPanel}</div>
+          </div>
+
+          {/* Content sections */}
+          <div className="order-2 flex flex-col gap-5 lg:order-1 lg:w-[760px]">
+            {/* 01 About the night */}
+            <div>
+              <SectionLabel index={1} className="mb-2">About the night</SectionLabel>
+              <Card className="shadow-sm border-black/10 bg-white">
+                <CardContent className="pt-4">
+                  <RichTextDisplay
+                    as="p"
+                    html={event.description}
+                    className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
+                      ? 'text-slate-800'
+                      : ''
+                      }`}
+                    style={event.descriptionStyle ? { fontSize: event.descriptionStyle.fontSize, fontWeight: event.descriptionStyle.fontWeight, fontStyle: event.descriptionStyle.fontStyle, color: event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color ? undefined : event.descriptionStyle.color } : undefined}
                   />
-                  Acknowledged
-                </label>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Tickets, or RSVP link if this is an RSVP event */}
-          <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
-            <CardContent className="pt-4">
-              {event.registrationMode === 'rsvp' ? (
-                <>
-                  <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">RSVP</h2>
-                  <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-                    This event doesn&rsquo;t need a ticket — register through the organizer&rsquo;s form to attend.
-                  </p>
-                  {event.rsvpLink ? (
-                    <a
-                      href={consentBlocking ? undefined : event.rsvpLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-disabled={consentBlocking}
-                      onClick={(e) => { if (consentBlocking) e.preventDefault(); }}
-                      className={`inline-flex items-center gap-1.5 rounded-sm bg-[#007A78] px-4 py-2 text-sm font-semibold text-white hover:bg-[#006361] ${consentBlocking ? 'opacity-40 pointer-events-none' : ''}`}
-                    >
-                      {event.rsvpButtonLabel || 'RSVP Now'}
-                    </a>
+            {/* 02 Where & when */}
+            <div>
+              <SectionLabel index={2} className="mb-2">Where &amp; when</SectionLabel>
+              <Card className="shadow-sm border-black/10 bg-white">
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-sm bg-slate-50 p-3 text-center">
+                      <p className="brand-mono text-[9px] text-black/40">Starts</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-800">{event.date}</p>
+                    </div>
+                    <div className="rounded-sm bg-slate-50 p-3 text-center">
+                      <p className="brand-mono text-[9px] text-black/40">Ends</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-800">{event.endDate || event.date}</p>
+                    </div>
+                    <div className="rounded-sm bg-slate-50 p-3 text-center">
+                      <p className="brand-mono text-[9px] text-black/40">Time</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-800">{formatTime(event.time)}</p>
+                    </div>
+                  </div>
+
+                  {event.isOnline ? (
+                    <div className="mt-3 flex items-center gap-3 rounded-sm bg-[var(--brand-black)] p-3">
+                      <Wifi size={18} className="shrink-0 text-[var(--brand-yellow)]" />
+                      <div>
+                        <p className="text-sm font-medium text-white">Online event</p>
+                        <p className="text-xs text-white/50">The joining link is shared with ticket holders before the event.</p>
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-xs text-red-500 dark:text-red-400">RSVP link isn&rsquo;t set up yet — check back soon.</p>
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-sm bg-slate-50 p-3">
+                      <div className="flex items-start gap-3">
+                        <MapPin size={18} className="mt-0.5 shrink-0 text-[var(--brand-teal)]" />
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{event.venue}</p>
+                          <p className="text-xs text-slate-500">Venue address</p>
+                        </div>
+                      </div>
+                      <a
+                        href={directionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="brand-mono flex shrink-0 items-center gap-1 rounded-sm bg-[var(--brand-black)] px-3 py-1.5 text-[10px] font-bold text-white hover:brightness-110"
+                      >
+                        <Navigation size={11} /> Get directions
+                      </a>
+                    </div>
                   )}
-                  {consentBlocking && (
-                    <p className="mt-2 text-xs text-red-500 dark:text-red-400">Please acknowledge the important information above to continue.</p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Tickets</h2>
+                </CardContent>
+              </Card>
+            </div>
 
-                  {allSoldOut ? (
-                    <p className="rounded-sm bg-slate-50 dark:bg-slate-800 p-3 text-sm text-slate-500 dark:text-slate-400">
-                      {visibleTiers.length === 0
-                        ? 'No tickets are available for this event right now.'
-                        : 'All tickets for this event are sold out.'}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800">
-                      {visibleTiers.map((tier) => {
-                        const remaining = remainingFor(tier.id);
-                        const soldOut = remaining <= 0;
-                        const qty = quantities[tier.id] ?? 0;
-
+            {/* 03 From past nights */}
+            {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
+              <div>
+                <SectionLabel index={3} className="mb-2">From past nights</SectionLabel>
+                <Card className="shadow-sm border-black/10 bg-white">
+                  <CardContent className="pt-4">
+                    <div className="grid grid-cols-3 gap-2 sm:grid-rows-2 sm:[&>*:first-child]:col-span-2 sm:[&>*:first-child]:row-span-2">
+                      {event.pastEventsGallery.slice(0, 6).map((item, i) => {
+                        const remaining = event.pastEventsGallery.length - 6;
+                        const isLastVisible = i === 5 && remaining > 0;
                         return (
-                          <div key={tier.id} className="flex items-center justify-between gap-3 py-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{tier.name}</p>
-                              <p className="text-sm font-semibold text-[#007A78]">
-                                {tier.price === 0 ? 'Free' : `\u20B9${tier.price.toLocaleString('en-IN')}`}
-                              </p>
-                              {settings.ticketDisplay.showTicketsRemaining && (
-                                <p className="text-xs text-slate-400 dark:text-slate-500">
-                                  {soldOut ? 'Sold out' : `${displayRemainingFor(tier.id)} left`}
-                                </p>
-                              )}
-                            </div>
-
-                            {soldOut ? (
-                              <span className="rounded-sm bg-gray-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-slate-400">Sold out</span>
+                          <button
+                            key={item.url + i}
+                            onClick={() => setLightboxIndex(i)}
+                            className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100"
+                          >
+                            {item.type === 'video' ? (
+                              <video src={item.url} className="h-full w-full object-cover" muted playsInline />
                             ) : (
-                              <div className="flex shrink-0 items-center gap-2">
-                                <button
-                                  onClick={() => setQty(tier.id, qty - 1)}
-                                  disabled={qty === 0}
-                                  className="rounded-sm border border-gray-300 dark:border-slate-600 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-30"
-                                >
-                                  <Minus size={14} />
-                                </button>
-                                <span className="w-5 text-center text-sm font-medium text-slate-800 dark:text-slate-100">{qty}</span>
-                                <button
-                                  onClick={() => setQty(tier.id, qty + 1)}
-                                  disabled={qty >= remaining || totalTickets >= maxPerOrder}
-                                  className="rounded-sm border border-gray-300 dark:border-slate-600 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-30"
-                                >
-                                  <Plus size={14} />
-                                </button>
+                              <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                            )}
+                            {isLastVisible && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                                +{remaining} more
                               </div>
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Lightbox */}
+            {lightboxIndex !== null && event.pastEventsGallery && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+                onClick={() => setLightboxIndex(null)}
+              >
+                <button
+                  onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
+                  className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+                {event.pastEventsGallery.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
+                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+                      aria-label="Previous"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
+                      aria-label="Next"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                  </>
+                )}
+                <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                  {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
+                    <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
+                  ) : (
+                    <img
+                      src={event.pastEventsGallery[lightboxIndex].url}
+                      alt={`Past event ${lightboxIndex + 1}`}
+                      className="max-h-[85vh] max-w-[90vw] object-contain"
+                    />
                   )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                </div>
+              </div>
+            )}
+
+            {/* 04 Before you book — only if the organizer set consent text */}
+            {hasConsent && (
+              <div>
+                <SectionLabel index={4} className="mb-2">Before you book</SectionLabel>
+                <Card className="shadow-sm border-black/10 bg-white">
+                  <CardContent className="pt-4">
+                    <RichTextDisplay
+                      as="p"
+                      html={event.consentText ?? ''}
+                      className={`whitespace-pre-line leading-relaxed ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                        ? 'text-slate-800'
+                        : ''
+                        }`}
+                      style={
+                        event.consentStyle
+                          ? {
+                            fontSize: event.consentStyle.fontSize,
+                            fontWeight: event.consentStyle.fontWeight,
+                            fontStyle: event.consentStyle.fontStyle,
+                            color:
+                              event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                                ? undefined
+                                : event.consentStyle.color,
+                          }
+                          : undefined
+                      }
+                    />
+                    <p className="brand-mono mt-3 text-[10px] text-black/40">
+                      You&rsquo;ll acknowledge this in the ticket panel before continuing.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* 05 Your host */}
+            <div>
+              <SectionLabel index={hasConsent ? 5 : 4} className="mb-2">Your host</SectionLabel>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-[var(--brand-black)] p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-[var(--brand-yellow)]">
+                    <span className="brand-display text-lg text-black">{event.organizerName?.[0]?.toUpperCase() || 'S'}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{event.organizerName}</p>
+                    <p className="brand-mono text-[10px] text-white/40">Organizer</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleBack}
+                  className="brand-mono shrink-0 rounded-sm border border-white/20 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+                >
+                  More events &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
-      {/* ── Sticky checkout bar — only for ticketed events ───────────── */}
+      <CustomerFooter variant="slim" organizationName={settings.organizationName} />
+
+      {/* ── Floating bottom bar — mobile only, ticketed events ───────── */}
       {!allSoldOut && event.registrationMode !== 'rsvp' && (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3 flex justify-center gap-3 z-30">
-          <div className="flex w-full max-w-3xl items-center gap-3">
+        <div className="fixed bottom-0 left-0 right-0 border-t border-black/10 bg-white p-3 flex justify-center gap-3 z-30 lg:hidden">
+          <div className="flex w-full items-center gap-3">
             <div className="flex-1">
-              <p className="text-base font-bold text-slate-800 dark:text-slate-100">
-                {totalTickets > 0 ? `${totalTickets} ticket${totalTickets === 1 ? '' : 's'} selected` : 'Select tickets'}
+              <p className="brand-mono text-[10px] text-black/40">{totalTickets} ticket{totalTickets === 1 ? '' : 's'}</p>
+              <p className="brand-display text-lg text-[var(--brand-black)]">
+                {totalAmount === 0 && totalTickets > 0 ? 'Free' : `₹${totalAmount.toLocaleString('en-IN')}`}
               </p>
             </div>
             <button
               onClick={handleGetTickets}
               disabled={totalTickets === 0 || consentBlocking}
-              className="flex-1 rounded-sm bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#2DD4BF] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
+              className="brand-mono flex-1 rounded-sm bg-[var(--brand-yellow)] py-2.5 text-xs font-bold text-black hover:brightness-95 disabled:opacity-40 transition-colors"
             >
-              {consentBlocking ? 'Acknowledge to continue' : 'Get tickets'}
+              {consentBlocking ? 'Acknowledge to continue' : 'Checkout'}
             </button>
           </div>
         </div>
@@ -650,6 +697,7 @@ const CustomerEventDetail: React.FC = () => {
           breakdown={selectedTiersBreakdown}
           quantities={quantities}
           accessCode={event.isPrivate ? sessionStorage.getItem(`eventAccessCode:${event.id}`) ?? undefined : undefined}
+          organizationName={settings.organizationName}
           onClose={() => setShowManualQR(false)}
           onSuccess={() => {
             // clear cart after a successful submission, same as a normal checkout would

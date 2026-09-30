@@ -7,7 +7,6 @@ import type { CustomField } from '../types/event.types';
 import { stripHtmlTags } from '../lib/utils';
 import { shareTicketImage } from '../lib/shareTicket';
 import { buildAcknowledgementPdf, type AcknowledgementTicketData, type AcknowledgementEventData } from '../lib/ticketPdf';
-import { useAuth } from '../context/AuthContext';
 
 interface AttendeeCardProps {
   attendee: Attendee;
@@ -79,7 +78,6 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
 }) => {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
-  const { profile } = useAuth();
 
   // Older manual-QR attendee records (created before paymentMode was stored)
   // have no paymentMode saved — but manual_qr always means UPI, so infer it

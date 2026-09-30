@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Ticket, Loader2 } from 'lucide-react';
-import BackButton from '../components/ui/BackButton';
-import { Card, CardContent } from '../components/ui/card';
+import { Ticket, Loader2, ArrowLeft, Smartphone, CreditCard, Landmark } from 'lucide-react';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
-import type { AccessCodeEntry } from '../data/events';
+import { formatDateRange, formatTime, type AccessCodeEntry } from '../data/events';
 import { useDomainResolution } from '../hooks/useDomainResolution';
+import { useCompanySettings } from '../hooks/useSettings';
 import { getSubdomain } from '../lib/subdomain';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
-import MockPGModal from '../components/MockPGModal';
 import { stripHtmlTags } from '../lib/utils';
 import { loadImageAsCoverBanner } from '../lib/imageBanner';
+import BrandNavHeader from '../components/brand/BrandNavHeader';
+import SectionLabel from '../components/brand/SectionLabel';
+import TicketOrderSummary from '../components/brand/TicketOrderSummary';
+import CheckoutStepPills from '../components/brand/CheckoutStepPills';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
 const PDF_BANNER_WIDTH = 760;
@@ -59,6 +61,7 @@ const CheckoutPage: React.FC = () => {
 
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
+  const { settings } = useCompanySettings(resolvedCompanyId);
   const loading = domainLoading || eventLoading;
   const locationState = location.state as { quantities?: Record<string, number>; accessCode?: string } | null;
   const quantities: Record<string, number> = locationState?.quantities ?? {};
@@ -86,7 +89,7 @@ const CheckoutPage: React.FC = () => {
   const [sameForAll, setSameForAll] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
-  const [showPGPopup, setShowPGPopup] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -203,20 +206,20 @@ const CheckoutPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-gray-100">
-        <Loader2 className="animate-spin text-slate-400" size={24} />
+      <div className="brand-theme flex min-h-screen w-full items-center justify-center bg-[var(--brand-cream)]">
+        <Loader2 className="animate-spin text-[var(--brand-teal)]" size={24} />
       </div>
     );
   }
 
   if (domainError || (!loading && !event)) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-gray-100 p-6 text-center">
-        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-          <Ticket size={28} className="text-gray-500" />
+      <div className="brand-theme flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-[var(--brand-cream)] p-6 text-center">
+        <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center">
+          <Ticket size={28} className="text-black/40" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800">Order Not Found</h2>
-        <p className="text-sm text-gray-500 max-w-xs">
+        <h2 className="brand-display text-xl text-[var(--brand-black)]">Order not found</h2>
+        <p className="text-sm text-black/50 max-w-xs">
           We couldn&rsquo;t find this order. The event might have been removed or the link is incorrect.
         </p>
         <button
@@ -225,9 +228,9 @@ const CheckoutPage: React.FC = () => {
               getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
             )
           }
-          className="mt-2 rounded-md bg-[#007A78] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#006361]"
+          className="brand-mono mt-2 rounded-sm bg-[var(--brand-yellow)] px-6 py-2.5 text-xs font-bold text-black shadow-sm hover:brightness-95"
         >
-          Return to Store
+          Return to store
         </button>
       </div>
     );
@@ -318,11 +321,7 @@ const CheckoutPage: React.FC = () => {
       return;
     }
 
-    if (total === 0) {
-      handlePay();
-    } else {
-      setShowPGPopup(true);
-    }
+    handlePay(total === 0 ? 'free' : selectedMethod);
   };
 
   const handlePay = async (method: PaymentMethod = 'free') => {
@@ -559,251 +558,286 @@ const CheckoutPage: React.FC = () => {
     );
   }
 
+  const steps = [
+    { id: 'checkout-details', label: 'Details' },
+    ...(customFields.length > 0 ? [{ id: 'checkout-questions', label: 'Questions' }] : []),
+    { id: 'checkout-payment', label: 'Payment' },
+  ];
+
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gray-100 dark:bg-slate-900">
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="relative sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <BackButton />
-        <div className="absolute left-1/2 -translate-x-1/2 text-center min-w-0 max-w-[65%]">
-          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">Checkout</h1>
-          <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{stripHtmlTags(event.title)}</p>
-        </div>
-        <div className="w-9" />
-      </header>
+    <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)]">
+      <BrandNavHeader organizationName={settings.organizationName} variant="minimal" />
 
       {/* ── Main content ─────────────────────────────────────────────── */}
-      <main className="grow overflow-y-auto p-3 pb-28">
-        <div className="mx-auto flex max-w-xl flex-col gap-3">
+      <main className="grow overflow-y-auto px-4 py-6 pb-10 sm:px-8">
+        <div className="mx-auto w-full max-w-[1440px] lg:px-12">
+          {/* Title row */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <button
+                onClick={() => navigate(-1)}
+                className="brand-mono mb-1 flex items-center gap-1.5 text-xs font-bold text-black/50 hover:text-black"
+              >
+                <ArrowLeft size={12} /> Back to event
+              </button>
+              <h1 className="brand-display text-4xl leading-none text-[var(--brand-black)]">
+                Almost <span className="text-[var(--brand-teal)]">in.</span>
+              </h1>
+              <p className="mt-1 text-sm text-black/50">{stripHtmlTags(event.title)}</p>
+            </div>
+            <CheckoutStepPills steps={steps} />
+          </div>
+
           {lineItems.length === 0 && (
-            <div className="rounded-md border border-dashed border-gray-300 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            <div className="mt-4 rounded-sm border-2 border-dashed border-black/15 bg-white p-4 text-center text-sm text-slate-500">
               No tickets selected. Go back and pick a ticket tier first.
             </div>
           )}
 
-          {/* Order summary */}
-          <Card className="shadow-sm border-gray-200">
-            <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Order summary</h2>
-              <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-700">
-                {lineItemsWithTax.map(({ tier, qty, itemBaseAmount }) => (
-                  <div key={tier.id} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-600 dark:text-slate-300">
-                      {tier.name} <span className="text-slate-400 dark:text-slate-500">× {qty}</span>
-                    </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-100">
-                      {tier.price === 0 ? 'Free' : `₹${itemBaseAmount.toFixed(2)}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {totalTaxAmount > 0 && (
-                <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    {taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}
-                  </span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{`₹${totalTaxAmount.toFixed(2)}`}</span>
-                </div>
-              )}
-              {roundOffAmt !== 0 && (
-                <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Round off</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{`\u20B9${roundOffAmt.toFixed(2)}`}</span>
-                </div>
-              )}
-              <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 text-sm font-semibold dark:border-slate-700">
-                <span className="text-slate-800 dark:text-slate-100">Total</span>
-                <span className="text-[#007A78]">{total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}</span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+            {/* ── Left: form sections ──────────────────────────────────── */}
+            <div className="flex flex-col gap-6 lg:w-[760px]">
+              {/* 01 Your details */}
+              <div id="checkout-details">
+                <SectionLabel index={1} className="mb-3">Your details</SectionLabel>
+                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-5">
+                  {totalQty > 1 && (
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={sameForAll}
+                        onChange={(e) => handleToggleSameForAll(e.target.checked)}
+                        className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-[var(--brand-teal)] focus:ring-[var(--brand-teal)]"
+                      />
+                      Use the same details for all {totalQty} tickets
+                    </label>
+                  )}
 
-          {/* Attendee details — ek form per ticket */}
-          <Card className="shadow-sm border-gray-200">
-            <CardContent className="pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">
-                Attendee details{totalQty > 1 ? ` · ${totalQty} tickets` : ''}
-              </h2>
-
-              {totalQty > 1 && (
-                <label className="mb-4 flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={sameForAll}
-                    onChange={(e) => handleToggleSameForAll(e.target.checked)}
-                    className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
-                  />
-                  Use the same details for all {totalQty} tickets
-                </label>
-              )}
-
-              <div className="flex flex-col gap-5">
-                {attendeeDetails.map((entry, index) => {
-                  if (sameForAll && index > 0) return null;
-                  return (
-                    <div key={index} className="flex flex-col gap-3">
-                      {totalQty > 1 && !sameForAll && (
-                        <p className="text-xs font-bold text-[#007A78]">
-                          Ticket {index + 1} · {ticketSlots[index]?.tierName}
-                        </p>
-                      )}
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Full name</label>
-                        <input
-                          value={entry.name}
-                          onChange={(e) => updateAttendee(index, 'name', e.target.value)}
-                          placeholder="As it should appear on the ticket"
-                          autoComplete="name"
-                          spellCheck={false}
-                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
-                        <input
-                          type="email"
-                          value={entry.email}
-                          onChange={(e) => updateAttendee(index, 'email', e.target.value)}
-                          placeholder="you@example.com"
-                          autoComplete="email"
-                          spellCheck={false}
-                          className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
-                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
-                            }`}
-                        />
-                        {entry.email.length > 0 && !isValidEmail(entry.email) && (
-                          <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          value={entry.phone}
-                          onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          maxLength={10}
-                          placeholder="10-digit mobile number"
-                          autoComplete="tel"
-                          className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
-                            ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                            : 'border-gray-300 focus:border-[#2DD4BF] focus:ring-[#007A78]'
-                            }`}
-                        />
-                        {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
-                          <p className="mt-1 text-xs font-medium text-red-500">
-                            {entry.phone.length < 10
-                              ? 'Enter a 10-digit mobile number.'
-                              : 'Must start with 6, 7, 8, or 9.'}
-                          </p>
-                        )}
-                      </div>
-
-                      {customFields.map((field) => {
-                        const value = entry.customAnswers[field.id] ?? '';
-                        const baseClass =
-                          'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2DD4BF] focus:ring-1 focus:ring-[#007A78]';
-
-                        return (
-                          <div key={field.id}>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">
-                              {field.label}{field.required ? ' *' : ''}
-                            </label>
-
-                            {field.type === 'textarea' && (
-                              <textarea
-                                rows={3}
-                                value={value}
-                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                placeholder={field.label}
-                                className={baseClass}
-                              />
-                            )}
-
-                            {field.type === 'select' && (
-                              <select
-                                value={value}
-                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                className={baseClass}
-                              >
-                                <option value="">Select…</option>
-                                {(field.options ?? []).map((opt) => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            )}
-
-                            {field.type === 'checkbox' && (
-                              <label className="flex items-center gap-2 text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={value === 'true'}
-                                  onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
-                                  className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[#007A78] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[#007A78] focus:outline-none"
-                                />
-                                {field.label}
-                              </label>
-                            )}
-
-                            {field.type === 'text' && (
+                  <div className="flex flex-col gap-5">
+                    {attendeeDetails.map((entry, index) => {
+                      if (sameForAll && index > 0) return null;
+                      return (
+                        <div key={index} className="flex flex-col gap-3">
+                          {totalQty > 1 && !sameForAll && (
+                            <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
+                              Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                            </p>
+                          )}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
                               <input
-                                type="text"
-                                value={value}
-                                onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                placeholder={field.label}
-                                className={baseClass}
+                                value={entry.name}
+                                onChange={(e) => updateAttendee(index, 'name', e.target.value)}
+                                placeholder="As on your ID"
+                                autoComplete="name"
+                                spellCheck={false}
+                                className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[var(--brand-teal)] focus:ring-1 focus:ring-[var(--brand-teal)]"
                               />
-                            )}
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                              <input
+                                type="tel"
+                                inputMode="numeric"
+                                value={entry.phone}
+                                onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                maxLength={10}
+                                placeholder="+91"
+                                autoComplete="tel"
+                                className={`w-full rounded-sm border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
+                                  ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                                  : 'border-gray-300 focus:border-[var(--brand-teal)] focus:ring-[var(--brand-teal)]'
+                                  }`}
+                              />
+                              {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
+                                <p className="mt-1 text-xs font-medium text-red-500">
+                                  {entry.phone.length < 10
+                                    ? 'Enter a 10-digit mobile number.'
+                                    : 'Must start with 6, 7, 8, or 9.'}
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                              <input
+                                type="email"
+                                value={entry.email}
+                                onChange={(e) => updateAttendee(index, 'email', e.target.value)}
+                                placeholder="Tickets are sent here"
+                                autoComplete="email"
+                                spellCheck={false}
+                                className={`w-full rounded-sm border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
+                                  ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
+                                  : 'border-gray-300 focus:border-[var(--brand-teal)] focus:ring-[var(--brand-teal)]'
+                                  }`}
+                              />
+                              {entry.email.length > 0 && !isValidEmail(entry.email) && (
+                                <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
+                              )}
+                            </div>
                           </div>
-                        );
-                      })}
 
-                      {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100 dark:border-slate-700" />}
-                    </div>
-                  );
-                })}
+                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+
+              {/* 02 A few questions */}
+              {customFields.length > 0 && (
+                <div id="checkout-questions">
+                  <SectionLabel index={2} className="mb-3">A few questions</SectionLabel>
+                  <div className="rounded-lg border border-black/10 bg-white p-4 space-y-5">
+                    {attendeeDetails.map((entry, index) => {
+                      if (sameForAll && index > 0) return null;
+                      return (
+                        <div key={index} className="space-y-3">
+                          {totalQty > 1 && !sameForAll && (
+                            <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
+                              Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                            </p>
+                          )}
+                          {customFields.map((field) => {
+                            const value = entry.customAnswers[field.id] ?? '';
+                            const baseClass =
+                              'w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[var(--brand-teal)] focus:ring-1 focus:ring-[var(--brand-teal)]';
+
+                            return (
+                              <div key={field.id}>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">
+                                  {field.label}{field.required ? ' *' : ''}
+                                </label>
+
+                                {field.type === 'textarea' && (
+                                  <textarea
+                                    rows={3}
+                                    value={value}
+                                    onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                    placeholder={field.label}
+                                    className={baseClass}
+                                  />
+                                )}
+
+                                {field.type === 'select' && (
+                                  <select
+                                    value={value}
+                                    onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                    className={baseClass}
+                                  >
+                                    <option value="">Select…</option>
+                                    {(field.options ?? []).map((opt) => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                )}
+
+                                {field.type === 'checkbox' && (
+                                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={value === 'true'}
+                                      onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
+                                      className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[var(--brand-teal)] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[var(--brand-teal)] focus:outline-none"
+                                    />
+                                    {field.label}
+                                  </label>
+                                )}
+
+                                {field.type === 'text' && (
+                                  <input
+                                    type="text"
+                                    value={value}
+                                    onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
+                                    placeholder={field.label}
+                                    className={baseClass}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 03 Payment — payment-gateway method list */}
+              <div id="checkout-payment">
+                <SectionLabel index={customFields.length > 0 ? 3 : 2} className="mb-3">Payment</SectionLabel>
+                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-2">
+                  {([
+                    { value: 'upi' as const, label: 'UPI / QR code', icon: Smartphone },
+                    { value: 'card' as const, label: 'Credit / Debit card', icon: CreditCard },
+                    { value: 'netbanking' as const, label: 'Netbanking', icon: Landmark },
+                  ]).map((m) => (
+                    <label
+                      key={m.value}
+                      className={`flex cursor-pointer items-center justify-between rounded-sm border p-3 transition-colors ${selectedMethod === m.value ? 'border-[var(--brand-teal)] bg-[var(--brand-teal)]/5' : 'border-gray-200 hover:bg-slate-50'
+                        }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className={`flex h-9 w-9 items-center justify-center rounded-full ${selectedMethod === m.value ? 'bg-[var(--brand-teal)] text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          <m.icon size={16} />
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{m.label}</span>
+                      </span>
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        checked={selectedMethod === m.value}
+                        onChange={() => setSelectedMethod(m.value)}
+                        className="h-4 w-4 text-[var(--brand-teal)]"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {checkoutError && (
+                <p className="text-sm font-medium text-red-500">{checkoutError}</p>
+              )}
+            </div>
+
+            {/* ── Right: sticky order summary ─────────────────────────── */}
+            <div className="lg:sticky lg:top-6 lg:flex-1 lg:self-start">
+              <TicketOrderSummary
+                eventTitle={stripHtmlTags(event.title)}
+                dateLabel={`${formatDateRange(event.date, event.endDate)} · ${formatTime(event.time)}`}
+                venueLabel={event.isOnline ? 'Online' : event.venue}
+                imageUrl={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
+                lineItems={[
+                  ...lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
+                    id: tier.id,
+                    label: `${tier.name} × ${qty}`,
+                    amountLabel: tier.price === 0 ? 'Free' : `₹${itemTotalAmount.toFixed(2)}`,
+                  })),
+                  ...(totalTaxAmount > 0
+                    ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: `₹${totalTaxAmount.toFixed(2)}` }]
+                    : []),
+                  ...(roundOffAmt !== 0
+                    ? [{ id: 'round-off', label: 'Round off', amountLabel: `₹${roundOffAmt.toFixed(2)}` }]
+                    : []),
+                ]}
+                totalLabel={total === 0 ? 'Free' : `₹${total.toLocaleString('en-IN')}`}
+                ctaLabel={
+                  step === 'processing'
+                    ? 'Processing…'
+                    : total === 0
+                      ? 'Confirm registration'
+                      : `Pay ₹${total.toLocaleString('en-IN')}`
+                }
+                onCta={initiatePayment}
+                ctaDisabled={!detailsComplete || lineItems.length === 0 || step === 'processing'}
+              />
+            </div>
+          </div>
         </div>
       </main>
-
-      {/* ── Sticky pay bar ───────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-3 flex flex-col items-center gap-2 z-30 dark:border-slate-700 dark:bg-slate-900">
-        {checkoutError && (
-          <p className="w-full max-w-xl text-center text-xs font-medium text-red-500">{checkoutError}</p>
-        )}
-        <div className="flex w-full max-w-xl items-center gap-3">
-          <div className="flex-1">
-            <p className="text-xs text-slate-500 dark:text-slate-400">{totalQty} ticket{totalQty === 1 ? '' : 's'}</p>
-            <p className="text-base font-bold text-slate-800 dark:text-slate-100">
-              {total === 0 ? 'Free' : `\u20B9${total.toLocaleString('en-IN')}`}
-            </p>
-          </div>
-          <button
-            onClick={initiatePayment}
-            disabled={!detailsComplete || lineItems.length === 0 || step === 'processing'}
-            className="flex-1 rounded-md bg-[#007A78] py-2.5 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-40 disabled:hover:bg-[#2DD4BF] transition-colors"
-          >
-            {step === 'processing'
-              ? 'Processing…'
-              : total === 0
-                ? 'Confirm registration'
-                : `Pay \u20B9${total.toLocaleString('en-IN')}`}
-          </button>
-        </div>
-      </div>
-
-      {showPGPopup && (
-        <MockPGModal
-          amount={total}
-          onSuccess={(method) => {
-            setShowPGPopup(false);
-            handlePay(method);
-          }}
-          onCancel={() => setShowPGPopup(false)}
-        />
-      )}
     </div>
   );
 };

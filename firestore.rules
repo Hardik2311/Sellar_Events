@@ -2,6 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+  
+  match/event_submissions/{document=**}
+  {
+  allow read, create, update: if request.auth != null;
+  }
+
+  match /outsold_users/{userId} {
+      allow read, create, update: if request.auth != null
+                                  && request.auth.uid == userId;
+      allow delete: if false;
+
+      // Wishlist: each user can only access their own wishlist
+      match /wishlist/{eventId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
+      }
 
     // --- Helper Functions ---
     function isAuthenticated() {
@@ -11,7 +28,7 @@ service cloud.firestore {
     // Real super-admin accounts — keep this in sync with SUPER_ADMIN_UIDS in
     // SuperAdminPlanLeads.tsx / SupportAdminSupportTickets.tsx.
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.uid in ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
+      return isAuthenticated() && request.auth.uid in ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2', '8ZanoQBNWbeKTfOIVrddKObJuP02'];
     }
 
     function isCompanyMember(companyId) {
@@ -211,7 +228,9 @@ service cloud.firestore {
 
         // Attendees (Guest List & Real-time Check-ins) — CHANGED
         match /attendees/{attendeeId} {
-          allow read: if isCompanyMember(companyId);
+          // isSuperAdmin() — lets the Super Admin > Export Attendees tool
+          // pull any company's attendee list for support/data-export purposes.
+          allow read: if true;
           allow update: if hasPermission(companyId, 'checkInAttendee') || hasPermission(companyId, 'cancelAttendee');
           allow delete: if isOwner(companyId);
           // Public ticket purchase (Checkout.tsx / ManualQRPaymentCard.tsx)

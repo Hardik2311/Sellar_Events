@@ -1,5 +1,28 @@
 @import 'tailwindcss';
 
+/* ── Brand theme (Discover / Event detail / Checkout redesign) ──────────
+   Scoped under .brand-theme so the rest of the app keeps Comfortaa + teal. */
+.brand-theme {
+  --brand-black: #14120f;
+  --brand-cream: #f4efe4;
+  --brand-yellow: #f5c518;
+  --brand-teal: #007a78;
+  --brand-teal-light: #2dd4bf;
+  font-family: 'Comfortaa', sans-serif;
+}
+
+.brand-display {
+  font-family: 'Anton', 'Comfortaa', sans-serif;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.brand-mono {
+  font-family: 'Space Mono', ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 @font-face {
   font-family: 'Comfortaa';
   src: url('./assets/fonts/Comfortaa-Regular.ttf') format('truetype');
