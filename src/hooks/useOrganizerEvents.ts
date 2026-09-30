@@ -66,7 +66,10 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
 export const useOrganizerEvents = () => {
   const { profile } = useAuth();
   const [events, setEvents] = useState<PublicEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+const [loading, setLoading] = useState(true);
+// bumped when a scheduled expiry timer fires, so the effect below re-runs
+// and schedules the NEXT expiry (setTimeout can't exceed ~24.8 days).
+const [expiryTick, setExpiryTick] = useState(0);
 
   useEffect(() => {
     if (!profile?.companyId) return;
@@ -105,8 +108,46 @@ export const useOrganizerEvents = () => {
         });
     });
 
-    return () => unsubscribe();
+        return () => unsubscribe();
   }, [profile?.companyId, profile?.organizationName]);
+
+  // Auto-unpublish at the exact moment a credit expires, even if the
+  // dashboard stays open (the snapshot listener only fires on data changes).
+  useEffect(() => {
+    if (!profile?.companyId) return;
+    const companyId = profile.companyId;
+
+    const unpublishExpired = () => {
+      events
+        .filter((e) => e.status === 'published' && isCreditExpired(e))
+        .forEach((e) => {
+          updateDoc(doc(db, 'companies', companyId, 'events', e.id), {
+            status: 'draft',
+          }).catch((err) => console.error('Failed to auto-expire event:', err));
+        });
+    };
+
+    // Catch anything already expired right now
+    unpublishExpired();
+
+    // Find the nearest upcoming expiry among live events
+    const nextExpiry = events
+      .filter((e) => e.status === 'published' && e.creditExpiresAt)
+      .map((e) => new Date(e.creditExpiresAt as string).getTime())
+      .filter((t) => !Number.isNaN(t) && t > Date.now())
+      .sort((a, b) => a - b)[0];
+
+    if (!nextExpiry) return;
+
+    // Clamp: setTimeout overflows above 2^31-1 ms
+    const delay = Math.min(nextExpiry - Date.now() + 1000, 2147483647);
+    const timer = setTimeout(() => {
+      unpublishExpired();
+      setExpiryTick((t) => t + 1); // re-schedule for the next one
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [events, expiryTick, profile?.companyId]);
 
   const toggleLive = async (id: string, currentStatus: string) => {
     if (!profile?.companyId) return;

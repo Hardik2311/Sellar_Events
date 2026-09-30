@@ -28,15 +28,20 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({
     percent: t.total > 0 ? Math.min(100, Math.round((t.sold / t.total) * 100)) : 0,
   }));
 
+  const truncate = (s: string, max = 16) =>
+    s.length > max ? `${s.slice(0, max - 1)}…` : s;
+
   const TierTick = ({ x, y, payload }: any) => {
-    const tier = chartData.find((d) => d.name === payload.value);
+    const tier = chartData.find((d) => d.id === payload.value); // lookup by id
+    if (!tier) return null;
     return (
       <text x={x} y={y} textAnchor="end">
-        <tspan x={x - 8} dy="-4" fontSize={15} fontWeight={600} fill="#1e293b">
-          {payload.value}
+        <title>{tier.name}</title>
+        <tspan x={x - 8} dy="-4" fontSize={14} fontWeight={600} fill="#1e293b">
+          {truncate(tier.name)}
         </tspan>
         <tspan x={x - 8} dy="18" fontSize={12} fill="#94a3b8">
-          ₹{tier?.price} per ticket
+          ₹{tier.price} per ticket
         </tspan>
       </text>
     );
@@ -63,7 +68,7 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({
         <CardTitle className="text-base font-semibold text-gray-900">Ticket tiers</CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col justify-center">
+      <CardContent className="flex-1 flex flex-col justify-start">
         {loading ? (
           <div className="space-y-4">
             {[1, 2].map((i) => (
@@ -77,20 +82,20 @@ export const TicketTierBreakdown: React.FC<TicketTierBreakdownProps> = ({
         ) : !isDataVisible ? (
           <div className="text-center py-8 text-gray-400 text-sm">Data hidden</div>
         ) : (
-          <div style={{ width: '100%', height: Math.max(chartData.length * ROW_HEIGHT, 200) }}>
+          <div style={{ width: '100%', height: chartData.length * ROW_HEIGHT + 16 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 8, right: 70, bottom: 8, left: 8 }}
+                margin={{ top: 8, right: 64, bottom: 8, left: 8 }}
                 barSize={26}
                 barCategoryGap="15%"
               >
                 <XAxis type="number" hide domain={[0, 'dataMax']} />
                 <YAxis
                   type="category"
-                  dataKey="name"
-                  width={120}
+                  dataKey="id"
+                  width={140}
                   axisLine={false}
                   tickLine={false}
                   tick={<TierTick />}
