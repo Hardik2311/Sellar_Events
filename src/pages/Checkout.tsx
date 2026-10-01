@@ -625,7 +625,7 @@ const CheckoutPage: React.FC = () => {
                           )}
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="sm:col-span-2">
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Full name *</label>
                               <input
                                 value={entry.name}
                                 onChange={(e) => updateAttendee(index, 'name', e.target.value)}
@@ -636,7 +636,7 @@ const CheckoutPage: React.FC = () => {
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Phone *</label>
                               <input
                                 type="tel"
                                 inputMode="numeric"
@@ -659,7 +659,7 @@ const CheckoutPage: React.FC = () => {
                               )}
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                              <label className="mb-1 block text-xs font-medium text-slate-600">Email *</label>
                               <input
                                 type="email"
                                 value={entry.email}

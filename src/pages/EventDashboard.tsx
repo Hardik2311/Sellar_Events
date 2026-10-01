@@ -86,19 +86,19 @@ const EventDashboardContent: React.FC = () => {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="relative flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1E293B] px-4 py-5 sticky top-0 z-10 shadow-xs">
         {/* Left: logo — mobile only, desktop already has it in the sidebar */}
-        <div className="md:hidden w-fit">
+        <div className="md:hidden w-fit shrink-0">
           <img src="/Outsold.png" alt="Outsold" className="h-10 w-auto" />
         </div>
 
         {/* Center: title + org name + tagline — absolutely centered so it stays true-center regardless of left/right widths */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none px-2 max-w-[60%] sm:max-w-none">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none px-2 w-[calc(100%-15rem)] sm:w-auto">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">Dashboard</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">{profile?.organizationName ?? ''}</p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate">Real-time ticketing & sales analytics</p>
+          <p className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate">Real-time ticketing & sales analytics</p>
         </div>
 
         {/* Right: credits badge + eye toggle button */}
-        <div className="flex items-center justify-end gap-2 ml-auto">
+       <div className="flex shrink-0 items-center justify-end gap-2 ml-auto">
           <button
             onClick={() => navigate('/events/account/recharge')}
             className="flex items-center gap-1.5 rounded-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-bold text-[#007A78] dark:text-[#2DD4BF] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs cursor-pointer"

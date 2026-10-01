@@ -15,10 +15,10 @@ const CoverImageDisplay: React.FC<CoverImageDisplayProps> = ({ desktopSrc, mobil
       <>
         {/* Mobile — blurred backdrop + full image, never cropped */}
         <img src={mobileSrc} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover scale-110 blur-2xl opacity-70 sm:hidden" />
-        <img src={mobileSrc} alt={alt} className="absolute inset-0 h-full w-full object-contain sm:hidden" />
+        <img src={mobileSrc} alt={alt} className="absolute inset-0 h-full w-full object-cover sm:hidden" />
         {/* Desktop — blurred backdrop + full image, never cropped */}
         <img src={desktopSrc} alt="" aria-hidden className="absolute inset-0 hidden h-full w-full object-cover scale-110 blur-2xl opacity-70 sm:block" />
-        <img src={desktopSrc} alt={alt} className="absolute inset-0 hidden h-full w-full object-contain sm:block" />
+        <img src={desktopSrc} alt={alt} className="absolute inset-0 hidden h-full w-full object-cover sm:block" />
       </>
     );
   }

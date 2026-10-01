@@ -113,10 +113,15 @@ const CreateEvent: React.FC = () => {
   const titleEditorRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement>(null);
   const consentEditorRef = useRef<HTMLDivElement>(null);
-  const toDate = (s: string) => (s ? new Date(`${s}T00:00:00`) : null);
+  const toDate = (s: string) => {
+    if (!s) return null;
+    const d = new Date(`${s}T00:00:00`);
+    return isNaN(d.getTime()) ? null : d;
+  };
   const toDateStr = (d: Date | null) => {
-    if (!d) return '';
+    if (!d || isNaN(d.getTime())) return '';
     const year = d.getFullYear();
+    if (year < 1000 || year > 9999) return '';
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
@@ -423,6 +428,7 @@ const CreateEvent: React.FC = () => {
               <DatePicker
                 id="date"
                 selected={toDate(form.date)}
+                onKeyDown={(e) => e.preventDefault()}
                 onChange={(d: Date | null) => {
                   const value = toDateStr(d);
                   update('date', value);
@@ -434,7 +440,7 @@ const CreateEvent: React.FC = () => {
                 popperClassName="react-datepicker-popper-custom"
                 popperPlacement="bottom-start"
                 showPopperArrow={false}
-                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-9 pr-2 text-[13px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
                 required
               />
             </div>
@@ -454,7 +460,7 @@ const CreateEvent: React.FC = () => {
                 popperClassName="react-datepicker-popper-custom"
                 popperPlacement="bottom-start"
                 showPopperArrow={false}
-                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-11 pr-3 text-[15px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
+                className="w-full bg-white dark:bg-slate-800 border border-[#7D7777A3] dark:border-slate-600 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.06)] py-3 pl-9 pr-2 text-[13px] text-slate-800 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-[#2DD4BF]"
                 required={req.endDate}
               />
             </div>
@@ -526,6 +532,7 @@ const CreateEvent: React.FC = () => {
             {form.venue.trim().length > 2 && (
               <div className="mt-2 overflow-hidden rounded-sm border border-gray-300 dark:border-slate-700">
                 <iframe
+                  key={form.venue}
                   title="venue-map-preview"
                   width="100%"
                   height="180"
@@ -542,21 +549,26 @@ const CreateEvent: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           <FloatingLabelInput
             id="helpline-number"
-            label="Helpline number"
+            label="Helpline no."
+            type="tel"
+            inputMode="numeric"
+            maxLength={15}
             value={form.helplineNumber}
-            onChange={(e) => update('helplineNumber', e.target.value)}
+            onChange={(e) => update('helplineNumber', e.target.value.replace(/\D/g, '').slice(0, 15))}
           />
 
           <FloatingLabelInput
             id="age-limit"
             label="Age limit"
+            maxLength={3}
             value={form.ageLimit}
-            onChange={(e) => update('ageLimit', e.target.value)}
+            onChange={(e) => update('ageLimit', e.target.value.replace(/[^\d+]/g, '').slice(0, 3))}
           />
         </div>
       </CardContent>
     </Card>
   );
+
 
   if (!isProfileComplete(profile)) {
     return (
@@ -785,7 +797,7 @@ const CreateEvent: React.FC = () => {
                       value={form.description}
                       onChange={(html) => update('description', html)}
                       fontSize={form.descriptionFontSize}
-                      label="Description"
+                      label="Event description"
                       required={req.description}
                       multiline
                     />
@@ -883,7 +895,7 @@ const CreateEvent: React.FC = () => {
                           />
                           <FloatingLabelInput
                             id="payee-name"
-                            label="Label shown above QR (optional)"
+                            label="Label shown above QR"
                             value={form.payeeName}
                             onChange={(e) => update('payeeName', e.target.value)}
                           />
