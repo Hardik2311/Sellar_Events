@@ -328,7 +328,7 @@ const CustomerEventDetail: React.FC = () => {
       <BrandNavHeader organizationName={settings.organizationName} onBrowse={handleBack} />
 
       {/* ── Cover banner ─────────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br sm:h-[26rem] ${gradient}`}>
+      <div className={`relative w-full shrink-0 overflow-hidden bg-gradient-to-br aspect-[4/3] sm:aspect-[21/6] sm:max-h-[340px] ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay
             desktopSrc={event.coverImageDesktop}

@@ -283,7 +283,7 @@ const OrganizerEventDetail: React.FC = () => {
   return (
     <div className="brand-theme flex min-h-screen w-full flex-col bg-gray-100 dark:bg-[#0F172A] mb-16">
       {/* ── Header / hero ───────────────────────────────────────────── */}
-      <div className={`relative h-74 w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient}`}>
+      <div className={`relative w-full shrink-0 overflow-hidden bg-gradient-to-br aspect-[4/3] sm:aspect-[21/6] sm:max-h-[340px] ${gradient}`}>
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay desktopSrc={event.coverImageDesktop} mobileSrc={event.coverImageMobile} alt={event.title} />
         ) : event.images && event.images.length > 0 && (
