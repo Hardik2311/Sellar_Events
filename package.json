@@ -21,6 +21,7 @@
     "jspdf-autotable": "^5.0.8",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.25.0",
+    "mediabunny": "^1.61.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "qrcode": "^1.5.4",

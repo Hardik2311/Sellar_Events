@@ -34,6 +34,7 @@ const IncomeReportPageInner: React.FC = () => {
                     startDate: '2000-01-01',
                     endDate: formatDateForInput(new Date()),
                     cacheKey: `income-report-events-${profile.companyId}`,
+                    includeSalesTrend: false, // just the event picker — trend isn't read here
                 });
                 setEvents(data.events || []);
             } catch (e) {

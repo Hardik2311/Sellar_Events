@@ -14,6 +14,7 @@ const SettingsHub = lazy(() => import('../pages/SettingHub'));
 const EventFieldSettings = lazy(() => import('../pages/EventSettings'));
 const CompanySettings = lazy(() => import('../pages/CompanySetting'));
 const AppSettings = lazy(() => import('../pages/AppSettings'));
+const StorefrontSettings = lazy(() => import('../pages/StorefrontSettings'));
 const ManageUsersPage = lazy(() => import('../pages/Reports/ManageUsersPage'));
 const UserAdd = lazy(() => import('../pages/UserAdd'));
 const SupportPage = lazy(() => import('../pages/SupportPage'));
@@ -70,6 +71,7 @@ export const AppRegistry: AppModule[] = [
       { path: ROUTES.EVENTS_SETTINGS_EVENT, component: guarded(Permission.EDIT_EVENT_SETTINGS, EventFieldSettings) },
       { path: ROUTES.EVENTS_SETTINGS_COMPANY, component: guarded(Permission.EDIT_COMPANY_SETTINGS, CompanySettings) },
       { path: ROUTES.EVENTS_SETTINGS_APP, component: guarded(Permission.EDIT_APP_SETTINGS, AppSettings) },
+      { path: ROUTES.EVENTS_SETTINGS_STOREFRONT, component: guarded(Permission.EDIT_COMPANY_SETTINGS, StorefrontSettings) },
       { path: ROUTES.EVENTS_SETTINGS_USER_SETTINGS, component: UserSettingsHub }, // owner/manage-user check is inside the page itself
       { path: ROUTES.EVENTS_SETTINGS_USERS, component: ManageUsersPage },
       { path: ROUTES.EVENTS_USER_ADD, component: UserAdd },

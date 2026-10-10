@@ -14,6 +14,7 @@ import {
   updateDoc,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +28,7 @@ import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
 import QRScanner from '../components/QrScannerModal';
 import ConfirmCheckInModal from '../components/ConfirmCheckInModal';
+import GroupCheckInModal from '../components/GroupCheckInModal';
 import SearchBar from '../components/SearchBar';
 import ExportMenu from '../components/ExportMenu';
 import type { ExportColumn } from '../components/ExportMenu';
@@ -121,6 +123,7 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   accessCode: data.accessCode ?? undefined,
   purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
   createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
+  bookingGroupId: data.bookingGroupId ?? null,
 });
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
@@ -138,6 +141,8 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
+  // Group booking awaiting "how many arrived?" (one QR admits the whole group)
+  const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; initialArrived: number } | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
   const [walkInTicket, setWalkInTicket] = useState<{
@@ -239,6 +244,78 @@ const Attendees: React.FC = () => {
     setSearchValue('');
     setExpandedId(null);
   };
+
+  // bookingGroupId -> its non-cancelled tickets (lead ticket first). Only
+  // groups with 2+ live tickets get the group check-in flow.
+  const bookingGroups = useMemo(() => {
+    const map = new Map<string, Attendee[]>();
+    attendees.forEach((a) => {
+      if (!a.bookingGroupId || a.status === 'cancelled') return;
+      map.set(a.bookingGroupId, [...(map.get(a.bookingGroupId) ?? []), a]);
+    });
+    map.forEach((members, groupId) =>
+      members.sort((x, y) => (x.id === groupId ? -1 : y.id === groupId ? 1 : x.ticketId.localeCompare(y.ticketId)))
+    );
+    return map;
+  }, [attendees]);
+
+  const getGroupMembers = useCallback(
+    (attendee: Attendee): Attendee[] | null => {
+      const members = attendee.bookingGroupId ? bookingGroups.get(attendee.bookingGroupId) : undefined;
+      return members && members.length > 1 ? members : null;
+    },
+    [bookingGroups]
+  );
+
+  // Defaults to "everyone arrived" — the usual case when a group shows its QR
+  // at the gate; staff lower it if only some of them are here yet.
+  const openGroupCheckIn = useCallback((members: Attendee[]) => {
+    setPendingGroup({ members, initialArrived: members.length });
+  }, []);
+
+  // Sets exactly `arrivedCount` tickets in the group to checked-in. Tickets
+  // already checked in keep their original check-in time.
+  const handleGroupCheckIn = useCallback(
+    (arrivedCount: number) => {
+      const companyId = profile?.companyId;
+      if (!pendingGroup || !companyId || !selectedEventId) return;
+      const ordered = [...pendingGroup.members].sort(
+        (a, b) => Number(b.status === 'checked_in') - Number(a.status === 'checked_in')
+      );
+      const changes = ordered
+        .map((a, i) => ({ attendee: a, shouldBeIn: i < arrivedCount }))
+        .filter(({ attendee, shouldBeIn }) => (attendee.status === 'checked_in') !== shouldBeIn);
+
+      const nowIso = new Date().toISOString();
+      const changedIds = new Map(changes.map(({ attendee, shouldBeIn }) => [attendee.id, shouldBeIn]));
+      setAttendees((prev) =>
+        prev.map((a) =>
+          changedIds.has(a.id)
+            ? { ...a, status: changedIds.get(a.id) ? 'checked_in' : 'valid', checkedInAt: changedIds.get(a.id) ? nowIso : null }
+            : a
+        )
+      );
+
+      const batch = writeBatch(db);
+      changes.forEach(({ attendee, shouldBeIn }) => {
+        batch.update(doc(db, 'companies', companyId, 'events', selectedEventId, 'attendees', attendee.id), {
+          status: shouldBeIn ? 'checked_in' : 'valid',
+          checkedInAt: shouldBeIn ? serverTimestamp() : null,
+        });
+      });
+      batch.commit().catch((err) => {
+        console.error('Group check-in failed:', err);
+        setScanFeedback({ type: 'error', message: 'Group check-in failed, please retry.' });
+      });
+
+      setScanFeedback({
+        type: 'success',
+        message: `${pendingGroup.members[0].name}'s group: ${arrivedCount} of ${pendingGroup.members.length} arrived.`,
+      });
+      setPendingGroup(null);
+    },
+    [pendingGroup, profile?.companyId, selectedEventId]
+  );
 
   const handleCheckIn = useCallback(
     (id: string) => {
@@ -390,9 +467,14 @@ const Attendees: React.FC = () => {
         return;
       }
 
+      const group = getGroupMembers(match);
+      if (group) {
+        openGroupCheckIn(group);
+        return;
+      }
       setPendingAttendee(match);
     },
-    [attendees, selectedEvent, isEventDateInFuture]
+    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
   );
   const handleConfirmCancel = useCallback(() => {
     if (!pendingCancelAttendee) return;
@@ -504,9 +586,15 @@ const Attendees: React.FC = () => {
         return;
       }
       const target = attendees.find((a) => a.id === id);
-      if (target) setPendingAttendee(target);
+      if (!target) return;
+      const group = getGroupMembers(target);
+      if (group) {
+        openGroupCheckIn(group);
+        return;
+      }
+      setPendingAttendee(target);
     },
-    [attendees, selectedEvent, isEventDateInFuture]
+    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
   );
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -707,6 +795,12 @@ const Attendees: React.FC = () => {
                       eventHelplineNumber={selectedEvent.helplineNumber}
                       bookMoreTicketsUrl={bookMoreTicketsUrl}
                       customFields={selectedEvent.customFields}
+                      groupInfo={(() => {
+                        const group = getGroupMembers(attendee);
+                        return group
+                          ? { size: group.length, arrived: group.filter((m) => m.status === 'checked_in').length }
+                          : undefined;
+                      })()}
                     />
                   ))}
                 </div>
@@ -736,6 +830,12 @@ const Attendees: React.FC = () => {
         attendee={pendingAttendee}
         onConfirm={handleConfirmCheckIn}
         onCancel={handleCancelConfirm}
+      />
+      <GroupCheckInModal
+        members={pendingGroup?.members ?? null}
+        initialArrived={pendingGroup?.initialArrived ?? 0}
+        onConfirm={handleGroupCheckIn}
+        onCancel={() => setPendingGroup(null)}
       />
       <EditAttendeeModal
         attendee={pendingEditAttendee}

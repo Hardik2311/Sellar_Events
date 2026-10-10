@@ -24,6 +24,7 @@ export function useSalesReport(companyId: string | undefined, initialEventId?: s
           startDate: '2000-01-01',
           endDate: formatDateForInput(new Date()),
           cacheKey: `sales-report-events-${companyId}`,
+          includeSalesTrend: false, // just the event picker — trend isn't read here
         });
         setEvents(data.events || []);
       } catch (e) {

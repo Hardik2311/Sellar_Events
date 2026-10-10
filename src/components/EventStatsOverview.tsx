@@ -1,10 +1,8 @@
 import React, { useMemo } from 'react';
 import { IndianRupee, Ticket, Users, TrendingUp } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import StatusBadge from './ui/StatusBadge';
+import { Card, CardContent } from './ui/card';
 import { useAttendees } from '../hooks/useAttendees';
 import { CONFIRMED_TICKET_STATUSES } from '../types/attendee.types';
-import { stripHtmlTags } from '../lib/utils';
 import type { EventSummary } from '../types/event.types';
 
 interface EventStatsOverviewProps {
@@ -79,11 +77,6 @@ export const EventStatsOverview: React.FC<EventStatsOverviewProps> = ({
   }
 
   const isLoading = loading || attendeesLoading;
-  const formattedDate = new Date(event.startDate).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
   return (
   <div className="flex flex-col gap-3">

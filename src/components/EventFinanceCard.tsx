@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownCircle, ArrowUpCircle, Plus, Scale } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Scale } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useIncomes } from '../hooks/useIncomes';
 import { useExpenses } from '../hooks/useExpenses';
@@ -33,7 +33,6 @@ const toTimestamp = (d?: DateLike): number | null => {
 export const EventFinanceCard: React.FC<EventFinanceCardProps> = ({
   companyId,
   eventId,
-  eventName,
   events,
   eventsLoading = false,
   isDataVisible,

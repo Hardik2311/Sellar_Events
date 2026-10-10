@@ -4,8 +4,6 @@ import { QRCodeCanvas } from 'qrcode.react';
 //import { jsPDF } from 'jspdf';
 import type { Attendee } from '../types/attendee.types';
 import type { CustomField } from '../types/event.types';
-import { stripHtmlTags } from '../lib/utils';
-import { shareTicketImage } from '../lib/shareTicket';
 import { buildAcknowledgementPdf, type AcknowledgementTicketData, type AcknowledgementEventData } from '../lib/ticketPdf';
 
 interface AttendeeCardProps {
@@ -30,6 +28,8 @@ interface AttendeeCardProps {
   customFields?: CustomField[];
   onRevive?: (id: string) => void;
   onEdit?: (attendee: Attendee) => void;
+  /** Set when this ticket is part of a group booking (one QR for the group). */
+  groupInfo?: { size: number; arrived: number };
 }
 
 const STATUS_STYLES: Record<Attendee['status'], string> = {
@@ -75,6 +75,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   eventHelplineNumber,
   bookMoreTicketsUrl,
   customFields = [],
+  groupInfo,
 }) => {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
@@ -85,278 +86,10 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   const displayPaymentMode: Attendee['paymentMode'] | undefined =
     attendee.paymentMode ?? (attendee.paymentMethod === 'manual_qr' ? 'UPI' : undefined);
 
-  const buildTicketCanvas = (): HTMLCanvasElement | null => {
-    const qrCanvas = qrCanvasRef.current;
-    if (!qrCanvas) return null;
-
-    const SCALE = 3;
-    const width = 380;
-    const cardMargin = 14;
-    const cardW = width - cardMargin * 2;
-    const headerH = 172;          // taller — room for title + location + divider + columns
-    const stubPadTop = 24;
-    const qrSize = 176;
-    const qrBoxPad = 16;
-    const boxSize = qrSize + qrBoxPad * 2;
-    const notchR = 11;
-    const height = cardMargin + headerH + stubPadTop + boxSize + 30 + 20 + 26 + cardMargin;
-
-    const out = document.createElement('canvas');
-    out.width = width * SCALE;
-    out.height = height * SCALE;
-    const ctx = out.getContext('2d');
-    if (!ctx) return null;
-    ctx.scale(SCALE, SCALE);
-
-    const PAGE_BG = '#0A1614';    // dark outer background — only affects the downloaded/shared image
-    const CARD_BG = '#FFFFFF';
-    const INK = '#0B3B3A';
-    const TEAL = '#00A896';
-    const WHITE_16 = 'rgba(255,255,255,0.16)';
-    const WHITE_35 = 'rgba(255,255,255,0.35)';
-    const WHITE_55 = 'rgba(255,255,255,0.55)';
-    const WHITE_70 = 'rgba(255,255,255,0.7)';
-
-    ctx.fillStyle = PAGE_BG;
-    ctx.fillRect(0, 0, width, height);
-
-    const cardX = cardMargin;
-    const cardY = cardMargin;
-    const cardH = height - cardMargin * 2;
-    const radius = 22;
-
-    // soft drop shadow
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 12;
-    ctx.fillStyle = CARD_BG;
-    ctx.beginPath();
-    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
-    ctx.fill();
-    ctx.restore();
-
-    // clip to card
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
-    ctx.clip();
-
-    ctx.fillStyle = CARD_BG;
-    ctx.fillRect(cardX, cardY, cardW, cardH);
-
-    // gradient header
-    const grad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + headerH);
-    grad.addColorStop(0, INK);
-    grad.addColorStop(1, TEAL);
-    ctx.fillStyle = grad;
-    ctx.fillRect(cardX, cardY, cardW, headerH);
-
-    // texture circles
-    ctx.save();
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(cardX + cardW - 24, cardY + 20, 50, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cardX + 20, cardY + headerH - 8, 34, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-
-    ctx.textAlign = 'left';
-
-    // "E-TICKET" pill + "LIVE PASS" label
-    const eyebrowY = cardY + 24;
-    ctx.font = 'bold 9px sans-serif';
-    const eyebrowText = 'E-TICKET';
-    const eyebrowW = ctx.measureText(eyebrowText).width + 16;
-    ctx.fillStyle = WHITE_16;
-    ctx.beginPath();
-    ctx.roundRect(cardX + 20, eyebrowY - 12, eyebrowW, 18, 9);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(eyebrowText, cardX + 28, eyebrowY);
-    ctx.fillStyle = WHITE_70;
-    ctx.font = '9px sans-serif';
-    ctx.fillText('LIVE PASS', cardX + 28 + eyebrowW + 6, eyebrowY);
-
-    // tier pill, top-right (stands in for "GENERAL")
-    ctx.font = 'bold 9px sans-serif';
-    const tierText = attendee.tierName.toUpperCase();
-    const tierW = ctx.measureText(tierText).width + 18;
-    const tierX = cardX + cardW - 20 - tierW;
-    ctx.fillStyle = WHITE_16;
-    ctx.strokeStyle = WHITE_35;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(tierX, eyebrowY - 12, tierW, 18, 9);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(tierText, tierX + 9, eyebrowY);
-
-    // event title, wraps to 2 lines max
-    const wrapText = (text: string, maxWidth: number): string[] => {
-      const words = text.split(' ');
-      const lines: string[] = [];
-      let line = '';
-      for (const w of words) {
-        const test = line ? `${line} ${w}` : w;
-        if (line && ctx.measureText(test).width > maxWidth) {
-          lines.push(line);
-          line = w;
-        } else {
-          line = test;
-        }
-      }
-      if (line) lines.push(line);
-      return lines.slice(0, 2);
-    };
-
-    ctx.font = 'bold 20px sans-serif';
-    const titleText = stripHtmlTags(eventTitle || '') || 'Event Ticket';
-    const titleLines = wrapText(titleText, cardW - 40);
-    let ty = cardY + 58;
-    ctx.fillStyle = '#ffffff';
-    titleLines.forEach((line, i) => ctx.fillText(line, cardX + 20, ty + i * 24));
-    ty += (titleLines.length - 1) * 24;
-
-    // location row with a small pin glyph (only if venue is known)
-    if (eventVenue) {
-      const pinCx = cardX + 24;
-      const pinCy = ty + 20;
-      ctx.fillStyle = WHITE_70;
-      ctx.beginPath();
-      ctx.arc(pinCx, pinCy - 2, 4, 0, Math.PI * 2);
-      ctx.moveTo(pinCx - 3.4, pinCy + 1);
-      ctx.lineTo(pinCx, pinCy + 7);
-      ctx.lineTo(pinCx + 3.4, pinCy + 1);
-      ctx.closePath();
-      ctx.fill();
-      ctx.font = '11px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.fillText(eventVenue, cardX + 34, ty + 24);
-      ty += 20;
-    }
-
-    // divider
-    ty += 14;
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cardX + 20, ty);
-    ctx.lineTo(cardX + cardW - 20, ty);
-    ctx.stroke();
-
-    // two-column info: Attendee / Date
-    const colY = ty + 22;
-    const colGap = (cardW - 40) / 2;
-    ctx.font = '9px sans-serif';
-    ctx.fillStyle = WHITE_55;
-    ctx.fillText('ATTENDEE', cardX + 20, colY);
-    ctx.fillText('DATE', cardX + 20 + colGap, colY);
-
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = '#ffffff';
-    const nameText = attendee.name.length > 18 ? `${attendee.name.slice(0, 16)}…` : attendee.name;
-    ctx.fillText(nameText, cardX + 20, colY + 16);
-    ctx.fillText(eventDate || '—', cardX + 20 + colGap, colY + 16);
-
-    ctx.restore();
-
-    // perforation seam
-    const seamY = cardY + headerH;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(cardX, cardY, cardW, cardH, radius);
-    ctx.clip();
-    ctx.fillStyle = PAGE_BG;
-    ctx.beginPath(); ctx.arc(cardX, seamY, notchR, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cardX + cardW, seamY, notchR, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-
-    ctx.strokeStyle = 'rgba(11,59,58,0.18)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(cardX + notchR + 6, seamY);
-    ctx.lineTo(cardX + cardW - notchR - 6, seamY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // QR box with viewfinder corners
-    let y = seamY + stubPadTop;
-    const boxX = (width - boxSize) / 2;
-    ctx.fillStyle = CARD_BG;
-    ctx.strokeStyle = 'rgba(11,59,58,0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(boxX, y, boxSize, boxSize, 16);
-    ctx.fill();
-    ctx.stroke();
-    ctx.drawImage(qrCanvas, boxX + qrBoxPad, y + qrBoxPad, qrSize, qrSize);
-
-    const bracket = 16;
-    ctx.strokeStyle = TEAL;
-    ctx.lineWidth = 2.5;
-    const bx = boxX + 6, by = y + 6, bw = boxSize - 12, bh = boxSize - 12;
-    const drawCorner = (cx: number, cy: number, dx: number, dy: number) => {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + bracket * dy);
-      ctx.lineTo(cx, cy);
-      ctx.lineTo(cx + bracket * dx, cy);
-      ctx.stroke();
-    };
-    drawCorner(bx, by, 1, 1);
-    drawCorner(bx + bw, by, -1, 1);
-    drawCorner(bx, by + bh, 1, -1);
-    drawCorner(bx + bw, by + bh, -1, -1);
-
-    // ticket id
-    y += boxSize + 26;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = INK;
-    ctx.font = '600 13px monospace';
-    ctx.fillText(attendee.ticketId.split('').join('\u200a'), width / 2, y);
-
-    y += 18;
-    ctx.fillStyle = 'rgba(11,59,58,0.45)';
-    ctx.font = '600 10px sans-serif';
-    ctx.fillText('SCAN AT ENTRY · NON-TRANSFERABLE', width / 2, y);
-
-    return out;
-  };
-
   const [sharing, setSharing] = useState(false);
-
-  const handleShare = async () => {
-    if (sharing) return; // prevent double-tap re-entry
-    setSharing(true);
-    try {
-      const cleanEventTitle = eventTitle ? stripHtmlTags(eventTitle) : '';
-      const text = `${cleanEventTitle ? cleanEventTitle + '\n' : ''}${attendee.name} — ${attendee.tierName}\nTicket: ${attendee.ticketId}\nPhone: ${attendee.phone}`;
-      const canvas = buildTicketCanvas();
-      if (canvas) {
-        // sirf image jaayegi, koi caption text nahi — WhatsApp me duplicate text nahi aayega
-        await shareTicketImage(
-          canvas.toDataURL('image/png'),
-          `${attendee.ticketId}.png`,
-          'image/png',
-          { title: attendee.name, text }
-        );
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
 
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
 
-  const handleDownloadTicket = () => {
-    const canvas = buildTicketCanvas();
-    if (!canvas) return;
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `${attendee.ticketId}.png`;
-    link.click();
-  };
   const buildTicketDataForPdf = (): AcknowledgementTicketData => ({
     ticketId: attendee.ticketId,
     tierName: attendee.tierName,
@@ -435,6 +168,11 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             {attendee.accessCode && (
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">
                 Access code: <span className="font-mono text-slate-500 dark:text-slate-400">{attendee.accessCode}</span>
+              </p>
+            )}
+            {groupInfo && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-sm bg-[#007A78]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#007A78] dark:bg-[#2DD4BF]/10 dark:text-[#2DD4BF]">
+                Group of {groupInfo.size} · {groupInfo.arrived}/{groupInfo.size} arrived
               </p>
             )}
           </div>

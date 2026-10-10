@@ -1,10 +1,14 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
+import BrandButton from './BrandButton';
+import BrandTag from './BrandTag';
+import TicketDivider from './TicketDivider';
 
 interface TierRow {
   id: string;
   name: string;
   priceLabel: string;
+  description?: string;
   remainingLabel?: string;
   qty: number;
   soldOut: boolean;
@@ -20,123 +24,132 @@ interface TicketPanelProps {
   tiers: TierRow[];
   allSoldOut: boolean;
   emptyMessage: string;
-  consent?: {
-    text: string;
-    acknowledged: boolean;
-    onToggle: (v: boolean) => void;
-  };
   lineItems: { id: string; label: string; amountLabel: string }[];
+  countLabel: string;
   totalLabel: string;
   ctaLabel: string;
   onCta: () => void;
   ctaDisabled: boolean;
+  /** The MobileCheckoutBar carries the action below lg, so the panel's own button hides there. */
+  hideCtaOnMobile?: boolean;
   className?: string;
 }
 
-// The sticky ticket-selection panel on the event-detail page's right rail
-// (desktop) / right-after-title block (mobile): tier rows on top, a dashed
-// perforation, then a dark stub with the selected lines, total and CTA.
+// The ticket picker on the event page: tier rows with a stepper, then a
+// punched perforation and an ink stub with the lines, total and CTA.
 const TicketPanel: React.FC<TicketPanelProps> = ({
   maxPerOrder,
   tiers,
   allSoldOut,
   emptyMessage,
-  consent,
   lineItems,
+  countLabel,
   totalLabel,
   ctaLabel,
   onCta,
   ctaDisabled,
+  hideCtaOnMobile = false,
   className = '',
 }) => (
-  <div className={`overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm ${className}`}>
-    <div className="p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="brand-display text-lg text-[var(--brand-black)]">Tickets</h2>
-        <span className="brand-mono text-[10px] text-black/40">Max {maxPerOrder} per order</span>
+  <div className={`overflow-hidden rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] ${className}`}>
+    <div className="p-4 lg:p-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="brand-display text-2xl leading-none text-[var(--brand-black)]">Tickets</h2>
+        <span className="text-[13px] text-[var(--brand-muted)]">Max {maxPerOrder} per order</span>
       </div>
 
       {allSoldOut ? (
-        <p className="mt-3 rounded-sm bg-slate-50 p-3 text-sm text-slate-500">{emptyMessage}</p>
+        <p className="mt-4 rounded-lg bg-[var(--brand-skeleton)] p-3 text-sm text-[var(--brand-muted)]">{emptyMessage}</p>
       ) : (
-        <div className="mt-3 flex flex-col divide-y divide-gray-100">
-          {tiers.map((tier) => (
-            <div key={tier.id} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-800">{tier.name}</p>
-                <p className="brand-display text-base text-[var(--brand-black)]">{tier.priceLabel}</p>
-                {tier.remainingLabel && (
-                  <p className="brand-mono text-[10px] text-slate-400">{tier.remainingLabel}</p>
+        <div className="mt-4 flex flex-col gap-2">
+          {tiers.map((tier) => {
+            const selected = tier.qty > 0;
+            return (
+              <div
+                key={tier.id}
+                className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-lg p-4 ${
+                  selected
+                    ? 'border-[1.5px] border-[var(--brand-teal)] bg-[var(--brand-teal-soft)]'
+                    : 'border border-[var(--brand-line)]'
+                } ${tier.soldOut ? 'opacity-70' : ''}`}
+              >
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">
+                    {tier.name}
+                    {tier.remainingLabel && !tier.soldOut && <BrandTag variant="highlight">{tier.remainingLabel}</BrandTag>}
+                  </p>
+                  <p className="text-[15px] font-bold leading-[22px] tabular-nums text-[var(--brand-black)]">{tier.priceLabel}</p>
+                </div>
+
+                {tier.soldOut ? (
+                  <BrandTag variant="muted">{tier.salesEnded ? 'Sales ended' : 'Sold out'}</BrandTag>
+                ) : (
+                  <div
+                    className={`inline-flex h-9 shrink-0 items-center rounded-sm border bg-[var(--brand-surface)] ${
+                      selected ? 'border-[var(--brand-teal)]' : 'border-[var(--brand-line-strong)]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={tier.onDecrement}
+                      disabled={tier.decrementDisabled}
+                      aria-label={`Remove one ${tier.name} ticket`}
+                      className="flex h-full w-9 items-center justify-center rounded-sm text-[var(--brand-black)] hover:bg-[var(--brand-skeleton)] disabled:text-[var(--brand-line-strong)] disabled:hover:bg-transparent"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="min-w-6 text-center text-[15px] font-bold tabular-nums text-[var(--brand-black)]" aria-live="polite">
+                      {tier.qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={tier.onIncrement}
+                      disabled={tier.incrementDisabled}
+                      aria-label={`Add one ${tier.name} ticket`}
+                      className="flex h-full w-9 items-center justify-center rounded-sm text-[var(--brand-black)] hover:bg-[var(--brand-skeleton)] disabled:text-[var(--brand-line-strong)] disabled:hover:bg-transparent"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {tier.description && (
+                  <p className="col-span-2 text-[13px] font-medium leading-[18px] text-[var(--brand-muted)]">{tier.description}</p>
                 )}
               </div>
-
-              {tier.soldOut ? (
-                <span className="brand-mono rounded-sm bg-gray-100 px-3 py-1.5 text-[10px] font-bold text-gray-400">
-                  {tier.salesEnded ? 'Sales ended' : 'Sold out'}
-                </span>
-              ) : (
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={tier.onDecrement}
-                    disabled={tier.decrementDisabled}
-                    className="rounded-sm border border-gray-300 p-1.5 text-slate-600 hover:bg-gray-50 disabled:opacity-30"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="w-5 text-center text-sm font-medium text-slate-800">{tier.qty}</span>
-                  <button
-                    type="button"
-                    onClick={tier.onIncrement}
-                    disabled={tier.incrementDisabled}
-                    className="rounded-sm border border-gray-300 p-1.5 text-slate-600 hover:bg-gray-50 disabled:opacity-30"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
-      )}
-
-      {consent && (
-        <label className="mt-3 flex items-start gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={consent.acknowledged}
-            onChange={(e) => consent.onToggle(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 bg-white accent-[var(--brand-teal)]"
-          />
-          {consent.text}
-        </label>
       )}
     </div>
 
     {lineItems.length > 0 && (
       <>
-        <div className="border-t-2 border-dashed border-black/10" />
-        <div className="bg-[var(--brand-black)] p-4">
-          <div className="space-y-1">
+        <div className="relative h-6 bg-[var(--brand-surface)]">
+          <TicketDivider notchColor="var(--brand-cream)" className="absolute inset-x-0 top-1/2" />
+        </div>
+        <div className="bg-[var(--brand-black)] px-4 py-4 text-[var(--brand-cream)] lg:px-5">
+          <ul className="flex flex-col gap-1.5">
             {lineItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between text-xs text-white/70">
-                <span>{item.label}</span>
+              <li key={item.id} className="flex items-center justify-between gap-4 text-sm tabular-nums text-[#c9c4b8]">
+                <span className="min-w-0 truncate">{item.label}</span>
                 <span>{item.amountLabel}</span>
-              </div>
+              </li>
             ))}
+          </ul>
+          <div className="mt-3 flex items-end justify-between gap-4 border-t border-white/10 pt-3">
+            <span className="brand-label text-[#c9c4b8]">{countLabel}</span>
+            <span className="brand-display text-2xl leading-none tabular-nums text-[var(--brand-yellow)]">{totalLabel}</span>
           </div>
-          <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-            <span className="brand-mono text-xs font-bold text-white/60">Total</span>
-            <span className="brand-display text-xl text-[var(--brand-yellow)]">{totalLabel}</span>
-          </div>
-          <button
-            type="button"
+          <BrandButton
+            variant="onInk"
+            block
             onClick={onCta}
             disabled={ctaDisabled}
-            className="brand-mono mt-3 w-full rounded-sm bg-[var(--brand-yellow)] py-2.5 text-xs font-bold text-black hover:brightness-95 disabled:opacity-40"
+            className={`mt-4 ${hideCtaOnMobile ? 'hidden lg:flex' : ''}`}
           >
             {ctaLabel}
-          </button>
+          </BrandButton>
         </div>
       </>
     )}

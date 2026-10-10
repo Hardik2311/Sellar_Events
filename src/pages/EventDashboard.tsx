@@ -16,7 +16,6 @@ import { EventFilterProvider, useEventFilter } from '../components/ui/EventdateF
 import { usePermissions } from '../hooks/usePermissions';
 import { Permission } from '../types/permissions.types';
 import EventFinanceCard from '../components/EventFinanceCard';
-import { stripHtmlTags } from '../lib/utils';
 //import ThemeToggle from '../components/ui/ThemeToggle';
 
 const getPreselectedEventId = (events: EventDashboardData['events']): string | null => {

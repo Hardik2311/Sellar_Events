@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
+import { normalizeDocFiles, type DocFile } from '../lib/docFiles';
 
 export interface UserProfile {
   fullName: string;

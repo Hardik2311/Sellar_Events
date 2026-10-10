@@ -21,6 +21,7 @@ import { useAuth, isProfileComplete } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { DEFAULT_MAX_TICKETS_PER_ORDER, EVENT_CREDIT_VALIDITY_DAYS, getNewCreditExpiry } from '../data/events';
 import { saveDraft, loadDraft, deleteDraft } from '../lib/draftStore';
+import { uploadGalleryMedia } from '../lib/galleryUpload';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import TimeSelect from '../components/ui/Timeselect';
@@ -107,6 +108,8 @@ const CreateEvent: React.FC = () => {
   // immediately overwrite any real saved draft before it's loaded.
   const [draftReady, setDraftReady] = useState(false);
   const [savingAction, setSavingAction] = useState<'draft' | 'published' | null>(null);
+  // True while the past-events gallery is still compressing photos/videos
+  const [galleryBusy, setGalleryBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showPastEventConfirm, setShowPastEventConfirm] = useState(false);
   const [showCreditConfirm, setShowCreditConfirm] = useState(false);
@@ -142,7 +145,12 @@ const CreateEvent: React.FC = () => {
         if (cancelled || !draft) return;
         // Merged over INITIAL_STATE so a draft saved before a field was added
         // to the form doesn't come back missing that key.
-        setForm({ ...INITIAL_STATE, ...draft });
+        // Compressed gallery videos come back as their stored file; their old
+        // blob: preview URL died with the previous page, so make a fresh one.
+        const pastEventsGallery = (draft.pastEventsGallery ?? []).map((item) =>
+          item.file ? { ...item, url: URL.createObjectURL(item.file) } : item
+        );
+        setForm({ ...INITIAL_STATE, ...draft, pastEventsGallery });
       })
       .catch((err) => console.warn('Failed to load saved event draft:', err))
       .finally(() => { if (!cancelled) setDraftReady(true); });
@@ -260,13 +268,9 @@ const CreateEvent: React.FC = () => {
         })()
         : null;
 
-      const pastEventsGalleryUploaded = await Promise.all(
-        form.pastEventsGallery.map(async (item, i) => {
-          const ext = item.type === 'video' ? 'mp4' : item.type === 'gif' ? 'gif' : 'jpg';
-          const r = ref(storage, `companies/${profile.companyId}/events/${tempId}/past-${i}.${ext}`);
-          await uploadString(r, item.url, 'data_url');
-          return { url: await getDownloadURL(r), type: item.type };
-        })
+      const pastEventsGalleryUploaded = await uploadGalleryMedia(
+        form.pastEventsGallery,
+        `companies/${profile.companyId}/events/${tempId}`
       );
 
       const isManualQR = form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr';
@@ -927,6 +931,7 @@ const CreateEvent: React.FC = () => {
                   <PastEventsGallery
                     media={form.pastEventsGallery}
                     onChange={(media) => update('pastEventsGallery', media)}
+                    onBusyChange={setGalleryBusy}
                     maxItems={6}
                   />
                 </CardContent>
@@ -1128,17 +1133,19 @@ const CreateEvent: React.FC = () => {
       <div className="fixed bottom-14 md:bottom-0 left-0 right-0 md:left-56 border-t border-slate-200 dark:border-slate-800 bg-[#F9FAFB] dark:bg-[#1E293B] p-3.5 flex justify-center gap-3 z-30 shadow-2xl">
         <div className="w-full max-w-3xl flex gap-3">
           {can(Permission.SAVE_DRAFT_EVENT) && (
-            <button onClick={handleSaveDraft} disabled={savingAction !== null}
+            <button onClick={handleSaveDraft} disabled={savingAction !== null || galleryBusy}
               className="flex-1 rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs disabled:opacity-40"
             >
-              {savingAction === 'draft' ? 'Saving…' : 'Save as Draft'}
+              {galleryBusy ? 'Compressing media…' : savingAction === 'draft' ? 'Saving…' : 'Save as Draft'}
             </button>
           )}
           {can(Permission.PUBLISH_EVENT) && (
-            <button onClick={handlePublish} disabled={savingAction !== null}
+            <button onClick={handlePublish} disabled={savingAction !== null || galleryBusy}
               className={`flex-1 rounded-sm bg-[#007A78] hover:bg-[#006361] text-white dark:bg-[#2DD4BF] dark:hover:bg-[#22b8a5] dark:text-slate-950 py-3 text-xs font-bold transition-all shadow-xs disabled:opacity-40 ${!isPublishable ? 'opacity-60' : ''}`}
             >
-              {savingAction === 'published'
+              {galleryBusy
+                ? 'Compressing media…'
+                : savingAction === 'published'
                 ? 'Publishing…'
                 : `Publish Event (${creditsLoading ? '…' : credits})`}
             </button>

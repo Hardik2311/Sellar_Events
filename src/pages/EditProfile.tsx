@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { FiCamera, FiCheck, FiX, FiUser } from 'react-icons/fi';
+import { FiCamera, FiCheck, FiX, FiUser, FiImage, FiUpload, FiTrash2 } from 'react-icons/fi';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../hooks/useProfileData';
@@ -36,7 +36,13 @@ interface ProfileFormData {
     facebook: string;
     twitter: string;
     whatsappNumber: string;
+    brandCover: string;
 }
+
+// Store-front hero banner — shown behind the header copy on the customer
+// Discover page. Wide 3:1; the sides crop on phones, so keep text/logos centred.
+const BRAND_COVER_SIZE = { width: 1920, height: 640 };
+const BRAND_COVER_MAX_KB = 600;
 
 const emptyProfile: ProfileFormData = {
     name: '',
@@ -62,6 +68,7 @@ const emptyProfile: ProfileFormData = {
     facebook: '',
     twitter: '',
     whatsappNumber: '',
+    brandCover: '',
 };
 
 const eventCategoryOptions = [
@@ -133,6 +140,10 @@ const EditProfile: React.FC = () => {
     const [photoRemoved, setPhotoRemoved] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    const [coverFile, setCoverFile] = useState<File | null>(null);
+    const [coverRemoved, setCoverRemoved] = useState(false);
+    const coverInputRef = useRef<HTMLInputElement>(null);
 
     // FIXED: Added loading checks and Object.keys check so it only maps real data
     useEffect(() => {
@@ -164,10 +175,12 @@ const EditProfile: React.FC = () => {
                 facebook: profile.facebook || authProfile?.facebook || '',
                 twitter: profile.twitter || authProfile?.twitter || '',
                 whatsappNumber: profile.whatsappNumber || authProfile?.whatsappNumber || '',
+                brandCover: profile.brandCover || '',
             };
 
             setFormData(loaded);
             setPreviewUrl(loaded.profilePicture || null);
+            setCoverPreview(loaded.brandCover || null);
         }
     }, [profile, dataLoading, authLoading, user, authProfile]);
 
@@ -263,6 +276,21 @@ const EditProfile: React.FC = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setCoverFile(file);
+        setCoverPreview(URL.createObjectURL(file));
+        setCoverRemoved(false);
+    };
+
+    const handleRemoveCover = () => {
+        setCoverFile(null);
+        setCoverPreview(null);
+        setCoverRemoved(true);
+        if (coverInputRef.current) coverInputRef.current.value = '';
+    };
+
     const handleMenuUpload = () => {
         fileInputRef.current?.click();
         setShowPhotoMenu(false);
@@ -336,6 +364,17 @@ const EditProfile: React.FC = () => {
                 profilePictureUrl = '';
             }
 
+            let brandCoverUrl = formData.brandCover;
+            if (isOwner && coverFile) {
+                const compressedCover = await compressImage(coverFile, BRAND_COVER_MAX_KB, BRAND_COVER_SIZE.width);
+                // Timestamped name so a replaced cover never shows a stale cached copy
+                const coverRef = ref(storage, `companies/${effectiveCompanyId}/branding/brand-cover-${Date.now()}`);
+                await uploadBytes(coverRef, compressedCover, { contentType: compressedCover.type || 'image/jpeg' });
+                brandCoverUrl = await getDownloadURL(coverRef);
+            } else if (isOwner && coverRemoved) {
+                brandCoverUrl = '';
+            }
+
             const finalCategory =
                 formData.eventCategory === 'Other'
                     ? formData.customEventCategory
@@ -364,12 +403,16 @@ const EditProfile: React.FC = () => {
                 profilePicture: profilePictureUrl,
                 aadhaarDocUrls: formData.aadhaarDocUrls,
                 panDocUrls: formData.panDocUrls,
+                ...(isOwner && { brandCover: brandCoverUrl }),
             });
 
             refetch();
             await refreshProfile(); // AuthContext ka profile bhi sync karo, warna Account page pe stale pic dikhega
             setFormData((prev) => ({ ...prev, profilePicture: profilePictureUrl }));
             setPhotoRemoved(false);
+            setFormData((prev) => ({ ...prev, brandCover: brandCoverUrl }));
+            setCoverFile(null);
+            setCoverRemoved(false);
             setSubmitSuccess('Profile updated successfully!');
             setTimeout(() => setSubmitSuccess(null), 3000);
         } catch (err) {
@@ -461,6 +504,67 @@ const EditProfile: React.FC = () => {
                             onClose={() => setShowPhotoMenu(false)}
                         />
                     )}
+
+                    {/* ── Store brand cover (customer Discover page hero) ── */}
+                    <SectionCard title="Store Brand Cover">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                            <div className="relative aspect-[3/1] w-full overflow-hidden rounded-sm border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 md:max-w-xl">
+                                {coverPreview ? (
+                                    <img src={coverPreview} alt="Brand cover preview" className="h-full w-full object-cover" />
+                                ) : (
+                                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500">
+                                        <FiImage size={24} />
+                                        <span className="text-xs font-bold">No cover uploaded</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                <p className="m-0 font-medium">Shown behind the header on your public events page.</p>
+                                <ul className="m-0 list-disc space-y-0.5 pl-4 font-medium">
+                                    <li>
+                                        Recommended size:{' '}
+                                        <span className="font-extrabold text-slate-700 dark:text-slate-200">
+                                            {BRAND_COVER_SIZE.width} × {BRAND_COVER_SIZE.height} px
+                                        </span>{' '}
+                                        (3:1 landscape)
+                                    </li>
+                                    <li>JPG or PNG</li>
+                                    <li>Keep logos and text in the centre, since the sides are cropped on phones</li>
+                                </ul>
+                                <div className="mt-1 flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => coverInputRef.current?.click()}
+                                        disabled={!isOwner}
+                                        className="flex items-center gap-1.5 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-3 py-2 text-xs font-bold text-white dark:text-slate-950 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <FiUpload size={13} /> {coverPreview ? 'Change cover' : 'Upload cover'}
+                                    </button>
+                                    {coverPreview && (
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveCover}
+                                            disabled={!isOwner}
+                                            className="flex items-center gap-1.5 rounded-sm border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-red-400 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            <FiTrash2 size={13} /> Remove
+                                        </button>
+                                    )}
+                                </div>
+                                {!isOwner && (
+                                    <p className="m-0 text-[11px] font-bold">Only the account owner can change the brand cover.</p>
+                                )}
+                                <input
+                                    ref={coverInputRef}
+                                    type="file"
+                                    accept="image/png, image/jpeg, image/jpg"
+                                    className="hidden"
+                                    aria-label="Upload brand cover"
+                                    onChange={handleCoverChange}
+                                />
+                            </div>
+                        </div>
+                    </SectionCard>
 
                     {/* ── Personal Information + Organization Details ── */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

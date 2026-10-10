@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Ticket, Loader2, ArrowLeft, Smartphone, CreditCard, Landmark } from 'lucide-react';
+import { Ticket, ArrowLeft, Smartphone, CreditCard, Landmark, AlertCircle } from 'lucide-react';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
-import { formatDateRange, formatTime, type AccessCodeEntry } from '../data/events';
+import { formatTime, type AccessCodeEntry } from '../data/events';
+import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
 import { getSubdomain } from '../lib/subdomain';
@@ -12,11 +13,25 @@ import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
 import { stripHtmlTags } from '../lib/utils';
+import { assignBookingGroups, getEventInitials } from '../lib/ticketing';
 import { loadImageAsCoverBanner } from '../lib/imageBanner';
 import BrandNavHeader from '../components/brand/BrandNavHeader';
 import SectionLabel from '../components/brand/SectionLabel';
 import TicketOrderSummary from '../components/brand/TicketOrderSummary';
 import CheckoutStepPills from '../components/brand/CheckoutStepPills';
+import BrandCheckbox from '../components/brand/BrandCheckbox';
+import MobileCheckoutBar from '../components/brand/MobileCheckoutBar';
+import MobileOrderSummary from '../components/brand/MobileOrderSummary';
+import BrandButton from '../components/brand/BrandButton';
+import BrandEmptyState from '../components/brand/BrandEmptyState';
+import {
+  brandErrorClass,
+  brandFieldHeight,
+  brandHelpClass,
+  brandInputClass,
+  brandLabelClass,
+  brandPanelClass,
+} from '../components/brand/brandForm';
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
 const PDF_BANNER_WIDTH = 760;
@@ -42,18 +57,6 @@ const roundToInterval = (value: number, interval: number) => {
   return Math.round(value / interval) * interval;
 };
 
-// Turns an event title into short initials for ticket IDs.
-// "Party Popper" -> "PP", "Sunburn Festival" -> "SF", "Diwali" (single word) -> "DI"
-const getEventInitials = (title: string): string => {
-  const words = title.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return 'EV';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return words
-    .slice(0, 3) // cap at 3 words so long titles don't produce long codes
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-};
 const CheckoutPage: React.FC = () => {
   const { id, companyId } = useParams<{ id: string; companyId?: string }>();
   const navigate = useNavigate();
@@ -101,6 +104,7 @@ const CheckoutPage: React.FC = () => {
     paymentMode?: string;
     purchasedAt?: number;
     status?: 'valid' | 'checked_in' | 'cancelled';
+    bookingGroupId?: string | null;
   }
 
   const [purchasedTickets, setPurchasedTickets] = useState<PurchasedTicket[]>([]);
@@ -206,32 +210,41 @@ const CheckoutPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="brand-theme flex min-h-screen w-full items-center justify-center bg-[var(--brand-cream)]">
-        <Loader2 className="animate-spin text-[var(--brand-teal)]" size={24} />
+      <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)]" aria-busy="true" aria-label="Loading checkout">
+        <div className="h-16 border-b border-[var(--brand-line)] bg-[var(--brand-surface)]" />
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-6 px-4 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10 lg:px-12">
+          <div className="flex flex-col gap-4">
+            <div className="h-10 w-56 animate-pulse rounded-lg bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="h-44 animate-pulse rounded-xl bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+            ))}
+          </div>
+          <div className="h-80 animate-pulse rounded-xl bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+        </div>
       </div>
     );
   }
 
   if (domainError || (!loading && !event)) {
     return (
-      <div className="brand-theme flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-[var(--brand-cream)] p-6 text-center">
-        <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center">
-          <Ticket size={28} className="text-black/40" />
-        </div>
-        <h2 className="brand-display text-xl text-[var(--brand-black)]">Order not found</h2>
-        <p className="text-sm text-black/50 max-w-xs">
-          We couldn&rsquo;t find this order. The event might have been removed or the link is incorrect.
-        </p>
-        <button
-          onClick={() =>
-            navigate(
-              getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
-            )
+      <div className="brand-theme flex min-h-screen w-full items-center justify-center bg-[var(--brand-cream)] p-4">
+        <BrandEmptyState
+          icon={Ticket}
+          title="This order isn't available"
+          body="The event may have been removed, or the link might be wrong."
+          className="w-full max-w-md"
+          action={
+            <BrandButton
+              onClick={() =>
+                navigate(
+                  getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
+                )
+              }
+            >
+              All events
+            </BrandButton>
           }
-          className="brand-mono mt-2 rounded-sm bg-[var(--brand-yellow)] px-6 py-2.5 text-xs font-bold text-black shadow-sm hover:brightness-95"
-        >
-          Return to store
-        </button>
+        />
       </div>
     );
   }
@@ -294,20 +307,21 @@ const CheckoutPage: React.FC = () => {
   // empty custom field still renders as a blank, pointless input at checkout.
   const customFields = (event.customFields ?? []).filter((f) => f.label?.trim());
 
-  const detailsComplete =
+  // Split so the step pills can tick "Details" and "Questions" separately.
+  const contactComplete =
     attendeeDetails.length === totalQty &&
     totalQty > 0 &&
     attendeeDetails.every(
-      (a) =>
-        a.name.trim().length > 0 &&
-        isValidEmail(a.email) &&
-        isValidPhone(a.phone) &&
-        customFields.every((f) => {
-          if (!f.required) return true;
-          const val = a.customAnswers[f.id] ?? '';
-          return f.type === 'checkbox' ? val === 'true' : val.trim().length > 0;
-        })
+      (a) => a.name.trim().length > 0 && isValidEmail(a.email) && isValidPhone(a.phone)
     );
+  const questionsComplete = attendeeDetails.every((a) =>
+    customFields.every((f) => {
+      if (!f.required) return true;
+      const val = a.customAnswers[f.id] ?? '';
+      return f.type === 'checkbox' ? val === 'true' : val.trim().length > 0;
+    })
+  );
+  const detailsComplete = contactComplete && questionsComplete;
 
   const initiatePayment = () => {
     if (!detailsComplete || lineItems.length === 0) return;
@@ -400,9 +414,15 @@ const CheckoutPage: React.FC = () => {
         }
       }
       const initials = getEventInitials(stripHtmlTags(event.title));
-      const created: PurchasedTicket[] = [];
+      // Same-name tickets in this order share one QR / group check-in
+      const bookingGroupIds = assignBookingGroups(
+        attendeeWrites.map((w) => w.attendeeName),
+        attendeeWrites.map((w) => w.ref.id)
+      );
+      let created: PurchasedTicket[] = [];
 
       await runTransaction(db, async (transaction) => {
+        created = []; // a retried transaction must not double-append
         const eventSnap = await transaction.get(eventRef);
         if (!eventSnap.exists()) throw new Error('Event no longer exists.');
 
@@ -500,6 +520,7 @@ const CheckoutPage: React.FC = () => {
               paymentMode: PAYMENT_MODE_LABELS[method],
               paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
               accessCode: accessCode || null,
+              bookingGroupId: bookingGroupIds[index],
             });
 
             created.push({
@@ -513,6 +534,7 @@ const CheckoutPage: React.FC = () => {
               paymentMode: PAYMENT_MODE_LABELS[method],
               purchasedAt: Date.now(), // approx — serverTimestamp() nahi resolve hua client pe abhi
               status: 'valid',
+              bookingGroupId: bookingGroupIds[index],
             });
           }
         );
@@ -536,7 +558,9 @@ const CheckoutPage: React.FC = () => {
 
   if (step === 'success') {
     return (
-      <TicketConfirmation
+      <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)]">
+        <BrandNavHeader organizationName={settings.organizationName} variant="minimal" rightSlot={<span />} />
+        <TicketConfirmation
         eventTitle={event.title}
         eventDate={event.date}
         eventTime={event.time}
@@ -554,178 +578,228 @@ const CheckoutPage: React.FC = () => {
         eventAgeLimit={event.ageLimit}
         eventHelplineNumber={event.helplineNumber}
         bookMoreTicketsUrl={bookMoreTicketsUrl}
-      />
+        />
+      </div>
     );
   }
 
+  const payCtaLabel =
+    step === 'processing'
+      ? 'Processing…'
+      : total === 0
+        ? 'Confirm registration'
+        : `Pay ${formatRupees(total, { zeroAsFree: false })}`;
+  const payCtaDisabled = !detailsComplete || lineItems.length === 0 || step === 'processing';
+  const totalLabel = formatRupees(total);
+  const showMobileBar = lineItems.length > 0;
+
   const steps = [
-    { id: 'checkout-details', label: 'Details' },
-    ...(customFields.length > 0 ? [{ id: 'checkout-questions', label: 'Questions' }] : []),
-    { id: 'checkout-payment', label: 'Payment' },
+    { id: 'checkout-details', label: 'Details', complete: contactComplete },
+    ...(customFields.length > 0 ? [{ id: 'checkout-questions', label: 'Questions', complete: questionsComplete }] : []),
+    // Paying is the final action itself, so this step is never "done" here.
+    { id: 'checkout-payment', label: 'Payment', complete: false },
   ];
 
+  const orderSummary = (
+    <TicketOrderSummary
+      eventTitle={stripHtmlTags(event.title)}
+      dateLabel={`${formatShortDateRange(event.date, event.endDate)}, ${formatTime(event.time)}`}
+      venueLabel={event.isOnline ? 'Online' : event.venue}
+      lineItems={[
+        ...lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
+          id: tier.id,
+          label: `${qty} × ${tier.name}`,
+          amountLabel: formatRupees(tier.price === 0 ? 0 : itemTotalAmount),
+        })),
+        ...(totalTaxAmount > 0
+          ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }]
+          : []),
+        ...(roundOffAmt !== 0
+          ? [{ id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }]
+          : []),
+      ]}
+      totalLabel={totalLabel}
+      ctaLabel={payCtaLabel}
+      onCta={initiatePayment}
+      ctaDisabled={payCtaDisabled}
+    />
+  );
+  const orderItemsLabel = lineItems.length === 1 ? `${lineItems[0].qty} × ${lineItems[0].tier.name}` : `${totalQty} tickets`;
+
   return (
-    <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)]">
+    <div className={`brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)] text-[var(--brand-black)] ${showMobileBar ? 'pb-24 lg:pb-0' : ''}`}>
       <BrandNavHeader organizationName={settings.organizationName} variant="minimal" />
 
       {/* ── Main content ─────────────────────────────────────────────── */}
       <main className="grow overflow-y-auto px-4 py-6 pb-10 sm:px-8">
         <div className="mx-auto w-full max-w-[1440px] lg:px-12">
           {/* Title row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <button
-                onClick={() => navigate(-1)}
-                className="brand-mono mb-1 flex items-center gap-1.5 text-xs font-bold text-black/50 hover:text-black"
-              >
-                <ArrowLeft size={12} /> Back to event
-              </button>
-              <h1 className="brand-display text-4xl leading-none text-[var(--brand-black)]">
+              <BrandButton variant="link" onClick={() => navigate(-1)} className="mb-3 !text-[var(--brand-black)]">
+                <ArrowLeft size={18} /> Back to event
+              </BrandButton>
+              <h1 className="brand-display text-[32px] leading-none text-[var(--brand-black)] sm:text-[44px]">
                 Almost <span className="text-[var(--brand-teal)]">in.</span>
               </h1>
-              <p className="mt-1 text-sm text-black/50">{stripHtmlTags(event.title)}</p>
+              <p className="mt-2 text-[15px] text-[var(--brand-muted)]">
+                {stripHtmlTags(event.title)} &middot; {formatShortDateRange(event.date, event.endDate)}
+              </p>
             </div>
             <CheckoutStepPills steps={steps} />
           </div>
 
           {lineItems.length === 0 && (
-            <div className="mt-4 rounded-sm border-2 border-dashed border-black/15 bg-white p-4 text-center text-sm text-slate-500">
-              No tickets selected. Go back and pick a ticket tier first.
+            <div className="mt-6 rounded-xl border-[1.5px] border-dashed border-[var(--brand-line-strong)] bg-[var(--brand-surface)] p-4 text-center text-[15px] text-[var(--brand-muted)]">
+              No tickets selected. Go back to the event and pick a ticket first.
             </div>
           )}
 
-          <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+          {lineItems.length > 0 && (
+            <MobileOrderSummary className="mt-6" itemsLabel={orderItemsLabel} totalLabel={totalLabel}>
+              {orderSummary}
+            </MobileOrderSummary>
+          )}
+
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-10">
             {/* ── Left: form sections ──────────────────────────────────── */}
-            <div className="flex flex-col gap-6 lg:w-[760px]">
-              {/* 01 Your details */}
-              <div id="checkout-details">
-                <SectionLabel index={1} className="mb-3">Your details</SectionLabel>
-                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-5">
+            <div className="flex min-w-0 flex-col gap-8">
+              {/* Your details */}
+              <section id="checkout-details" className="scroll-mt-6">
+                <SectionLabel className="mb-4">Your details</SectionLabel>
+                <div className={`${brandPanelClass} flex flex-col gap-5`}>
                   {totalQty > 1 && (
-                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={sameForAll}
-                        onChange={(e) => handleToggleSameForAll(e.target.checked)}
-                        className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-[var(--brand-teal)] focus:ring-[var(--brand-teal)]"
-                      />
+                    <BrandCheckbox checked={sameForAll} onChange={handleToggleSameForAll}>
                       Use the same details for all {totalQty} tickets
-                    </label>
+                    </BrandCheckbox>
                   )}
 
-                  <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-6">
                     {attendeeDetails.map((entry, index) => {
                       if (sameForAll && index > 0) return null;
+                      const phoneInvalid = entry.phone.length > 0 && !isValidPhone(entry.phone);
+                      const emailInvalid = entry.email.length > 0 && !isValidEmail(entry.email);
                       return (
-                        <div key={index} className="flex flex-col gap-3">
+                        <div key={index} className="flex flex-col gap-4">
                           {totalQty > 1 && !sameForAll && (
-                            <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
-                              Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                            <p className="text-[15px] font-semibold text-[var(--brand-black)]">
+                              Ticket {index + 1}, {ticketSlots[index]?.tierName}
                             </p>
                           )}
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="sm:col-span-2">
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
+                              <label htmlFor={`attendee-${index}-name`} className={brandLabelClass}>Full name</label>
                               <input
+                                id={`attendee-${index}-name`}
                                 value={entry.name}
                                 onChange={(e) => updateAttendee(index, 'name', e.target.value)}
                                 placeholder="As on your ID"
                                 autoComplete="name"
                                 spellCheck={false}
-                                className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[var(--brand-teal)] focus:ring-1 focus:ring-[var(--brand-teal)]"
+                                className={`${brandInputClass()} ${brandFieldHeight}`}
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-                              <input
-                                type="tel"
-                                inputMode="numeric"
-                                value={entry.phone}
-                                onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                maxLength={10}
-                                placeholder="+91"
-                                autoComplete="tel"
-                                className={`w-full rounded-sm border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.phone.length > 0 && !isValidPhone(entry.phone)
-                                  ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                                  : 'border-gray-300 focus:border-[var(--brand-teal)] focus:ring-[var(--brand-teal)]'
-                                  }`}
-                              />
-                              {entry.phone.length > 0 && !isValidPhone(entry.phone) && (
-                                <p className="mt-1 text-xs font-medium text-red-500">
+                              <label htmlFor={`attendee-${index}-phone`} className={brandLabelClass}>Phone</label>
+                              <div className="flex">
+                                <span className="inline-flex shrink-0 items-center rounded-l-lg border border-r-0 border-[var(--brand-line-strong)] bg-[var(--brand-cream)] px-3 text-[15px] font-semibold text-[var(--brand-muted)]">
+                                  +91
+                                </span>
+                                <input
+                                  id={`attendee-${index}-phone`}
+                                  type="tel"
+                                  inputMode="numeric"
+                                  value={entry.phone}
+                                  onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                  maxLength={10}
+                                  placeholder="10-digit mobile number"
+                                  autoComplete="tel-national"
+                                  aria-invalid={phoneInvalid || undefined}
+                                  className={`${brandInputClass(phoneInvalid)} ${brandFieldHeight} rounded-l-none`}
+                                />
+                              </div>
+                              {phoneInvalid && (
+                                <p className={brandErrorClass}>
+                                  <AlertCircle size={14} aria-hidden="true" />
                                   {entry.phone.length < 10
                                     ? 'Enter a 10-digit mobile number.'
-                                    : 'Must start with 6, 7, 8, or 9.'}
+                                    : 'Mobile numbers start with 6, 7, 8 or 9.'}
                                 </p>
                               )}
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                              <label htmlFor={`attendee-${index}-email`} className={brandLabelClass}>Email</label>
                               <input
+                                id={`attendee-${index}-email`}
                                 type="email"
                                 value={entry.email}
                                 onChange={(e) => updateAttendee(index, 'email', e.target.value)}
-                                placeholder="Tickets are sent here"
+                                placeholder="you@example.com"
                                 autoComplete="email"
                                 spellCheck={false}
-                                className={`w-full rounded-sm border bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-1 ${entry.email.length > 0 && !isValidEmail(entry.email)
-                                  ? 'border-red-400 focus:border-red-500 focus:ring-red-400'
-                                  : 'border-gray-300 focus:border-[var(--brand-teal)] focus:ring-[var(--brand-teal)]'
-                                  }`}
+                                aria-invalid={emailInvalid || undefined}
+                                className={`${brandInputClass(emailInvalid)} ${brandFieldHeight}`}
                               />
-                              {entry.email.length > 0 && !isValidEmail(entry.email) && (
-                                <p className="mt-1 text-xs font-medium text-red-500">Enter a valid email address.</p>
+                              {emailInvalid ? (
+                                <p className={brandErrorClass}>
+                                  <AlertCircle size={14} aria-hidden="true" /> Enter a valid email, like name@example.com.
+                                </p>
+                              ) : (
+                                <p className={brandHelpClass}>Tickets are sent here.</p>
                               )}
                             </div>
                           </div>
 
-                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100" />}
+                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-[var(--brand-line)]" />}
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* 02 A few questions */}
+              {/* A few questions */}
               {customFields.length > 0 && (
-                <div id="checkout-questions">
-                  <SectionLabel index={2} className="mb-3">A few questions</SectionLabel>
-                  <div className="rounded-lg border border-black/10 bg-white p-4 space-y-5">
+                <section id="checkout-questions" className="scroll-mt-6">
+                  <SectionLabel className="mb-4">A few questions</SectionLabel>
+                  <div className={`${brandPanelClass} flex flex-col gap-6`}>
                     {attendeeDetails.map((entry, index) => {
                       if (sameForAll && index > 0) return null;
                       return (
-                        <div key={index} className="space-y-3">
+                        <div key={index} className="flex flex-col gap-4">
                           {totalQty > 1 && !sameForAll && (
-                            <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
-                              Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                            <p className="text-[15px] font-semibold text-[var(--brand-black)]">
+                              Ticket {index + 1}, {ticketSlots[index]?.tierName}
                             </p>
                           )}
                           {customFields.map((field) => {
                             const value = entry.customAnswers[field.id] ?? '';
-                            const baseClass =
-                              'w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[var(--brand-teal)] focus:ring-1 focus:ring-[var(--brand-teal)]';
+                            const fieldId = `attendee-${index}-q-${field.id}`;
 
                             return (
                               <div key={field.id}>
-                                <label className="mb-1 block text-xs font-medium text-slate-600">
-                                  {field.label}{field.required ? ' *' : ''}
-                                </label>
+                                {field.type !== 'checkbox' && (
+                                  <label htmlFor={fieldId} className={brandLabelClass}>
+                                    {field.label}{field.required ? ' *' : ''}
+                                  </label>
+                                )}
 
                                 {field.type === 'textarea' && (
                                   <textarea
+                                    id={fieldId}
                                     rows={3}
                                     value={value}
                                     onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                    placeholder={field.label}
-                                    className={baseClass}
+                                    className={`${brandInputClass()} py-3`}
                                   />
                                 )}
 
                                 {field.type === 'select' && (
                                   <select
+                                    id={fieldId}
                                     value={value}
                                     onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                    className={baseClass}
+                                    className={`${brandInputClass()} ${brandFieldHeight}`}
                                   >
                                     <option value="">Select…</option>
                                     {(field.options ?? []).map((opt) => (
@@ -735,109 +809,104 @@ const CheckoutPage: React.FC = () => {
                                 )}
 
                                 {field.type === 'checkbox' && (
-                                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                                    <input
-                                      type="checkbox"
-                                      checked={value === 'true'}
-                                      onChange={(e) => updateCustomAnswer(index, field.id, e.target.checked ? 'true' : 'false')}
-                                      className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border-2 border-gray-300 bg-white checked:border-[var(--brand-teal)] checked:bg-white bg-no-repeat bg-center [background-size:14px] checked:bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23007A78%22%3E%3Cpath%20d%3D%22M16.7%205.3a1%201%200%200%201%200%201.4l-7%207a1%201%200%200%201-1.4%200l-3-3a1%201%200%200%201%201.4-1.4L9%2011.6l6.3-6.3a1%201%200%200%201%201.4%200z%22%2F%3E%3C%2Fsvg%3E')] focus:ring-1 focus:ring-[var(--brand-teal)] focus:outline-none"
-                                    />
-                                    {field.label}
-                                  </label>
+                                  <BrandCheckbox
+                                    checked={value === 'true'}
+                                    onChange={(checked) => updateCustomAnswer(index, field.id, checked ? 'true' : 'false')}
+                                  >
+                                    {field.label}{field.required ? ' *' : ''}
+                                  </BrandCheckbox>
                                 )}
 
                                 {field.type === 'text' && (
                                   <input
+                                    id={fieldId}
                                     type="text"
                                     value={value}
                                     onChange={(e) => updateCustomAnswer(index, field.id, e.target.value)}
-                                    placeholder={field.label}
-                                    className={baseClass}
+                                    className={`${brandInputClass()} ${brandFieldHeight}`}
                                   />
                                 )}
                               </div>
                             );
                           })}
-                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-gray-100" />}
+                          {!sameForAll && index < attendeeDetails.length - 1 && <hr className="border-[var(--brand-line)]" />}
                         </div>
                       );
                     })}
                   </div>
-                </div>
+                </section>
               )}
 
-              {/* 03 Payment — payment-gateway method list */}
-              <div id="checkout-payment">
-                <SectionLabel index={customFields.length > 0 ? 3 : 2} className="mb-3">Payment</SectionLabel>
-                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-2">
+              {/* Payment — payment-gateway method list */}
+              <section id="checkout-payment" className="scroll-mt-6">
+                <SectionLabel className="mb-4">Payment</SectionLabel>
+                <div className={`${brandPanelClass} flex flex-col gap-3`} role="radiogroup" aria-label="Payment method">
                   {([
-                    { value: 'upi' as const, label: 'UPI / QR code', icon: Smartphone },
-                    { value: 'card' as const, label: 'Credit / Debit card', icon: CreditCard },
-                    { value: 'netbanking' as const, label: 'Netbanking', icon: Landmark },
-                  ]).map((m) => (
-                    <label
-                      key={m.value}
-                      className={`flex cursor-pointer items-center justify-between rounded-sm border p-3 transition-colors ${selectedMethod === m.value ? 'border-[var(--brand-teal)] bg-[var(--brand-teal)]/5' : 'border-gray-200 hover:bg-slate-50'
+                    { value: 'upi' as const, label: 'UPI', detail: 'GPay, PhonePe, Paytm or any UPI app', icon: Smartphone },
+                    { value: 'card' as const, label: 'Card', detail: 'Credit or debit card', icon: CreditCard },
+                    { value: 'netbanking' as const, label: 'Net banking', detail: 'All major Indian banks', icon: Landmark },
+                  ]).map((m) => {
+                    const active = selectedMethod === m.value;
+                    return (
+                      <label
+                        key={m.value}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3.5 transition-colors ${
+                          active
+                            ? 'border-[1.5px] border-[var(--brand-teal)] bg-[var(--brand-teal-soft)]'
+                            : 'border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] hover:bg-[var(--brand-cream)]'
                         }`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className={`flex h-9 w-9 items-center justify-center rounded-full ${selectedMethod === m.value ? 'bg-[var(--brand-teal)] text-white' : 'bg-slate-100 text-slate-500'}`}>
-                          <m.icon size={16} />
+                      >
+                        <span
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                            active ? 'bg-[var(--brand-teal)] text-[var(--brand-cream)]' : 'bg-[var(--brand-cream)] text-[var(--brand-black)]'
+                          }`}
+                        >
+                          <m.icon size={20} strokeWidth={1.75} aria-hidden="true" />
                         </span>
-                        <span className="text-sm font-medium text-slate-700">{m.label}</span>
-                      </span>
-                      <input
-                        type="radio"
-                        name="payment_method"
-                        checked={selectedMethod === m.value}
-                        onChange={() => setSelectedMethod(m.value)}
-                        className="h-4 w-4 text-[var(--brand-teal)]"
-                      />
-                    </label>
-                  ))}
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">{m.label}</span>
+                          <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">{m.detail}</span>
+                        </span>
+                        <input
+                          type="radio"
+                          name="payment_method"
+                          value={m.value}
+                          checked={active}
+                          onChange={() => setSelectedMethod(m.value)}
+                          className="h-5 w-5 shrink-0 accent-[var(--brand-teal)] [color-scheme:light]"
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
+              </section>
 
               {checkoutError && (
-                <p className="text-sm font-medium text-red-500">{checkoutError}</p>
+                <p className="flex items-start gap-2 rounded-lg border border-[var(--brand-danger)] bg-[var(--brand-surface)] px-4 py-3 text-[15px] font-medium text-[var(--brand-danger)]">
+                  <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  {checkoutError}
+                </p>
               )}
             </div>
 
             {/* ── Right: sticky order summary ─────────────────────────── */}
-            <div className="lg:sticky lg:top-6 lg:flex-1 lg:self-start">
-              <TicketOrderSummary
-                eventTitle={stripHtmlTags(event.title)}
-                dateLabel={`${formatDateRange(event.date, event.endDate)} · ${formatTime(event.time)}`}
-                venueLabel={event.isOnline ? 'Online' : event.venue}
-                imageUrl={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
-                lineItems={[
-                  ...lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
-                    id: tier.id,
-                    label: `${tier.name} × ${qty}`,
-                    amountLabel: tier.price === 0 ? 'Free' : `₹${itemTotalAmount.toFixed(2)}`,
-                  })),
-                  ...(totalTaxAmount > 0
-                    ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: `₹${totalTaxAmount.toFixed(2)}` }]
-                    : []),
-                  ...(roundOffAmt !== 0
-                    ? [{ id: 'round-off', label: 'Round off', amountLabel: `₹${roundOffAmt.toFixed(2)}` }]
-                    : []),
-                ]}
-                totalLabel={total === 0 ? 'Free' : `₹${total.toLocaleString('en-IN')}`}
-                ctaLabel={
-                  step === 'processing'
-                    ? 'Processing…'
-                    : total === 0
-                      ? 'Confirm registration'
-                      : `Pay ₹${total.toLocaleString('en-IN')}`
-                }
-                onCta={initiatePayment}
-                ctaDisabled={!detailsComplete || lineItems.length === 0 || step === 'processing'}
-              />
+            <div className="hidden lg:sticky lg:top-6 lg:block lg:self-start">
+              {orderSummary}
             </div>
           </div>
         </div>
       </main>
+
+      {/* ── Floating total + pay bar — mobile only ───────────────────── */}
+      {showMobileBar && (
+        <MobileCheckoutBar
+          countLabel={`${totalQty} ticket${totalQty === 1 ? '' : 's'}`}
+          totalLabel={totalLabel}
+          ctaLabel={payCtaLabel}
+          onCta={initiatePayment}
+          ctaDisabled={payCtaDisabled}
+        />
+      )}
     </div>
   );
 };

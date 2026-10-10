@@ -2,6 +2,15 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+  match /event_submissions/{docId} {
+  // Public: anyone can read published submissions (homepage / all-events)
+  allow read: if resource.data.status == "published" || request.auth != null;
+  // Unchanged: only logged-in users can submit / edit
+  allow create, update: if request.auth != null;
+  // Super Admin → Outsold.in Events can remove a listing
+  allow delete: if isSuperAdmin();
+}
   
   match/event_submissions/{document=**}
   {
@@ -212,7 +221,10 @@ service cloud.firestore {
         // arrays (adding/removing tiers or codes). A determined client could
         // still tamper with values inside existing elements. Move this
         // server-side (Cloud Function) before real payments go live.
-        allow update: if hasPermission(companyId, 'editEvent')
+        // isSuperAdmin(): Super Admin → Outsold.in Events → App events can set
+        // Live / Featured and soft-delete or restore any company's event.
+        allow update: if isSuperAdmin()
+          || hasPermission(companyId, 'editEvent')
           || hasPermission(companyId, 'toggleEventLive')
           || hasPermission(companyId, 'toggleEventFeatured')
           || hasPermission(companyId, 'duplicateEvent')

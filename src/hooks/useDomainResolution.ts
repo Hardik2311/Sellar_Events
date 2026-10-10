@@ -2,14 +2,32 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getSubdomain } from '../lib/subdomain';
+import { getStorefrontSeed } from '../lib/storefrontData';
+
+// The store the server already resolved for this page, if any. A stale
+// subdomain returns null so the lookup below still runs and redirects.
+const seededCompanyId = (fallbackCompanyId?: string): string | null => {
+  const seed = getStorefrontSeed();
+  if (!seed) return null;
+  const subdomain = getSubdomain();
+  if (subdomain) return seed.subdomain && seed.subdomain !== subdomain ? null : seed.companyId;
+  return fallbackCompanyId === seed.companyId ? seed.companyId : null;
+};
 
 export function useDomainResolution(fallbackCompanyId?: string) {
-  const [resolvedCompanyId, setResolvedCompanyId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [resolvedCompanyId, setResolvedCompanyId] = useState<string | null>(() => seededCompanyId(fallbackCompanyId));
+  const [loading, setLoading] = useState(() => !seededCompanyId(fallbackCompanyId));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const resolveDomain = async () => {
+      const fromServer = seededCompanyId(fallbackCompanyId);
+      if (fromServer) {
+        setResolvedCompanyId(fromServer);
+        setLoading(false);
+        return;
+      }
+
       const subdomain = getSubdomain();
 
       if (!subdomain) {

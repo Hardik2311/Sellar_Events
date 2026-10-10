@@ -20,6 +20,7 @@ export const ROUTES = {
   EVENTS_SETTINGS_EVENT: 'settings/event',
   EVENTS_SETTINGS_COMPANY: 'settings/company',
   EVENTS_SETTINGS_APP: 'settings/app',
+  EVENTS_SETTINGS_STOREFRONT: 'settings/storefront', // Storefront footer details + refund/terms/privacy policies
   EVENTS_SETTINGS_USERS: 'settings/users',      // NEW – list/manage users
   EVENTS_USER_ADD: 'settings/users/add',        // NEW – add user form
   EVENTS_SETTINGS_USER_SETTINGS: 'settings/user-settings', // NEW – hub: Manage Users + Permissions
@@ -35,13 +36,17 @@ export const ROUTES = {
   // Super Admin (protected inside the pages themselves via SUPER_ADMIN_UIDS check)
   EVENTS_SUPER_ADMIN: '/super-admin', 
   EVENTS_SUPER_ADMIN_TICKETS: '/super-admin/support-tickets',   // NEW – support tickets raised from Support page
-  EVENTS_SUPER_ADMIN_LEADS: '/super-admin/plan-leads',  
+  EVENTS_SUPER_ADMIN_LEADS: '/super-admin/plan-leads',
+  EVENTS_SUPER_ADMIN_COMPANIES: '/super-admin/companies', // NEW – manage/delete companies
+  EVENTS_SUPER_ADMIN_OUTSOLD_EVENTS: '/super-admin/outsold-events', // events listed on outsold.in (event_submissions)
 
   // Public, customer-facing routes
   // :slug is "event-title--<firestoreId>" — id is parsed out after the last "--"
   DISCOVER: '/discover',
   EVENT_DETAIL: '/e/:slug',
   CHECKOUT: '/checkout/:id',
+  // :policy is refund | terms | privacy
+  POLICY: '/policies/:policy',
 
   // Company-scoped fallback for merchants without a claimed subdomain —
   // these carry :companyId in the path since the bare routes above have no
@@ -49,4 +54,5 @@ export const ROUTES = {
   PUBLIC_STORE: '/public/:companyId',
   PUBLIC_EVENT_DETAIL: '/public/:companyId/e/:slug',
   PUBLIC_CHECKOUT: '/public/:companyId/checkout/:id',
+  PUBLIC_POLICY: '/public/:companyId/policies/:policy',
 };

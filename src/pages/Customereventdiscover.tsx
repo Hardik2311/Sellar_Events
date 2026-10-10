@@ -1,51 +1,121 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Search, Ticket, X, Loader2 } from 'lucide-react';
+import { Ticket, Store, LayoutGrid, MonitorSmartphone, CalendarRange, Calendar, X } from 'lucide-react';
 import {
     type PublicEvent,
     CATEGORY_GRADIENTS,
     getCategoryLabel,
-    formatDateRange,
-    formatTime,
-    getPriceLabel,
     getFeaturedEvent,
     buildEventSlugId,
 } from '../data/events';
+import { formatShortDate, formatShortDateRange, formatShortTime, formatStartingPrice } from '../lib/storefrontFormat';
 import { usePublicEvents } from '../hooks/usePublicEvents';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
 import { useCompanySettings } from '../hooks/useSettings';
 import { stripHtmlTags } from '../lib/utils';
+import { dismissServerPreview } from '../lib/storefrontData';
 import CustomerFooter from '../components/CustomerFooter';
 import BrandNavHeader from '../components/brand/BrandNavHeader';
-import EventListingRow from '../components/brand/EventListingRow';
-import FeaturedPoster from '../components/brand/FeaturedPoster';
+import EventCard from '../components/brand/EventCard';
+import FeaturedCarousel, { type FeaturedSlide } from '../components/brand/FeaturedCarousel';
 import MarqueeStrip from '../components/brand/MarqueeStrip';
+import HeaderSearch from '../components/brand/HeaderSearch';
+import BrandButton from '../components/brand/BrandButton';
+import BrandEmptyState from '../components/brand/BrandEmptyState';
+import FilterDropdown, { type FilterOption } from '../components/brand/FilterDropdown';
 
 type FormatFilter = 'all' | 'in-person' | 'online';
+type TimeFilter = 'any' | 'today' | 'tomorrow' | 'weekend' | 'week' | 'month' | 'date';
 
-// Upcoming Fri–Sun window (if today already falls in it, that's the window).
-const isThisWeekend = (dateISO: string): boolean => {
-    const d = new Date(dateISO + 'T00:00:00');
+const MAX_FEATURED_SLIDES = 6;
+
+const FORMAT_OPTIONS: { value: FormatFilter; label: string }[] = [
+    { value: 'all', label: 'Online & in person' },
+    { value: 'in-person', label: 'In person' },
+    { value: 'online', label: 'Online' },
+];
+
+const TIME_OPTIONS: FilterOption[] = [
+    { value: 'any', label: 'Any time' },
+    { value: 'today', label: 'Today' },
+    { value: 'tomorrow', label: 'Tomorrow' },
+    { value: 'weekend', label: 'This weekend' },
+    { value: 'week', label: 'This week' },
+    { value: 'month', label: 'This month' },
+    { value: 'date', label: 'Pick a date', icon: Calendar },
+];
+
+const addDays = (d: Date, n: number) => {
+    const next = new Date(d);
+    next.setDate(d.getDate() + n);
+    return next;
+};
+
+// [start, end] calendar-day window for a time filter (local time, inclusive).
+const getTimeWindow = (filter: TimeFilter, pickedDate?: string): [Date, Date] | null => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const day = today.getDay(); // 0 Sun .. 6 Sat
-    const daysToFriday = day <= 5 ? 5 - day : 5 - day + 7; // next/this Friday
-    const friday = new Date(today);
-    friday.setDate(today.getDate() + (day === 6 ? -1 : day === 0 ? -2 : daysToFriday));
-    const sunday = new Date(friday);
-    sunday.setDate(friday.getDate() + 2);
-    sunday.setHours(23, 59, 59, 999);
-    return d >= friday && d <= sunday;
+    switch (filter) {
+        case 'today':
+            return [today, today];
+        case 'tomorrow':
+            return [addDays(today, 1), addDays(today, 1)];
+        case 'weekend': {
+            // Upcoming Fri–Sun window (if today already falls in it, that's the window).
+            const friday = addDays(today, day === 6 ? -1 : day === 0 ? -2 : 5 - day);
+            return [friday, addDays(friday, 2)];
+        }
+        case 'week':
+            return [today, addDays(today, day === 0 ? 0 : 7 - day)]; // through Sunday
+        case 'month':
+            return [today, new Date(today.getFullYear(), today.getMonth() + 1, 0)];
+        case 'date': {
+            if (!pickedDate) return null;
+            const picked = new Date(pickedDate + 'T00:00:00');
+            return [picked, picked];
+        }
+        default:
+            return null;
+    }
 };
 
-const dateParts = (iso: string) => {
-    const d = new Date(iso + 'T00:00:00');
-    return {
-        day: d.toLocaleDateString('en-US', { day: '2-digit' }),
-        month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-    };
+// Multi-day events match if any of their days fall inside the window.
+const matchesTimeWindow = (startISO: string, endISO: string | undefined, window: [Date, Date] | null) => {
+    if (!window) return true;
+    const start = new Date(startISO + 'T00:00:00');
+    const end = new Date((endISO || startISO) + 'T00:00:00');
+    return start <= window[1] && end >= window[0];
 };
+
+// "Sat, 12 Oct · 7 PM" (one middle dot per line, per the storefront copy rules)
+const cardDateLabel = (event: PublicEvent) =>
+    [formatShortDateRange(event.date, event.endDate), formatShortTime(event.time)].filter(Boolean).join(' · ');
+
+const priceLabelFor = (event: PublicEvent) =>
+    event.registrationMode === 'rsvp' ? 'Free, RSVP' : formatStartingPrice(event.tiers.map((t) => t.price));
+
+// Skeleton shapes of the hero and the poster grid while events load.
+const DiscoverSkeleton: React.FC = () => (
+    <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)]" aria-busy="true" aria-label="Loading events">
+        <div className="h-16 border-b border-[var(--brand-line)] bg-[var(--brand-surface)]" />
+        <div className="h-[480px] w-full animate-pulse bg-[var(--brand-skeleton)] motion-reduce:animate-none sm:h-[460px] lg:h-[560px]" />
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-10 sm:px-8 lg:px-24">
+            <div className="mb-6 h-7 w-44 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-4">
+                {Array.from({ length: 4 }, (_, i) => (
+                    <div key={i} className="flex flex-col gap-3">
+                        <div className="aspect-[4/5] w-full animate-pulse rounded-xl bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+                        <div className="h-3 w-1/2 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+                        <div className="h-4 w-11/12 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+                        <div className="h-3 w-2/3 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Page
@@ -63,7 +133,8 @@ const CustomerEventDiscover: React.FC = () => {
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [format, setFormat] = useState<FormatFilter>('all');
-    const [thisWeekendOnly, setThisWeekendOnly] = useState(false);
+    const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
+    const [pickedDate, setPickedDate] = useState(''); // YYYY-MM-DD, used when timeFilter is 'date'
 
     // Private events must never show up in the public discover grid only
     // a direct shared link + code should reach them. `isPrivate` is the
@@ -86,37 +157,43 @@ const CustomerEventDiscover: React.FC = () => {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
+        const timeWindow = getTimeWindow(timeFilter, pickedDate);
         return upcomingEvents
             .filter((e) => {
                 const label = getCategoryLabel(e);
                 const matchesCategory = activeCategory === 'All' || label === activeCategory;
                 const matchesFormat = format === 'all' || (format === 'online' ? e.isOnline : !e.isOnline);
-                const matchesWeekend = !thisWeekendOnly || isThisWeekend(e.date);
+                const matchesTime = matchesTimeWindow(e.date, e.endDate, timeWindow);
                 const matchesSearch =
                     !q || e.title.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q) || label.toLowerCase().includes(q);
-                return matchesCategory && matchesFormat && matchesWeekend && matchesSearch;
+                return matchesCategory && matchesFormat && matchesTime && matchesSearch;
             })
             .sort((a, b) => a.date.localeCompare(b.date));
-    }, [upcomingEvents, activeCategory, format, thisWeekendOnly, search]);
+    }, [upcomingEvents, activeCategory, format, timeFilter, pickedDate, search]);
 
-    const hasFiltersApplied = search.trim().length > 0 || activeCategory !== 'All' || format !== 'all' || thisWeekendOnly;
+    const hasFiltersApplied = search.trim().length > 0 || activeCategory !== 'All' || format !== 'all' || timeFilter !== 'any';
 
-    // The featured pick is independent of filters it's always the
-    // organizer/admin-flagged event (or soonest upcoming as fallback), and
-    // only shown on the unfiltered view so it doesn't fight the search results.
-    const featured = useMemo(
+    // Hero slideshow picks are independent of filters: every organizer-flagged
+    // upcoming event (soonest first), or — when none are flagged — the single
+    // soonest upcoming event as a fallback.
+    const featuredEvents = useMemo(() => {
+        const flagged = upcomingEvents
+            .filter((e) => e.featured)
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, MAX_FEATURED_SLIDES);
+        if (flagged.length > 0) return flagged;
         // helper ka "autoFeatureNearest" arg ka purana matlab hai "fallback allowed" —
         // naye setting mapping mein ON = manual-only, isliye yahan invert karke bhej rahe hain
-        () => getFeaturedEvent(upcomingEvents, !settings.autoFeatureNearest),
-        [upcomingEvents, settings.autoFeatureNearest]
-    );
-    const listEvents = hasFiltersApplied ? filtered : filtered.filter((e) => e.id !== featured?.id);
+        const fallback = getFeaturedEvent(upcomingEvents, !settings.autoFeatureNearest);
+        return fallback ? [fallback] : [];
+    }, [upcomingEvents, settings.autoFeatureNearest]);
 
     const clearFilters = () => {
         setSearch('');
         setActiveCategory('All');
         setFormat('all');
-        setThisWeekendOnly(false);
+        setTimeFilter('any');
+        setPickedDate('');
     };
 
     const subdomain = getSubdomain();
@@ -126,195 +203,193 @@ const CustomerEventDiscover: React.FC = () => {
         navigate(subdomain ? `/e/${slugId}` : `/public/${resolvedCompanyId}/e/${slugId}`);
     };
 
+    // Swap the server's plain-HTML preview for the real page once it's drawn.
+    useEffect(() => {
+        if (!loading) dismissServerPreview();
+    }, [loading]);
+
     if (loading) {
-        return (
-            <div className="brand-theme flex min-h-screen items-center justify-center bg-[var(--brand-cream)]">
-                <div className="flex flex-col items-center gap-4 text-black/50">
-                    <Loader2 size={32} className="animate-spin text-[var(--brand-teal)]" />
-                    <p className="brand-mono text-xs">Loading events...</p>
-                </div>
-            </div>
-        );
+        return <DiscoverSkeleton />;
     }
 
     if (domainError || (!loading && !resolvedCompanyId)) {
         return (
-            <div className="brand-theme flex min-h-screen items-center justify-center bg-[var(--brand-cream)] p-4 text-center">
-                <div className="max-w-md w-full bg-white rounded-lg shadow-sm p-8 border border-black/10">
-                    <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">🏪</span>
-                    </div>
-                    <h2 className="brand-display text-xl text-[var(--brand-black)] mb-2">Store not found</h2>
-                    <p className="text-black/50 mb-6">
-                        The store you are looking for does not exist or has been moved.
-                    </p>
-                </div>
+            <div className="brand-theme flex min-h-screen items-center justify-center bg-[var(--brand-cream)] p-4">
+                <BrandEmptyState
+                    icon={Store}
+                    title="This store isn't available"
+                    body="The link may be wrong, or the store has moved. Check the address and try again."
+                    className="w-full max-w-md"
+                />
             </div>
         );
     }
 
-    const chips: { key: string; label: string; active: boolean; onClick: () => void }[] = [
-        { key: 'all', label: 'All', active: !hasFiltersApplied, onClick: clearFilters },
-        ...categories.map((c) => ({
-            key: `cat-${c}`,
-            label: c,
-            active: activeCategory === c,
-            onClick: () => setActiveCategory((cur) => (cur === c ? 'All' : c)),
+    const scrollToList = () => document.getElementById('whats-on')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const headline = (
+        <>
+            Find your <span className="text-[var(--brand-yellow)]">next experience.</span>
+        </>
+    );
+
+    // Brand slide (organizer's cover from Edit Profile) leads, then one slide
+    // per featured event.
+    const slides: FeaturedSlide[] = [
+        ...(settings.brandCoverUrl
+            ? [{
+                id: 'brand',
+                eyebrow: `${settings.organizationName || 'Outsold'} Events`,
+                title: headline,
+                titleText: 'Find your next experience',
+                desktopImage: settings.brandCoverUrl,
+                ctaLabel: 'Browse events',
+                onCta: scrollToList,
+            }]
+            : []),
+        ...featuredEvents.map((e) => ({
+            id: e.id,
+            eyebrow: 'Featured',
+            title: stripHtmlTags(e.title),
+            titleText: stripHtmlTags(e.title),
+            dateLabel: cardDateLabel(e),
+            venueLabel: e.isOnline ? 'Online' : e.venue,
+            priceLabel: priceLabelFor(e),
+            desktopImage: e.coverImageDesktop || e.coverImage || e.images?.[0] || null,
+            mobileImage: e.coverImageMobile || null,
+            gradientClass: CATEGORY_GRADIENTS[e.category] ?? CATEGORY_GRADIENTS.Other,
+            ctaLabel: 'Book tickets',
+            onCta: () => openEvent(e),
         })),
-        {
-            key: 'online',
-            label: 'Online',
-            active: format === 'online',
-            onClick: () => setFormat((cur) => (cur === 'online' ? 'all' : 'online')),
-        },
-        {
-            key: 'in-person',
-            label: 'In person',
-            active: format === 'in-person',
-            onClick: () => setFormat((cur) => (cur === 'in-person' ? 'all' : 'in-person')),
-        },
-        {
-            key: 'weekend',
-            label: 'This weekend',
-            active: thisWeekendOnly,
-            onClick: () => setThisWeekendOnly((v) => !v),
-        },
     ];
 
     return (
         <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)] text-[var(--brand-black)]">
-            <BrandNavHeader organizationName={settings.organizationName} onBrowse={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+            <BrandNavHeader
+                organizationName={settings.organizationName}
+                onBrowse={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                rightSlot={
+                    <HeaderSearch
+                        value={search}
+                        onChange={setSearch}
+                        onSubmit={scrollToList}
+                    />
+                }
+            />
 
-            {/* ── Hero, two columns ────────────────────────────────────────── */}
-            <section className="bg-[var(--brand-black)] px-4 pb-10 pt-8 sm:px-8 lg:px-24">
-                <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_380px]">
-                    {/* Left: copy + search + filters */}
-                    <div>
-                        <p className="brand-mono text-xs font-bold text-[var(--brand-yellow)]">
-                            Season {new Date().getFullYear()} &middot; Now booking
-                        </p>
-                        <h1 className="brand-display mt-2 max-w-xl text-4xl leading-[0.95] text-white sm:text-6xl">
-                            Nights worth <span className="text-[var(--brand-yellow)]">showing up</span> for.
-                        </h1>
-                        <p className="mt-3 max-w-md text-sm text-white/60">
-                            {settings.organizationName || 'Outsold'} Events — the nights worth showing up for.
-                        </p>
-
-                        <div className="mt-5 flex max-w-xl items-stretch gap-2">
-                            <div className="relative flex-1">
-                                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                                <input
-                                    type="text"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search events, venues or categories"
-                                    className="w-full rounded-sm border border-white/15 bg-white/5 py-2.5 pl-9 pr-9 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-yellow)]"
-                                />
-                                {search && (
-                                    <button
-                                        onClick={() => setSearch('')}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                                    >
-                                        <X size={15} />
-                                    </button>
-                                )}
-                            </div>
-                            <button
-                                type="button"
-                                className="brand-mono shrink-0 rounded-sm bg-[var(--brand-yellow)] px-4 text-xs font-bold text-black hover:brightness-95"
-                            >
-                                Search
-                            </button>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {chips.map((chip) => (
-                                <button
-                                    key={chip.key}
-                                    type="button"
-                                    onClick={chip.onClick}
-                                    className={`brand-mono rounded-sm border px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                                        chip.active
-                                            ? 'border-[var(--brand-yellow)] bg-[var(--brand-yellow)] text-black'
-                                            : 'border-white/20 text-white/70 hover:bg-white/5'
-                                    }`}
-                                >
-                                    {chip.label}
-                                </button>
-                            ))}
-                        </div>
+            {slides.length > 0 ? (
+                /* ── Hero slideshow: brand cover + featured events, edge to edge ── */
+                <FeaturedCarousel slides={slides} />
+            ) : (
+                /* ── Fallback hero when there's nothing to feature ───────────── */
+                <section className="flex min-h-[320px] items-center bg-[var(--brand-black)] px-4 py-10 sm:min-h-[380px] sm:px-8 lg:min-h-[480px] lg:px-24">
+                    <div className="mx-auto w-full max-w-[1440px]">
+                        <h1 className="brand-display max-w-xl text-[40px] leading-[0.95] text-[var(--brand-cream)] sm:text-[64px]">{headline}</h1>
                     </div>
-
-                    {/* Right: featured poster */}
-                    {featured && (
-                        <FeaturedPoster
-                            title={stripHtmlTags(featured.title)}
-                            imageUrl={featured.coverImageDesktop || featured.coverImageMobile || featured.coverImage || undefined}
-                            gradientClass={CATEGORY_GRADIENTS[featured.category] ?? CATEGORY_GRADIENTS.Other}
-                            categoryLabel={getCategoryLabel(featured)}
-                            dateLabel={`${formatDateRange(featured.date, featured.endDate)} · ${formatTime(featured.time)}`}
-                            priceLabel={getPriceLabel(featured.tiers)}
-                            onOpen={() => openEvent(featured)}
-                            className="hidden lg:block"
-                        />
-                    )}
-                </div>
-            </section>
+                </section>
+            )}
 
             {upcomingEvents.length > 0 && (
                 <MarqueeStrip
-                    items={upcomingEvents.slice(0, 6).map((e) => `${stripHtmlTags(e.title)} · ${formatDateRange(e.date, e.endDate)}`)}
+                    items={upcomingEvents.slice(0, 6).map((e) => `${stripHtmlTags(e.title)} · ${formatShortDateRange(e.date, e.endDate)}`)}
                 />
             )}
 
             {/* ── Main content ─────────────────────────────────────────────── */}
-            <main className="grow px-4 py-8 sm:px-8 lg:px-24">
+            <main id="whats-on" className="grow scroll-mt-4 px-4 py-8 sm:px-8 lg:px-24">
                 <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
-                    <div className="flex items-center justify-between border-b border-black/10 pb-3">
-                        <h2 className="brand-display text-2xl text-[var(--brand-black)]">
+                    <div className="flex items-baseline justify-between gap-4">
+                        <h2 className="brand-display text-2xl leading-[1.05] text-[var(--brand-black)] sm:text-[28px]">
                             What&rsquo;s <span className="text-[var(--brand-teal)]">on</span>
                         </h2>
-                        <span className="brand-mono text-xs text-black/40">
-                            {String(filtered.length).padStart(2, '0')} event{filtered.length === 1 ? '' : 's'}
+                        <span className="text-sm text-[var(--brand-muted)]">
+                            {filtered.length} event{filtered.length === 1 ? '' : 's'}
                         </span>
                     </div>
 
+                    {/* Filters — dropdowns under the "What’s on" heading */}
+                    <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2.5">
+                        <FilterDropdown
+                            icon={LayoutGrid}
+                            label="Category"
+                            value={activeCategory}
+                            onChange={setActiveCategory}
+                            options={[{ value: 'All', label: 'All categories' }, ...categories.map((c) => ({ value: c, label: c }))]}
+                            active={activeCategory !== 'All'}
+                            shortLabel="Category"
+                            className="sm:w-60"
+                        />
+                        <FilterDropdown
+                            icon={MonitorSmartphone}
+                            label="Online or in person"
+                            value={format}
+                            onChange={(v) => setFormat(v as FormatFilter)}
+                            options={FORMAT_OPTIONS}
+                            active={format !== 'all'}
+                            shortLabel="Mode"
+                            className="sm:w-60"
+                        />
+                        <FilterDropdown
+                            icon={CalendarRange}
+                            label="Date"
+                            value={timeFilter}
+                            displayLabel={timeFilter === 'date' ? (pickedDate ? formatShortDate(pickedDate) : 'Pick a date') : undefined}
+                            onChange={(v) => setTimeFilter(v as TimeFilter)}
+                            options={TIME_OPTIONS}
+                            active={timeFilter !== 'any' && (timeFilter !== 'date' || !!pickedDate)}
+                            keepOpenFor={['date']}
+                            shortLabel="Date"
+                            menuAlign="right"
+                            footer={
+                                timeFilter === 'date'
+                                    ? (
+                                        <label className="flex flex-col gap-1.5">
+                                            <span className="text-[13px] font-semibold text-[var(--brand-black)]">Date</span>
+                                            <input
+                                                type="date"
+                                                value={pickedDate}
+                                                min={todayISO}
+                                                onChange={(e) => setPickedDate(e.target.value)}
+                                                className="h-11 w-full rounded-lg border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] px-3 text-[15px] text-[var(--brand-black)] outline-none [color-scheme:light] focus:border-[var(--brand-teal)] focus:ring-1 focus:ring-[var(--brand-teal)]"
+                                            />
+                                        </label>
+                                    )
+                                    : undefined
+                            }
+                            className="sm:w-60"
+                        />
+                        {hasFiltersApplied && (
+                            <BrandButton variant="link" onClick={clearFilters} className="col-span-3 justify-self-start px-1 sm:self-center !text-[var(--brand-black)]">
+                                <X size={16} /> Clear filters
+                            </BrandButton>
+                        )}
+                    </div>
+
                     {filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-3 rounded-sm border-2 border-dashed border-black/15 bg-white py-16 text-center">
-                            <Ticket size={28} className="text-black/20" />
-                            <p className="text-sm font-medium text-black/70">No events match your filters</p>
-                            <p className="brand-mono text-xs text-black/40">Try a different category, format, or search term</p>
-                            <button
-                                onClick={clearFilters}
-                                className="brand-mono mt-1 rounded-sm border border-black/20 px-3 py-1.5 text-xs font-bold text-black/70 hover:bg-black/5"
-                            >
-                                Clear filters
-                            </button>
-                        </div>
+                        <BrandEmptyState
+                            icon={Ticket}
+                            title="No events match these filters"
+                            body="Try another category, date or search, or clear the filters to see everything coming up."
+                            action={
+                                <BrandButton variant="secondary" onClick={clearFilters}>
+                                    Clear filters
+                                </BrandButton>
+                            }
+                        />
                     ) : (
-                        <div className="flex flex-col gap-4">
-                            {listEvents.map((event, i) => {
-                                const { day, month } = dateParts(event.date);
-                                return (
-                                    <EventListingRow
-                                        key={event.id}
-                                        index={i + 1}
-                                        title={stripHtmlTags(event.title)}
-                                        imageUrl={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
-                                        gradientClass={CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other}
-                                        categoryLabel={getCategoryLabel(event)}
-                                        isOnline={event.isOnline}
-                                        dateLabel={formatDateRange(event.date, event.endDate)}
-                                        timeLabel={formatTime(event.time)}
-                                        venueLabel={event.venue}
-                                        organizerName={event.organizerName}
-                                        dateDay={day}
-                                        dateMonth={month}
-                                        priceLabel={event.registrationMode === 'rsvp' ? 'RSVP' : getPriceLabel(event.tiers)}
-                                        onOpen={() => openEvent(event)}
-                                    />
-                                );
-                            })}
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-4">
+                            {filtered.map((event) => (
+                                <EventCard
+                                    key={event.id}
+                                    title={stripHtmlTags(event.title)}
+                                    imageUrl={event.coverImageMobile || event.coverImageDesktop || event.coverImage || undefined}
+                                    gradientClass={CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other}
+                                    dateLabel={cardDateLabel(event)}
+                                    venueLabel={event.isOnline ? 'Online' : event.venue}
+                                    priceLabel={priceLabelFor(event)}
+                                    onOpen={() => openEvent(event)}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
@@ -328,6 +403,9 @@ const CustomerEventDiscover: React.FC = () => {
                 facebook={settings.facebook}
                 twitter={settings.twitter}
                 whatsappNumber={settings.whatsappNumber}
+                bio={settings.storefront.bio}
+                contactEmail={settings.storefront.contactEmail}
+                storeBasePath={subdomain ? '' : `/public/${resolvedCompanyId}`}
             />
         </div>
     );

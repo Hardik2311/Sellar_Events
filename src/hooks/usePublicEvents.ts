@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { isCreditExpired, type PublicEvent } from '../data/events';
+import { getStorefrontSeed } from '../lib/storefrontData';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
   id,
@@ -50,7 +51,9 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   consentStyle: d.consentStyle ?? undefined,
   goodToKnowText: d.goodToKnowText ?? undefined,
   goodToKnowStyle: d.goodToKnowStyle ?? undefined,
-  paymentCollectionMode: d.paymentCollectionMode || 'gateway',
+  // See useOrganizerEvents.ts — missing/legacy field must default to manual_qr,
+  // not 'gateway' (the unwired mock payment path).
+  paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
@@ -60,12 +63,29 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   helplineNumber: d.helplineNumber ?? null,
 });
 
+// Events the server sent with this storefront page (see lib/storefrontData.ts).
+const seededEvents = (companyId?: string | null) => {
+  const seed = companyId ? getStorefrontSeed(companyId) : null;
+  if (!seed?.events) return null;
+  const organizerName = seed.company.organizationName || seed.company.name || '';
+  return {
+    organizerName,
+    events: seed.events
+      .map(({ id, data }) => mapDocToPublicEvent(id, data, organizerName, seed.companyId))
+      .filter((e) => !isCreditExpired(e)),
+  };
+};
+
 export function usePublicEvents(targetCompanyId?: string | null) {
   const { profile } = useAuth();
   // allEvents = published events including private ones (needed so a direct
   // shared link + code can still resolve to the event).
-  const [allEvents, setAllEvents] = useState<PublicEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allEvents, setAllEvents] = useState<PublicEvent[]>(() => seededEvents(targetCompanyId)?.events ?? []);
+  const [loading, setLoading] = useState(() => !seededEvents(targetCompanyId));
+  // True while showing what the server sent, until the live listener's first
+  // snapshot replaces it. The server never sends a private event's access
+  // codes, so codes can only be checked once this is false.
+  const [fromServer, setFromServer] = useState(() => !!seededEvents(targetCompanyId));
 
   useEffect(() => {
     const effectiveCompanyId = targetCompanyId || profile?.companyId;
@@ -74,15 +94,23 @@ export function usePublicEvents(targetCompanyId?: string | null) {
       return;
     }
 
-    setLoading(true);
+    const seeded = seededEvents(targetCompanyId);
+    if (seeded) {
+      setAllEvents(seeded.events);
+      setFromServer(true);
+      setLoading(false);
+    } else {
+      setFromServer(false);
+      setLoading(true);
+    }
 
     let unsubscribe = () => { };
 
     const setup = async () => {
-      let organizerName = profile?.organizationName || '';
+      let organizerName = seeded?.organizerName || profile?.organizationName || '';
 
       // If we are overriding the company ID (e.g. public storefront), fetch the org name
-      if (targetCompanyId && targetCompanyId !== profile?.companyId) {
+      if (!seeded && targetCompanyId && targetCompanyId !== profile?.companyId) {
         try {
           const companySnap = await getDoc(doc(db, 'companies', effectiveCompanyId));
           if (companySnap.exists()) {
@@ -98,16 +126,30 @@ export function usePublicEvents(targetCompanyId?: string | null) {
         where('status', '==', 'published')
       );
 
-      unsubscribe = onSnapshot(publicEventsQuery, (snapshot) => {
-        const mapped = snapshot.docs
-          .map((docSnap) => mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId))
-          // NEW — hide events whose credit validity has run out even if the
-          // organizer hasn't opened their dashboard yet to trigger the
-          // status flip to 'draft'. Effectively "already unpublished".
-          .filter((e) => !isCreditExpired(e));
-        setAllEvents(mapped);
-        setLoading(false);
-      });
+      unsubscribe = onSnapshot(
+        publicEventsQuery,
+        (snapshot) => {
+          // When Firestore can't reach its backend it reports an empty
+          // from-cache result after ~10s; that must not replace what the
+          // server already sent with the page.
+          if (seeded && snapshot.metadata.fromCache) return;
+          const mapped = snapshot.docs
+            .map((docSnap) => mapDocToPublicEvent(docSnap.id, docSnap.data(), organizerName, effectiveCompanyId))
+            // NEW — hide events whose credit validity has run out even if the
+            // organizer hasn't opened their dashboard yet to trigger the
+            // status flip to 'draft'. Effectively "already unpublished".
+            .filter((e) => !isCreditExpired(e));
+          setAllEvents(mapped);
+          setFromServer(false);
+          setLoading(false);
+        },
+        (err) => {
+          // Without this a failed listener left `loading` true forever, so the
+          // page sat on its skeleton instead of showing "not available".
+          console.error('Failed to load published events:', err);
+          setLoading(false);
+        }
+      );
     };
 
     setup();
@@ -119,17 +161,22 @@ export function usePublicEvents(targetCompanyId?: string | null) {
   // only be reachable via a direct shared link + access code.
   const events = allEvents.filter((e) => !e.isPrivate);
 
-  return { events, loading, allEvents };
+  return { events, loading, allEvents, fromServer };
 }
 
 export function usePublicEvent(id?: string, targetCompanyId?: string | null) {
   // Use allEvents (not the filtered list) — a private event's direct link
   // must still resolve; verifyAccessCode() is what gates access to it.
-  const { allEvents, loading } = usePublicEvents(targetCompanyId);
+  const { allEvents, loading, fromServer } = usePublicEvents(targetCompanyId);
   const event = id ? allEvents.find((e) => e.id === id) : undefined;
-  return { event, loading };
+  return { event, loading, fromServer };
 }
 
+// Whether a code may OPEN the private event page. A code that has already
+// bought tickets still unlocks viewing — the buyer can come back to the event
+// as often as they like. Buying again is blocked separately: see
+// isAccessCodeUsed() on the page, and the CODE_ALREADY_USED check inside the
+// checkout transactions, which is the real enforcement.
 export function verifyAccessCode(event: PublicEvent, enteredCode: string): boolean {
   if (!event.isPrivate) return true; // public events don't need a code at all
   if (!event.accessCodes || event.accessCodes.length === 0) return false; // private, but organizer hasn't generated any code yet — deny by default
@@ -137,7 +184,13 @@ export function verifyAccessCode(event: PublicEvent, enteredCode: string): boole
   return event.accessCodes.some(
     (entry) =>
       entry.code.trim().toUpperCase() === cleaned &&
-      !entry.usedAt && // single-use — a code that already bought tickets is dead
       (!entry.expiresAt || new Date(entry.expiresAt).getTime() > Date.now())
   );
+}
+
+// Codes are single-use for purchases: true once this code has bought tickets.
+export function isAccessCodeUsed(event: PublicEvent, code: string | null | undefined): boolean {
+  if (!event.isPrivate || !code) return false;
+  const cleaned = code.trim().toUpperCase();
+  return !!event.accessCodes?.some((entry) => entry.code.trim().toUpperCase() === cleaned && !!entry.usedAt);
 }

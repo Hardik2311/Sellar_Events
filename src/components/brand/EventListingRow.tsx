@@ -40,7 +40,7 @@ const EventListingRow: React.FC<EventListingRowProps> = ({
   className = '',
 }) => (
   <div
-    className={`group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm transition-shadow hover:shadow-md sm:flex-row ${className}`}
+    className={`group flex cursor-pointer flex-col overflow-hidden rounded-sm border border-black/10 bg-white shadow-sm transition-shadow hover:shadow-md sm:flex-row ${className}`}
     onClick={onOpen}
   >
     {/* Artwork */}

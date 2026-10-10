@@ -1,5 +1,6 @@
 import React from 'react';
 import ErrorScreen from './ErrorScreen';
+import { dismissServerPreview } from '../lib/storefrontData';
 
 // Vite content-hashes chunk filenames, so a hash a visitor's browser is still
 // holding (an open tab spanning a deploy, or a stale cached index.html) can
@@ -26,6 +27,8 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, State> {
 
   componentDidCatch(error: Error) {
     console.error('Unhandled error in app tree:', error);
+    // Otherwise the server's storefront preview would sit on top of the error screen.
+    dismissServerPreview();
 
     if (CHUNK_ERROR_PATTERN.test(error.message)) {
       const alreadyTriedReload = sessionStorage.getItem(RELOAD_GUARD_KEY) === '1';

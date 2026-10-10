@@ -50,6 +50,7 @@ export function useAttendees(companyId: string | undefined, eventId: string | un
             paymentMode: data.paymentMode ?? undefined,
             screenshotUrl: data.screenshotUrl ?? undefined,
             source: data.source ?? 'ticket',
+            bookingGroupId: data.bookingGroupId ?? null,
           } as Attendee;
         });
         setAttendees(list);

@@ -1,9 +1,14 @@
-import React, { useRef, useState } from 'react';
-import { CheckCircle2, Download, Share2, Ticket as TicketIcon, FileDown, MapPin } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Check, Download, Share2, FileDown, MapPin } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { stripHtmlTags } from '../lib/utils';
-import { shareTicketImage } from '../lib/shareTicket';
 import { buildAcknowledgementPdf, type AcknowledgementTicketData, type AcknowledgementEventData } from '../lib/ticketPdf';
+import { formatTime } from '../data/events';
+import { formatShortDate } from '../lib/storefrontFormat';
+import TicketDivider from './brand/TicketDivider';
+import PoweredByOutsold from './brand/PoweredByOutsold';
+import BrandButton from './brand/BrandButton';
+import BrandTag from './brand/BrandTag';
 
 interface PurchasedTicket {
     ticketId: string;
@@ -17,7 +22,36 @@ interface PurchasedTicket {
     purchasedAt?: number;     // NEW — ms epoch, "BOOKED" fact
     createdAt?: number;       // NEW — fallback when purchasedAt is missing
     status?: 'valid' | 'checked_in' | 'cancelled'; // NEW — Confirmed/Cancelled pill
+    bookingGroupId?: string | null; // NEW — same-name tickets in one order share one pass
 }
+
+// One QR "pass" per holder: a group booking (same name, same order) collapses
+// into a single pass whose QR is the lead ticket's ID and admits everyone.
+interface TicketPass extends PurchasedTicket {
+    admits: number;
+    memberIds: string[];
+}
+
+const toPasses = (tickets: PurchasedTicket[]): TicketPass[] => {
+    const groups = new Map<string, PurchasedTicket[]>();
+    tickets.forEach((t) => {
+        const key = t.bookingGroupId || t.ticketId;
+        groups.set(key, [...(groups.get(key) ?? []), t]);
+    });
+    return Array.from(groups.values()).map((members) => {
+        const lead = members[0];
+        if (members.length === 1) return { ...lead, admits: 1, memberIds: [lead.ticketId] };
+        const tierCounts = new Map<string, number>();
+        members.forEach((m) => tierCounts.set(m.tierName, (tierCounts.get(m.tierName) ?? 0) + 1));
+        return {
+            ...lead,
+            tierName: Array.from(tierCounts.entries()).map(([name, n]) => `${name} × ${n}`).join(' + '),
+            amountPaid: members.reduce((sum, m) => sum + (m.amountPaid ?? 0), 0),
+            admits: members.length,
+            memberIds: members.map((m) => m.ticketId),
+        };
+    });
+};
 
 interface TicketConfirmationProps {
     eventTitle: string;
@@ -55,6 +89,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     bookMoreTicketsUrl,
 }) => {
     const cleanEventTitle = stripHtmlTags(eventTitle);
+    const passes = useMemo(() => toPasses(tickets), [tickets]);
     const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
     const buildEventDataForPdf = (): AcknowledgementEventData => ({
@@ -72,9 +107,10 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         eventHelplineNumber,
         bookMoreTicketsUrl,
     });
-    const buildTicketDataForPdf = (t: PurchasedTicket): AcknowledgementTicketData => ({
+    const buildTicketDataForPdf = (t: TicketPass): AcknowledgementTicketData => ({
         ticketId: t.ticketId,
         tierName: t.tierName,
+        tierTag: t.admits > 1 ? `Admits ${t.admits}` : undefined,
         attendeeName: t.attendeeName,
         attendeeEmail: t.attendeeEmail,
         attendeePhone: t.attendeePhone,
@@ -85,7 +121,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         isCancelled: t.status === 'cancelled',
     });
 
-    const handleDownload = async (t: PurchasedTicket) => {
+    const handleDownload = async (t: TicketPass) => {
         const canvas = canvasRefs.current[t.ticketId] ?? null;
         const doc = await buildAcknowledgementPdf(buildTicketDataForPdf(t), buildEventDataForPdf(), canvas);
         doc.save(`${t.ticketId}-receipt.pdf`);
@@ -93,7 +129,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
 
     const [sharingId, setSharingId] = useState<string | null>(null);
 
-    const handleShare = async (t: PurchasedTicket) => {
+    const handleShare = async (t: TicketPass) => {
         if (sharingId === t.ticketId) return; // prevent double-tap re-entry
         setSharingId(t.ticketId);
         try {
@@ -114,142 +150,141 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         }
     };
     const handleDownloadAllPdf = async () => {
-        await Promise.all(tickets.map((t) => handleDownload(t)));
+        await Promise.all(passes.map((t) => handleDownload(t)));
     };
 
+    const dateLabel = formatShortDate(eventDate);
+    const timeLabel = eventTime ? formatTime(eventTime) : '';
+    const ticketCount = `${tickets.length} ticket${tickets.length === 1 ? '' : 's'}`;
+
     return (
-        <div className="flex w-full flex-col items-center p-4">
-            <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 py-2">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#0B3B3A] shadow-md">
-                    <CheckCircle2 size={32} className="text-white" strokeWidth={2.5} />
-                </div>
-
-                <div className="flex w-full flex-col items-center gap-1 text-center">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#007A78]">
-                        Booking Confirmed
+        <div className="brand-theme flex w-full flex-col items-center bg-[var(--brand-cream)] px-4 py-8 text-[var(--brand-black)] sm:py-10">
+            <div className={`mx-auto flex w-full flex-col gap-6 ${passes.length > 1 ? 'max-w-4xl' : 'max-w-xl'}`}>
+                {/* Hero */}
+                <div className="flex w-full flex-col items-center gap-2.5 text-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-teal)] text-[var(--brand-cream)]">
+                        <Check size={28} strokeWidth={2.5} aria-hidden="true" />
                     </span>
-                    <h1 className="text-2xl font-extrabold text-[#0B3B3A]">{cleanEventTitle}</h1>
-                    <p className="text-sm text-slate-500">{eventDate}</p>
+                    <h1 className="brand-display text-[32px] leading-none sm:text-[44px]">
+                        You&rsquo;re <span className="text-[var(--brand-teal)]">in.</span>
+                    </h1>
+                    <p className="max-w-[44ch] text-[15px] leading-[22px] text-[var(--brand-muted)]">
+                        {ticketCount} for <span className="font-semibold text-[var(--brand-black)]">{cleanEventTitle}</span>
+                        {[dateLabel, timeLabel].filter(Boolean).length > 0 && `, ${[dateLabel, timeLabel].filter(Boolean).join(', ')}`}.
+                    </p>
                 </div>
 
-                <div className="flex w-full items-center justify-between gap-3 rounded-sm bg-white px-4 py-3 shadow-sm">
-                    <span className="text-xs font-semibold text-slate-600">
-                        {tickets.length} ticket{tickets.length === 1 ? '' : 's'} in this order
-                    </span>
-                    <button
-                        onClick={handleDownloadAllPdf}
-                        className="flex shrink-0 items-center gap-1.5 rounded-sm bg-[#007A78] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2DD4BF]"
-                    >
-                        <FileDown size={14} /> Download all
-                    </button>
+                {/* Order bar */}
+                <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
+                    <div className="min-w-0">
+                        <p className="text-[13px] text-[var(--brand-muted)]">This order</p>
+                        <p className="text-[15px] font-semibold">
+                            {ticketCount}
+                            {passes.length < tickets.length && ` · ${passes.length} pass${passes.length === 1 ? '' : 'es'}`}
+                        </p>
+                    </div>
+                    <BrandButton variant="secondary" size="sm" onClick={handleDownloadAllPdf}>
+                        <FileDown size={18} /> Download all
+                    </BrandButton>
                 </div>
 
-                <div className="flex w-full flex-col gap-6">
-                    {tickets.map((t) => (
-                        <div key={t.ticketId} className="w-full">
-                            {/* Header band — gradient, eyebrow + tier pill, title, venue, attendee/date columns */}
-                            <div
-                                className="relative overflow-hidden rounded-sm px-5 py-5"
-                                style={{ background: 'linear-gradient(135deg, #0B3B3A 0%, #00A896 100%)' }}
-                            >
-                                <div className="pointer-events-none absolute -right-3 -top-3 h-24 w-24 rounded-full bg-white/[0.08]" />
-                                <div className="pointer-events-none absolute -left-3 bottom-[-24px] h-16 w-16 rounded-full bg-white/[0.08]" />
-
-                                <div className="relative flex items-center justify-between">
-                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-white">
-                                        <span className="rounded-full bg-white/16 px-2 py-0.5 tracking-wide">E-TICKET</span>
-                                        <span className="text-white/70 tracking-[0.15em] uppercase">Live Pass</span>
-                                    </span>
-                                    <span className="inline-flex items-center rounded-full border border-white/35 bg-white/16 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                                        <TicketIcon size={11} className="mr-1" /> {t.tierName}
-                                    </span>
+                {/* Ticket stubs, one per pass */}
+                <div className={`grid w-full grid-cols-1 gap-5 ${passes.length > 1 ? 'md:grid-cols-2' : ''}`}>
+                    {passes.map((t) => (
+                        <div key={t.ticketId} className="w-full overflow-hidden rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)]">
+                            {/* Head */}
+                            <div className="bg-[var(--brand-black)] px-5 pt-5 pb-5 text-[var(--brand-cream)]">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="brand-label text-[#c9c4b8]">E-ticket</span>
+                                    <BrandTag variant="featured" className="max-w-[65%] truncate">{t.tierName}</BrandTag>
                                 </div>
 
-                                <p className="relative mt-3 text-xl font-extrabold leading-tight text-white">{cleanEventTitle}</p>
+                                <p className="brand-display mt-3 text-[26px] leading-[1.05]">{cleanEventTitle}</p>
 
-                                {eventVenue && (
-                                    <p className="relative mt-1 flex items-center gap-1 text-[11px] text-white/75">
-                                        <MapPin size={12} /> {eventVenue}
+                                {(eventIsOnline || eventVenue) && (
+                                    <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-[#c9c4b8]">
+                                        <MapPin size={14} className="shrink-0" aria-hidden="true" /> {eventIsOnline ? 'Online' : eventVenue}
                                     </p>
                                 )}
 
-                                <div className="relative mt-3 border-t border-white/15" />
-
-                                <div className="relative mt-3 flex gap-8">
-                                    <div>
-                                        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/55">Attendee</p>
-                                        <p className="mt-1 text-sm font-bold text-white">{t.attendeeName}</p>
+                                <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-white/10 pt-3">
+                                    <div className="min-w-0">
+                                        <dt className="brand-label text-[#c9c4b8]">Attendee</dt>
+                                        <dd className="mt-1 truncate text-sm font-semibold">{t.attendeeName || 'TBA'}</dd>
                                     </div>
-                                    <div>
-                                        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/55">Date</p>
-                                        <p className="mt-1 text-sm font-bold text-white">{eventDate}</p>
+                                    <div className="min-w-0">
+                                        <dt className="brand-label text-[#c9c4b8]">Date</dt>
+                                        <dd className="mt-1 truncate text-sm font-semibold">{dateLabel || 'TBA'}</dd>
                                     </div>
-                                </div>
+                                    <div className="min-w-0">
+                                        <dt className="brand-label text-[#c9c4b8]">Time</dt>
+                                        <dd className="mt-1 truncate text-sm font-semibold">{timeLabel || 'TBA'}</dd>
+                                    </div>
+                                </dl>
                             </div>
 
-                            {/* Perforated seam */}
-                            <div className="relative h-0">
-                                <div className="absolute left-0 right-0 top-0 border-t-2 border-dashed border-[#0B3B3A]/18" />
-                                <div className="absolute -left-3 -top-3 h-6 w-6 rounded-sm bg-gray-100" />
-                                <div className="absolute -right-3 -top-3 h-6 w-6 rounded-sm bg-gray-100" />
+                            {/* Perforation */}
+                            <div className="relative h-6 bg-[var(--brand-surface)]">
+                                <TicketDivider notchColor="var(--brand-cream)" className="absolute inset-x-0 top-1/2" />
                             </div>
 
                             {/* Body */}
-                            <div className="flex flex-col items-center gap-3 rounded-sm bg-white px-5 pb-5 pt-7 shadow-md">
-                                <div className="relative rounded-sm border border-[#0B3B3A]/10 bg-white p-4 shadow-sm">
-                                    {/* viewfinder-style corner brackets, matches canvas */}
-                                    <span className="pointer-events-none absolute left-1.5 top-1.5 h-3.5 w-3.5 border-l-2 border-t-2 border-[#007A78]" />
-                                    <span className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 border-r-2 border-t-2 border-[#007A78]" />
-                                    <span className="pointer-events-none absolute bottom-1.5 left-1.5 h-3.5 w-3.5 border-b-2 border-l-2 border-[#007A78]" />
-                                    <span className="pointer-events-none absolute bottom-1.5 right-1.5 h-3.5 w-3.5 border-b-2 border-r-2 border-[#007A78]" />
-
+                            <div className="flex flex-col items-center gap-3 px-5 pb-5">
+                                <div className="rounded-lg border border-[var(--brand-line)] bg-white p-2.5">
                                     <QRCodeCanvas
                                         value={t.ticketId}
                                         size={340}
                                         includeMargin
-                                        style={{ width: 170, height: 170 }}
+                                        style={{ width: 168, height: 168 }}
                                         ref={(el) => {
                                             canvasRefs.current[t.ticketId] = el as unknown as HTMLCanvasElement;
                                         }}
                                     />
                                 </div>
 
-                                <p className="font-mono text-xs font-semibold tracking-[0.15em] text-[#0B3B3A]">
-                                    {t.ticketId.split('').join('\u200a')}
-                                </p>
-                                <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#0B3B3A]/40">
-                                    Scan at entry · Non-transferable
-                                </p>
+                                <p className="brand-label text-[var(--brand-black)]">{t.ticketId}</p>
+                                <p className="text-[13px] text-[var(--brand-muted)]">Scan at entry. Non-transferable.</p>
+
+                                {t.admits > 1 && (
+                                    <div className="w-full rounded-lg bg-[var(--brand-discover-bg)] px-3 py-2.5 text-center ring-1 ring-inset ring-[var(--brand-yellow)]">
+                                        <p className="text-sm font-semibold">Group pass, admits {t.admits}</p>
+                                        <p className="mt-0.5 text-[13px] text-[var(--brand-muted)]">
+                                            One QR for all {t.admits} tickets. Show it once at the entrance.
+                                        </p>
+                                        <p className="brand-label mt-1.5 break-words text-[var(--brand-muted)]">{t.memberIds.join(', ')}</p>
+                                    </div>
+                                )}
 
                                 {t.accessCode && (
-                                    <p className="text-[11px] font-medium text-[#0B3B3A]/60">
-                                        Access code: <span className="font-mono font-bold tracking-wide text-[#0B3B3A]">{t.accessCode}</span>
+                                    <p className="text-[13px] text-[var(--brand-muted)]">
+                                        Access code: <span className="brand-label text-[var(--brand-black)]">{t.accessCode}</span>
                                     </p>
                                 )}
 
-                                <div className="flex w-full gap-2 pt-1">
-                                    <button
-                                        onClick={() => handleDownload(t)}
-                                        className="flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-[#0B3B3A] py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#0B3B3A]/85"
-                                    >
-                                        <Download size={14} /> Download
-                                    </button>
-                                    <button
+                                <div className="flex w-full gap-3 pt-1">
+                                    <BrandButton variant="primary" className="flex-1" onClick={() => handleDownload(t)}>
+                                        <Download size={18} /> Download
+                                    </BrandButton>
+                                    <BrandButton
+                                        variant="secondary"
+                                        className="flex-1"
                                         onClick={() => handleShare(t)}
                                         disabled={sharingId === t.ticketId}
-                                        className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-[#0B3B3A]/15 py-2.5 text-xs font-semibold text-[#0B3B3A] transition-colors hover:bg-[#0B3B3A]/5"
                                     >
-                                        <Share2 size={14} /> {sharingId === t.ticketId ? 'Sharing…' : 'Share'}
-                                    </button>
+                                        <Share2 size={18} /> {sharingId === t.ticketId ? 'Sharing…' : 'Share'}
+                                    </BrandButton>
                                 </div>
                             </div>
                         </div>
                     ))}
                 </div>
 
-                <button onClick={onDone} className="mt-2 text-sm font-medium text-slate-500 underline">
-                    Close
-                </button>
+                <div className="flex flex-col items-center gap-4 pt-2">
+                    <BrandButton variant="link" onClick={onDone} className="!text-[var(--brand-black)]">
+                        <ArrowLeft size={18} /> All events
+                    </BrandButton>
+                    <PoweredByOutsold />
+                </div>
             </div>
         </div>
     );

@@ -1,18 +1,32 @@
 @import 'tailwindcss';
 
-/* ── Brand theme (Discover / Event detail / Checkout redesign) ──────────
-   Scoped under .brand-theme so the rest of the app keeps Comfortaa + teal. */
+/* ── Brand theme (Outsold Storefront design system) ─────────────────────
+   Scoped under .brand-theme so the rest of the app keeps Comfortaa + teal.
+   Customer pages are light only. */
 .brand-theme {
-  --brand-black: #14120f;
-  --brand-cream: #f4efe4;
-  --brand-yellow: #f5c518;
-  --brand-teal: #007a78;
-  --brand-teal-light: #2dd4bf;
-  font-family: 'Comfortaa', sans-serif;
+  --brand-black: #14120f;        /* ink: text, primary buttons, dark stubs */
+  --brand-cream: #f4efe4;        /* canvas: every customer page background */
+  --brand-discover-bg: #fff7cf;  /* highlight tint: tags, total rows */
+  --brand-surface: #fffdf4;      /* cards, header, inputs, panels */
+  --brand-footer: #182322;       /* footer */
+  --brand-yellow: #f5c518;       /* highlight only; the button on ink */
+  --brand-teal: #007a78;         /* links, focus, selected, success */
+  --brand-teal-light: #2dd4bf;   /* teal on ink / footer */
+  --brand-muted: #625f5a;        /* secondary text */
+  --brand-line: rgb(20 18 15 / 0.12);        /* hairlines, card borders */
+  --brand-line-strong: #8a8882;              /* input, stepper, outline borders */
+  --brand-skeleton: rgb(20 18 15 / 0.06);    /* loading placeholders */
+  --brand-teal-soft: rgb(0 122 120 / 0.08);  /* selected fill */
+  --brand-danger: #b3261e;                   /* errors */
+  --brand-shadow-raise: 0 1px 2px rgb(20 18 15 / 0.06), 0 6px 16px rgb(20 18 15 / 0.06);
+  --brand-shadow-sticky: 0 -8px 24px rgb(20 18 15 / 0.18);
+  font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
 }
 
 .brand-display {
-  font-family: 'Anton', 'Comfortaa', sans-serif;
+  font-family: 'Anton', 'Arial Narrow', Impact, sans-serif;
+  font-weight: 400;
   letter-spacing: 0.01em;
   text-transform: uppercase;
 }
@@ -21,6 +35,48 @@
   font-family: 'Space Mono', ui-monospace, monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* The one small mono label: card date line, ticket-stub fields, tags. */
+.brand-label {
+  font-family: 'Space Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@font-face {
+  font-family: 'Figtree';
+  src: url('./assets/fonts/Figtree-Variable.woff2') format('woff2');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anton';
+  src: url('./assets/fonts/Anton-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('./assets/fonts/SpaceMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('./assets/fonts/SpaceMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {

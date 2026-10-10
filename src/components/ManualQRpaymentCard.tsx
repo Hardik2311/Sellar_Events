@@ -1,20 +1,34 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Upload, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
+import { X, Upload, Copy, Check, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
 import { stripHtmlTags } from '../lib/utils';
-import { formatDateRange, formatTime, type AccessCodeEntry, type PublicEvent } from '../data/events';
+import { formatTime, type AccessCodeEntry, type PublicEvent } from '../data/events';
+import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import QRCode from 'qrcode';
 import { loadImageAsCoverBanner } from '../lib/imageBanner';
 import TicketConfirmation from './TicketConfirmation';
+import { assignBookingGroups, getEventInitials } from '../lib/ticketing';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import BrandNavHeader from './brand/BrandNavHeader';
 import SectionLabel from './brand/SectionLabel';
 import TicketOrderSummary from './brand/TicketOrderSummary';
+import BrandCheckbox from './brand/BrandCheckbox';
+import MobileCheckoutBar from './brand/MobileCheckoutBar';
+import MobileOrderSummary from './brand/MobileOrderSummary';
 import CheckoutStepPills from './brand/CheckoutStepPills';
+import BrandButton from './brand/BrandButton';
+import {
+  brandErrorClass,
+  brandFieldHeight,
+  brandHelpClass,
+  brandInputClass,
+  brandLabelClass,
+  brandPanelClass,
+} from './brand/brandForm';
 
 const PDF_BANNER_WIDTH = 760;
 const PDF_BANNER_HEIGHT = 220;
@@ -29,6 +43,7 @@ interface PurchasedTicket {
   amountPaid?: number;
   paymentMode?: string;
   purchasedAt?: number;
+  bookingGroupId?: string | null;
 }
 
 interface Breakdown {
@@ -64,19 +79,6 @@ const roundToInterval = (value: number, interval: number) => {
 };
 const isValidPhone = (phone: string): boolean => /^[6-9]\d{9}$/.test(phone);
 const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-// Same scheme as CheckoutPage's getEventInitials — kept identical so
-// gateway and manual-QR tickets look consistent to the organizer.
-const getEventInitials = (title: string): string => {
-  const words = stripHtmlTags(title).trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return 'EV';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return words
-    .slice(0, 3)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-};
-
 interface AttendeeFormEntry {
   name: string;
   email: string;
@@ -379,6 +381,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           ...(updatedAccessCodes ? { accessCodes: updatedAccessCodes } : {}),
         });
 
+        // Pre-create every attendee doc ref so same-name tickets in this
+        // order can share one QR / group check-in (lead = first doc id).
+        const totalTickets = taxedBreakdown.reduce((sum, t) => sum + t.qty, 0);
+        const attendeeDocs = Array.from({ length: totalTickets }, () => doc(attendeesRef));
+        const bookingGroupIds = assignBookingGroups(
+          attendeeDocs.map((_, i) => (attendeeDetails[i]?.name ?? '').trim()),
+          attendeeDocs.map((d) => d.id)
+        );
+
         let index = 0;
         const created: PurchasedTicket[] = [];
         taxedBreakdown.forEach((tier) => {
@@ -387,7 +398,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           const unitTotal = unitBase + unitTax;
 
           for (let i = 0; i < tier.qty; i++) {
-            const attendeeDoc = doc(attendeesRef);
+            const attendeeDoc = attendeeDocs[index];
             const ticketNumber = totalAlreadySold + index + 1;
             const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
             const attendee = attendeeDetails[index] ?? { name: '', email: '', phone: '' };
@@ -412,6 +423,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               paymentMode: 'UPI',
               screenshotUrl,
               accessCode: accessCode || null,
+              bookingGroupId: bookingGroupIds[index],
             });
             created.push({
               ticketId,
@@ -423,6 +435,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               amountPaid: Number(unitTotal.toFixed(2)),
               paymentMode: 'UPI',
               purchasedAt: orderStamp,
+              bookingGroupId: bookingGroupIds[index],
             });
             index += 1;
           }
@@ -449,7 +462,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
   if (submitted) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-white dark:bg-[#0F172A]">
+      <div className="brand-theme fixed inset-0 z-50 overflow-y-auto bg-[var(--brand-cream)]">
+        <BrandNavHeader organizationName={organizationName} variant="minimal" rightSlot={<span />} />
         <TicketConfirmation
           eventTitle={event.title}
           eventDate={event.date}
@@ -480,104 +494,146 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     submitting ||
     isCompressing;
 
+  const submitCtaLabel = submitting ? 'Submitting…' : "I've paid, confirm";
+  const totalTicketQty = breakdown.reduce((sum, b) => sum + b.qty, 0);
+  const totalLabel = formatRupees(finalTotal, { zeroAsFree: false });
+
   const steps = [
-    { id: 'manual-details', label: 'Details' },
-    ...(customFields.length > 0 ? [{ id: 'manual-questions', label: 'Questions' }] : []),
-    { id: 'manual-payment', label: 'Payment' },
+    { id: 'manual-details', label: 'Details', complete: attendeeDetailsComplete },
+    ...(customFields.length > 0 ? [{ id: 'manual-questions', label: 'Questions', complete: customFieldsValid }] : []),
+    { id: 'manual-payment', label: 'Payment', complete: !!screenshot && consentChecked },
   ];
 
+  const orderSummary = (
+    <TicketOrderSummary
+      eventTitle={stripHtmlTags(event.title)}
+      dateLabel={`${formatShortDateRange(event.date, event.endDate)}, ${formatTime(event.time)}`}
+      venueLabel={event.isOnline ? 'Online' : event.venue}
+      lineItems={[
+        ...taxedBreakdown.map((b) => ({
+          id: b.id,
+          label: `${b.qty} × ${b.name}`,
+          amountLabel: formatRupees(b.itemTotal),
+        })),
+        ...(totalTaxAmount > 0
+          ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }]
+          : []),
+        ...(roundOffAmt !== 0
+          ? [{ id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }]
+          : []),
+      ]}
+      totalLabel={totalLabel}
+      ctaLabel={submitCtaLabel}
+      onCta={handleSubmit}
+      ctaDisabled={submitDisabled}
+    />
+  );
+  const orderItemsLabel = breakdown.length === 1 ? `${breakdown[0].qty} × ${breakdown[0].name}` : `${totalTicketQty} tickets`;
+
   return (
-    <div className="brand-theme fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[var(--brand-cream)]">
+    <div className="brand-theme fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[var(--brand-cream)] pb-24 text-[var(--brand-black)] lg:pb-0">
       <BrandNavHeader organizationName={organizationName} variant="minimal" />
 
       <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-8 lg:px-12">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <button
-              onClick={onClose}
-              className="brand-mono mb-1 flex items-center gap-1.5 text-xs font-bold text-black/50 hover:text-black"
-            >
-              &larr; Back to event
-            </button>
-            <h1 className="brand-display text-4xl leading-none text-[var(--brand-black)]">
+            <BrandButton variant="link" onClick={onClose} className="mb-3 !text-[var(--brand-black)]">
+              <ArrowLeft size={18} /> Back to event
+            </BrandButton>
+            <h1 className="brand-display text-[32px] leading-none text-[var(--brand-black)] sm:text-[44px]">
               Almost <span className="text-[var(--brand-teal)]">in.</span>
             </h1>
+            <p className="mt-2 text-[15px] text-[var(--brand-muted)]">
+              {stripHtmlTags(event.title)} &middot; {formatShortDateRange(event.date, event.endDate)}
+            </p>
           </div>
           <CheckoutStepPills steps={steps} />
         </div>
 
-        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
+        <MobileOrderSummary className="mt-6" itemsLabel={orderItemsLabel} totalLabel={totalLabel}>
+          {orderSummary}
+        </MobileOrderSummary>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-10">
           {/* ── Left: form ─────────────────────────────────────────────── */}
-          <div className="space-y-6 lg:w-[760px]">
-            {/* 01 Your details */}
-            <div id="manual-details">
-              <SectionLabel index={1} className="mb-3">Your details</SectionLabel>
-              <div className="rounded-lg border border-black/10 bg-white p-4 space-y-4">
+          <div className="flex min-w-0 flex-col gap-8">
+            {/* Your details */}
+            <section id="manual-details" className="scroll-mt-6">
+              <SectionLabel className="mb-4">Your details</SectionLabel>
+              <div className={`${brandPanelClass} flex flex-col gap-5`}>
                 {ticketSlots.length > 1 && (
-                  <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600">
+                  <BrandCheckbox checked={sameForAll} onChange={handleToggleSameForAll}>
                     Use the same details for all {ticketSlots.length} tickets
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={sameForAll}
-                      onClick={() => handleToggleSameForAll(!sameForAll)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sameForAll ? 'bg-[var(--brand-teal)]' : 'bg-gray-300'
-                        }`}
-                    >
-                      <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${sameForAll ? 'translate-x-4' : 'translate-x-1'
-                          }`}
-                      />
-                    </button>
-                  </label>
+                  </BrandCheckbox>
                 )}
 
                 {attendeeDetails.map((entry, index) => {
                   if (sameForAll && index > 0) return null;
+                  const phoneInvalid = !!entry.phone && !isValidPhone(entry.phone);
+                  const emailInvalid = !!entry.email && !isValidEmail(entry.email);
                   return (
-                    <div key={index} className="space-y-2">
+                    <div key={index} className="flex flex-col gap-4">
                       {ticketSlots.length > 1 && !sameForAll && (
-                        <p className="brand-mono text-[10px] font-bold text-[var(--brand-teal)]">
-                          Ticket {index + 1} &middot; {ticketSlots[index]?.tierName}
+                        <p className="text-[15px] font-semibold text-[var(--brand-black)]">
+                          Ticket {index + 1}, {ticketSlots[index]?.tierName}
                         </p>
                       )}
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="sm:col-span-2">
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
+                          <label htmlFor={`manual-${index}-name`} className={brandLabelClass}>Full name</label>
                           <input
+                            id={`manual-${index}-name`}
                             type="text"
                             placeholder="As on your ID"
+                            autoComplete="name"
                             value={entry.name}
                             onChange={(e) => updateAttendee(index, 'name', e.target.value)}
-                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
+                            className={`${brandInputClass()} ${brandFieldHeight}`}
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-                          <input
-                            type="tel"
-                            inputMode="numeric"
-                            placeholder="+91"
-                            value={entry.phone}
-                            onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            maxLength={10}
-                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
-                          />
-                          {entry.phone && !isValidPhone(entry.phone) && (
-                            <p className="text-[10px] text-red-500 mt-0.5">Enter a valid 10-digit number</p>
+                          <label htmlFor={`manual-${index}-phone`} className={brandLabelClass}>Phone</label>
+                          <div className="flex">
+                            <span className="inline-flex shrink-0 items-center rounded-l-lg border border-r-0 border-[var(--brand-line-strong)] bg-[var(--brand-cream)] px-3 text-[15px] font-semibold text-[var(--brand-muted)]">
+                              +91
+                            </span>
+                            <input
+                              id={`manual-${index}-phone`}
+                              type="tel"
+                              inputMode="numeric"
+                              placeholder="10-digit mobile number"
+                              autoComplete="tel-national"
+                              value={entry.phone}
+                              onChange={(e) => updateAttendee(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                              maxLength={10}
+                              aria-invalid={phoneInvalid || undefined}
+                              className={`${brandInputClass(phoneInvalid)} ${brandFieldHeight} rounded-l-none`}
+                            />
+                          </div>
+                          {phoneInvalid && (
+                            <p className={brandErrorClass}>
+                              <AlertCircle size={14} aria-hidden="true" /> Enter a 10-digit mobile number starting with 6 to 9.
+                            </p>
                           )}
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                          <label htmlFor={`manual-${index}-email`} className={brandLabelClass}>Email</label>
                           <input
+                            id={`manual-${index}-email`}
                             type="email"
-                            placeholder="Tickets are sent here"
+                            placeholder="you@example.com"
+                            autoComplete="email"
                             value={entry.email}
                             onChange={(e) => updateAttendee(index, 'email', e.target.value)}
-                            className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]"
+                            aria-invalid={emailInvalid || undefined}
+                            className={`${brandInputClass(emailInvalid)} ${brandFieldHeight}`}
                           />
-                          {entry.email && !isValidEmail(entry.email) && (
-                            <p className="text-[10px] text-red-500 mt-0.5">Enter a valid email</p>
+                          {emailInvalid ? (
+                            <p className={brandErrorClass}>
+                              <AlertCircle size={14} aria-hidden="true" /> Enter a valid email, like name@example.com.
+                            </p>
+                          ) : (
+                            <p className={brandHelpClass}>Tickets are sent here.</p>
                           )}
                         </div>
                       </div>
@@ -585,39 +641,41 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                   );
                 })}
               </div>
-            </div>
+            </section>
 
-            {/* 02 A few questions */}
+            {/* A few questions */}
             {customFields.length > 0 && (
-              <div id="manual-questions">
-                <SectionLabel index={2} className="mb-3">A few questions</SectionLabel>
-                <div className="rounded-lg border border-black/10 bg-white p-4 space-y-3">
+              <section id="manual-questions" className="scroll-mt-6">
+                <SectionLabel className="mb-4">A few questions</SectionLabel>
+                <div className={`${brandPanelClass} flex flex-col gap-4`}>
                   {customFields.map((field) => {
                     const value = customAnswers[field.id] ?? '';
-                    const baseClass =
-                      'w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[var(--brand-teal)]';
+                    const fieldId = `manual-q-${field.id}`;
 
                     return (
                       <div key={field.id}>
-                        <label className="mb-1 block text-xs font-medium text-slate-600">
-                          {field.label}{field.required ? ' *' : ''}
-                        </label>
+                        {field.type !== 'checkbox' && (
+                          <label htmlFor={fieldId} className={brandLabelClass}>
+                            {field.label}{field.required ? ' *' : ''}
+                          </label>
+                        )}
 
                         {field.type === 'textarea' && (
                           <textarea
+                            id={fieldId}
                             rows={3}
                             value={value}
                             onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                            placeholder={field.label}
-                            className={baseClass}
+                            className={`${brandInputClass()} py-3`}
                           />
                         )}
 
                         {field.type === 'select' && (
                           <select
+                            id={fieldId}
                             value={value}
                             onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                            className={baseClass}
+                            className={`${brandInputClass()} ${brandFieldHeight}`}
                           >
                             <option value="">Select…</option>
                             {(field.options ?? []).map((opt) => (
@@ -627,197 +685,173 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
                         )}
 
                         {field.type === 'checkbox' && (
-                          <label className="flex items-center gap-2 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={value === 'true'}
-                              onChange={(e) => updateCustomAnswer(field.id, e.target.checked ? 'true' : 'false')}
-                              className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300"
-                            />
-                            {field.label}
-                          </label>
+                          <BrandCheckbox
+                            checked={value === 'true'}
+                            onChange={(checked) => updateCustomAnswer(field.id, checked ? 'true' : 'false')}
+                          >
+                            {field.label}{field.required ? ' *' : ''}
+                          </BrandCheckbox>
                         )}
 
                         {field.type === 'text' && (
                           <input
+                            id={fieldId}
                             type="text"
                             value={value}
                             onChange={(e) => updateCustomAnswer(field.id, e.target.value)}
-                            placeholder={field.label}
-                            className={baseClass}
+                            className={`${brandInputClass()} ${brandFieldHeight}`}
                           />
                         )}
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* 03 Payment */}
-            <div id="manual-payment">
-              <SectionLabel index={customFields.length > 0 ? 3 : 2} className="mb-3">Payment</SectionLabel>
-              <div className="rounded-lg border border-black/10 bg-white p-4 space-y-4">
-                <div className="rounded-sm bg-[var(--brand-black)] p-4 text-center">
-                  <p className="brand-mono text-[10px] text-white/50">
-                    {event.payeeName ? '' : 'Label shown above QR'}
-                  </p>
-                  {qrDataUrl ? (
-                    <img src={qrDataUrl} alt="Payment QR" className="mx-auto mt-2 w-40 h-40 rounded-sm border border-white/10 object-contain bg-white" />
-                  ) : (
-                    <p className="mt-2 text-xs text-red-400">QR not set up by the organizer.</p>
-                  )}
-                  <p className="brand-display mt-3 text-2xl text-[var(--brand-yellow)]">
-                    Pay &#8377;{finalTotal.toLocaleString('en-IN')}
-                  </p>
-                </div>
+            {/* Pay by UPI */}
+            <section id="manual-payment" className="scroll-mt-6">
+              <SectionLabel className="mb-4">Pay by UPI</SectionLabel>
+              <div className={`${brandPanelClass} flex flex-col gap-5`}>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-[220px_minmax(0,1fr)] sm:items-start sm:gap-6">
+                  {/* QR, payee and amount together */}
+                  <div className="flex flex-col items-center gap-2.5 rounded-xl border border-[var(--brand-line)] bg-white p-4 text-center">
+                    {qrDataUrl ? (
+                      <img src={qrDataUrl} alt="UPI payment QR code" className="h-44 w-44 object-contain" />
+                    ) : (
+                      <p className="flex items-center gap-1.5 py-10 text-[13px] font-medium text-[var(--brand-danger)]">
+                        <AlertCircle size={14} aria-hidden="true" /> The organizer hasn&rsquo;t set up a QR yet.
+                      </p>
+                    )}
+                    {event.payeeName && (
+                      <p className="text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">{event.payeeName}</p>
+                    )}
+                    <p className="brand-display text-[28px] leading-none tabular-nums text-[var(--brand-black)]">{totalLabel}</p>
+                  </div>
 
-                {event.upiId && (
-                  <button
-                    onClick={handleCopyUpi}
-                    className="brand-mono mx-auto flex items-center gap-1.5 rounded-sm border border-slate-300 px-3 py-1.5 text-[11px] font-bold text-slate-700"
-                  >
-                    {event.upiId} {copied ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                )}
+                  <div className="flex min-w-0 flex-col gap-4">
+                    {event.upiId && (
+                      <div>
+                        <span className={brandLabelClass}>UPI ID</span>
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--brand-line-strong)] bg-[var(--brand-cream)] py-1.5 pl-3.5 pr-1.5">
+                          <span className="min-w-0 truncate text-[15px] font-semibold">{event.upiId}</span>
+                          <button
+                            type="button"
+                            onClick={handleCopyUpi}
+                            aria-label={copied ? 'UPI ID copied' : 'Copy UPI ID'}
+                            className="flex h-9 shrink-0 items-center gap-1.5 rounded-sm border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] px-3 text-[13px] font-semibold text-[var(--brand-black)] hover:bg-[var(--brand-cream)]"
+                          >
+                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                            {copied ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                <ol className="space-y-1.5">
-                  {['Scan the QR with any UPI app', 'Pay the exact amount shown', 'Upload your payment screenshot below'].map((step, i) => (
-                    <li key={step} className="flex items-start gap-2 text-sm text-slate-700">
-                      <span className="brand-mono flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-[var(--brand-black)] text-[10px] font-bold text-white">
-                        {i + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-
-                {/* Order breakdown, for transparency alongside the QR */}
-                <div className="rounded-sm bg-slate-50 p-3 space-y-1">
-                  {taxedBreakdown.map((b) => (
-                    <div key={b.id} className="flex justify-between text-xs text-slate-600">
-                      <span>{b.qty}&times; {b.name}</span>
-                      <span>&#8377;{b.itemBase.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {totalTaxAmount > 0 && (
-                    <div className="flex justify-between text-xs text-slate-500">
-                      <span>{taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax'}</span>
-                      <span>&#8377;{totalTaxAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {roundOffAmt !== 0 && (
-                    <div className="flex justify-between text-xs text-slate-500">
-                      <span>Round off</span>
-                      <span>&#8377;{roundOffAmt.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5 text-sm font-bold text-slate-800">
-                    <span>Total</span>
-                    <span>&#8377;{finalTotal.toLocaleString('en-IN')}</span>
+                    <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-[15px] leading-[22px] marker:font-semibold">
+                      <li>Scan the QR or pay to the UPI ID from any UPI app.</li>
+                      <li>
+                        Pay exactly <strong className="font-semibold">{totalLabel}</strong>.
+                      </li>
+                      <li>Upload the payment screenshot below.</li>
+                    </ol>
                   </div>
                 </div>
 
                 {/* Screenshot upload */}
                 <div>
-                  <p className="mb-1 text-sm font-medium text-slate-700">Upload payment screenshot *</p>
-                  <label
-                    className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed p-4 text-center hover:bg-slate-50 ${screenshotError ? 'border-red-400' : 'border-slate-300'
-                      }`}
-                  >
-                    {isCompressing ? (
-                      <Loader2 size={18} className="animate-spin text-slate-400" />
-                    ) : (
-                      <Upload size={18} className="text-slate-400" />
-                    )}
-                    <span className="text-xs font-medium text-slate-600">
-                      {isCompressing
-                        ? 'Processing image…'
-                        : screenshot
-                          ? 'Screenshot selected — tap to change'
-                          : 'Click to choose a file or drag here'}
-                    </span>
-                    <span className="brand-mono text-[10px] text-slate-400">PNG or JPG &middot; under 1 MB</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={isCompressing}
-                      onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                    />
-                  </label>
-                  {screenshotError && <p className="mt-1 text-xs font-medium text-red-500">{screenshotError}</p>}
-                  {screenshot && (
-                    <div className="relative mt-2 w-fit mx-auto">
-                      <img src={screenshot} alt="Screenshot preview" className="max-h-32 rounded-sm border border-slate-200" />
+                  <span className={brandLabelClass}>Payment screenshot *</span>
+                  {screenshot ? (
+                    <div className="flex items-center gap-3 rounded-lg border-[1.5px] border-dashed border-[var(--brand-line-strong)] bg-[var(--brand-surface)] p-3">
+                      <img src={screenshot} alt="Payment screenshot preview" className="h-12 w-12 shrink-0 rounded-md border border-[var(--brand-line)] object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-[var(--brand-black)]">Screenshot added</p>
+                        <label className="cursor-pointer text-[13px] font-semibold text-[var(--brand-teal)] hover:underline">
+                          Choose a different one
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={isCompressing}
+                            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                          />
+                        </label>
+                      </div>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                        onClick={() => {
                           setScreenshot(null);
                           setScreenshotError(null);
                         }}
-                        className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow hover:bg-slate-900"
                         aria-label="Remove screenshot"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] text-[var(--brand-black)] hover:bg-[var(--brand-cream)]"
                       >
-                        <X size={12} />
+                        <X size={16} />
                       </button>
                     </div>
+                  ) : (
+                    <label
+                      className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed bg-[var(--brand-surface)] p-5 text-center hover:bg-[var(--brand-cream)] ${
+                        screenshotError ? 'border-[var(--brand-danger)]' : 'border-[var(--brand-line-strong)]'
+                      }`}
+                    >
+                      {isCompressing ? (
+                        <Loader2 size={20} className="animate-spin text-[var(--brand-muted)] motion-reduce:animate-none" />
+                      ) : (
+                        <Upload size={20} strokeWidth={1.75} className="text-[var(--brand-black)]" />
+                      )}
+                      <span className="text-sm font-semibold text-[var(--brand-black)]">
+                        {isCompressing ? 'Preparing your image…' : 'Choose a screenshot or drag it here'}
+                      </span>
+                      <span className="text-[13px] text-[var(--brand-muted)]">PNG or JPG, under 1 MB</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isCompressing}
+                        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                      />
+                    </label>
+                  )}
+                  {screenshotError && (
+                    <p className={brandErrorClass}>
+                      <AlertCircle size={14} aria-hidden="true" /> {screenshotError}
+                    </p>
                   )}
                 </div>
 
-                <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentChecked}
-                    onChange={(e) => setConsentChecked(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 bg-white accent-[var(--brand-teal)]"
-                  />
-                  You&rsquo;re added to the guest list as soon as you submit. Final entry/pass allocation is subject to the organizer&rsquo;s approval and discretion.
-                </label>
+                <BrandCheckbox checked={consentChecked} onChange={setConsentChecked} className="text-sm">
+                  You&rsquo;re added to the guest list as soon as you submit. Final entry and pass allocation are subject to the organizer&rsquo;s approval.
+                </BrandCheckbox>
 
                 {error && (
                   <div
                     ref={errorRef}
-                    className="flex items-start gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
+                    className="flex items-start gap-2 rounded-lg border border-[var(--brand-danger)] bg-[var(--brand-surface)] px-4 py-3 text-sm font-medium text-[var(--brand-danger)]"
                   >
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
                     <span>{error}</span>
                   </div>
                 )}
-
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitDisabled}
-                  className="brand-mono w-full rounded-sm bg-[var(--brand-teal)] py-2.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-40"
-                >
-                  {submitting ? 'Submitting…' : "I've paid — confirm my ticket"}
-                </button>
               </div>
-            </div>
+            </section>
           </div>
 
           {/* ── Right: sticky order summary ───────────────────────────── */}
-          <div className="lg:sticky lg:top-6 lg:flex-1 lg:self-start">
-            <TicketOrderSummary
-              eventTitle={stripHtmlTags(event.title)}
-              dateLabel={`${formatDateRange(event.date, event.endDate)} · ${formatTime(event.time)}`}
-              venueLabel={event.isOnline ? 'Online' : event.venue}
-              imageUrl={event.coverImageDesktop || event.coverImageMobile || event.coverImage || undefined}
-              lineItems={taxedBreakdown.map((b) => ({
-                id: b.id,
-                label: `${b.qty}× ${b.name}`,
-                amountLabel: `₹${b.itemTotal.toLocaleString('en-IN')}`,
-              }))}
-              totalLabel={`₹${finalTotal.toLocaleString('en-IN')}`}
-              ctaLabel={submitting ? 'Submitting…' : screenshot ? "I've paid — confirm" : 'Upload screenshot to confirm'}
-              onCta={handleSubmit}
-              ctaDisabled={submitDisabled}
-            />
+          <div className="hidden lg:sticky lg:top-6 lg:block lg:self-start">
+              {orderSummary}
           </div>
         </div>
       </div>
+
+      {/* ── Floating total + confirm bar — mobile only ───────────────── */}
+      <MobileCheckoutBar
+        countLabel={`${totalTicketQty} ticket${totalTicketQty === 1 ? '' : 's'}`}
+        totalLabel={totalLabel}
+        ctaLabel={submitCtaLabel}
+        onCta={handleSubmit}
+        ctaDisabled={submitDisabled}
+      />
     </div>
   );
 };

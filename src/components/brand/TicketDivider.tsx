@@ -9,7 +9,7 @@ interface TicketDividerProps {
 // A dashed perforation line with two circular "punch holes" at the edges —
 // the containing card must have `overflow-hidden` so the outer half of each
 // circle gets clipped, leaving a die-cut notch look.
-const TicketDivider: React.FC<TicketDividerProps> = ({ notchColor = '#f4efe4', className = '' }) => (
+const TicketDivider: React.FC<TicketDividerProps> = ({ notchColor = 'var(--brand-cream)', className = '' }) => (
   <div className={`relative h-px w-full ${className}`}>
     <div className="absolute inset-x-3 top-0 border-t-2 border-dashed border-black/15" />
     <div

@@ -17,12 +17,20 @@ interface FetchEventDashboardOptions {
     endDate: string;
     cacheKey: string;
     forceRefresh?: boolean;
+    // Building the day-by-day salesByDate map costs one entry (and one
+    // toLocaleDateString call) per day in [startDate, endDate], per event,
+    // in parallel across every event. Fine for a report screen's bounded
+    // date-range chart; ruinous for a caller like EventsLayout that passes
+    // an all-time range just to get a picker list — that's 36,500+ entries
+    // per event, every page load, for a value (salesTrend) it never reads.
+    // Default true preserves existing behavior for callers that do chart it.
+    includeSalesTrend?: boolean;
 }
 
 export async function fetchEventDashboardData(
     options: FetchEventDashboardOptions
 ): Promise<WithCacheMeta<EventDashboardData>> {
-    const { companyId, startDate, endDate, cacheKey, forceRefresh = false } = options;
+    const { companyId, startDate, endDate, cacheKey, forceRefresh = false, includeSalesTrend = true } = options;
 
     // 1. Cache check — identical pattern to fetchDashboardData
     if (!forceRefresh) {
@@ -70,7 +78,7 @@ export async function fetchEventDashboardData(
 
     const eventResults: PromiseSettledResult<EventSummary>[] = await Promise.allSettled(
         activeEventDocs.map(async (eventDoc): Promise<EventSummary> => {
-            const salesByDate = makeEmptySalesByDate();
+            const salesByDate = includeSalesTrend ? makeEmptySalesByDate() : {};
             const e = eventDoc.data();
 
             const rawDate = e.date;

@@ -77,8 +77,9 @@ const toFormState = (event: EventItem): EventFormState => ({
   consentFontSize: event.consentStyle?.fontSize ?? 14,
   goodToKnowText: event.goodToKnowText ?? '',
   goodToKnowFontSize: event.goodToKnowStyle?.fontSize ?? 14,
-  // NEW
-  paymentCollectionMode: event.paymentCollectionMode ?? 'gateway',
+  // NEW — see useOrganizerEvents.ts: missing/legacy field defaults to manual_qr,
+  // not 'gateway' (the unwired mock payment path).
+  paymentCollectionMode: event.paymentCollectionMode ?? 'manual_qr',
   //qrImage: event.qrImageUrl ?? null,
   upiId: event.upiId ?? '',
   payeeName: event.payeeName ?? '',
@@ -143,8 +144,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
     isManualQRReady;
 
   const [isSaving, setIsSaving] = useState(false);
+  // True while the past-events gallery is still compressing photos/videos
+  const [galleryBusy, setGalleryBusy] = useState(false);
   const handleSave = async () => {
-    if (!isSavable || isSaving) return;
+    if (!isSavable || isSaving || galleryBusy) return;
     setIsSaving(true);
     try {
       await onSave(form); // onSave prop type becomes (updated) => Promise<void>
@@ -614,6 +617,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 <PastEventsGallery
                   media={form.pastEventsGallery}
                   onChange={(media) => update('pastEventsGallery', media)}
+                  onBusyChange={setGalleryBusy}
                   maxItems={6}
                 />
               </CardContent>
@@ -689,10 +693,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
           </button>
           <button
             onClick={handleSave}
-            disabled={!isSavable}
+            disabled={!isSavable || isSaving || galleryBusy}
             className="rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-4 py-2 text-sm font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-40"
           >
-            Save changes
+            {galleryBusy ? 'Compressing media…' : isSaving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>
