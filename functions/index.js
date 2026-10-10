@@ -14,10 +14,12 @@ const { createUser } = require("./users/CreateUser");
 const { addTeamMember } = require("./users/AddTeamMember");
 const { deleteTeamMember } = require("./users/DeleteTeamMember");
 const { createCompany } = require("./companies/CreateCompany");
+const { deleteCompanyData } = require("./companies/DeleteCompany");
 exports.createUser = createUser;
 exports.addTeamMember = addTeamMember;
 exports.deleteTeamMember = deleteTeamMember; // NEW
 exports.createCompany = createCompany;
+exports.deleteCompanyData = deleteCompanyData; // NEW
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected

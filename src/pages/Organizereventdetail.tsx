@@ -4,6 +4,8 @@ import { ArrowLeft, Calendar, Clock, MapPin, Wifi, Share2, Ticket, User, Pencil,
 import BackButton from '../components/ui/BackButton';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { uploadGalleryMedia } from '../lib/galleryUpload';
+import AutoplayVideo from '../components/brand/AutoplayVideo';
 import { Card, CardContent } from '../components/ui/card';
 import {
   CATEGORY_GRADIENTS,
@@ -187,6 +189,13 @@ const OrganizerEventDetail: React.FC = () => {
       uploadIfNeeded(updated.coverImageMobile, 'cover-mobile'),
     ]);
 
+    // New gallery photos/videos are still local (data: URL or compressed file) —
+    // upload them so only Storage URLs are written to the event document.
+    const pastEventsGallery = await uploadGalleryMedia(
+      updated.pastEventsGallery || [],
+      `companies/${profile.companyId}/events/${id}`
+    );
+
     const isRsvp = updated.registrationMode === 'rsvp';
 
     // NEW — upload the QR image the same way cover images are uploaded
@@ -212,7 +221,7 @@ const OrganizerEventDetail: React.FC = () => {
         coverImageUrls,
         coverImageDesktop: coverImageDesktopUrl,
         coverImageMobile: coverImageMobileUrl,
-        pastEventsGallery: updated.pastEventsGallery || [],
+        pastEventsGallery,
         isPrivate: updated.isPrivate,
         maxTicketsPerOrder:
           typeof updated.maxTicketsPerOrder === 'number' && updated.maxTicketsPerOrder > 0
@@ -429,7 +438,7 @@ const OrganizerEventDetail: React.FC = () => {
                         className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800"
                       >
                         {item.type === 'video' ? (
-                          <video src={item.url} className="h-full w-full object-cover" muted playsInline />
+                          <AutoplayVideo src={item.url} className="h-full w-full object-cover" />
                         ) : (
                           <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
                         )}
@@ -479,7 +488,7 @@ const OrganizerEventDetail: React.FC = () => {
               )}
               <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
                 {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
-                  <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
+                  <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay loop playsInline />
                 ) : (
                   <img
                     src={event.pastEventsGallery[lightboxIndex].url}

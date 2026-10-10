@@ -13,6 +13,14 @@
     guarded reload, which (now that index.html is served no-cache) fetches
     the current, correct build on retry.
 
+    Only our own build files (/assets/...) count. Third-party scripts —
+    Analytics' gtag.js, scripts that in-app browsers inject — get blocked by
+    content blockers and Safari Private Browsing, and reacting to those
+    reloaded the page in a tight loop. The guard is a timestamp rather than
+    a flag cleared on every boot (which is what let that loop happen): at
+    most one automatic reload per 30 seconds, so a failure that survives a
+    reload is left alone.
+
     Deliberately first thing in <head>, before Vite's injected entry
     <script type="module"> tag (which it hoists to the end of <head> at
     build time) — the error listener must be registered before that script
@@ -22,21 +30,26 @@
   <script>
     (function () {
       var GUARD_KEY = 'app:reloadedForEntryLoadError';
+      var MIN_RELOAD_INTERVAL_MS = 30000;
+      var ASSET_PREFIX = location.origin + '/assets/';
       window.addEventListener('error', function (e) {
         var target = e.target;
-        if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
-          if (sessionStorage.getItem(GUARD_KEY) === '1') return;
-          sessionStorage.setItem(GUARD_KEY, '1');
-          location.reload();
+        if (!target || (target.tagName !== 'SCRIPT' && target.tagName !== 'LINK')) return;
+        var url = target.src || target.href || '';
+        if (url.indexOf(ASSET_PREFIX) !== 0) return;
+        try {
+          var lastReload = Number(sessionStorage.getItem(GUARD_KEY)) || 0;
+          if (Date.now() - lastReload < MIN_RELOAD_INTERVAL_MS) return;
+          sessionStorage.setItem(GUARD_KEY, String(Date.now()));
+        } catch (err) {
+          return; // can't record the guard, so a reload could loop — skip it
         }
+        location.reload();
       }, true);
     })();
   </script>
   <link rel="icon" type="image/png" href="/Outsold.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <title>Outsold</title>
 </head>
 

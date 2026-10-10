@@ -123,7 +123,7 @@ const EventFieldSettings: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Auto-feature nearest event</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Off = soonest event auto-featured. On = pick it yourself from Discover.
+                    Off = soonest event auto-featured. On = pick them yourself from Discover (featured events rotate in the store slideshow).
                   </p>
                 </div>
                 <SettingToggle

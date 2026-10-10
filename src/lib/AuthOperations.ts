@@ -27,3 +27,10 @@ export const deleteTeamMember = async (payload: DeleteTeamMemberPayload) => {
   const result = await deleteTeamMemberFn(payload);
   return result.data as { success: boolean; message: string };
 };
+
+// NEW — Super Admin only; deletes a company's Auth users and its entire Firestore doc tree
+export const deleteCompanyData = async (payload: { companyId: string }) => {
+  const deleteCompanyDataFn = httpsCallable(functions, 'deleteCompanyData');
+  const result = await deleteCompanyDataFn(payload);
+  return result.data as { success: boolean; message: string };
+};

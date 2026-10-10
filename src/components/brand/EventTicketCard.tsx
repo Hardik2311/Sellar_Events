@@ -44,7 +44,7 @@ const EventTicketCard: React.FC<EventTicketCardProps> = ({
   className = '',
 }) => (
   <div
-    className={`group flex flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm transition-shadow hover:shadow-md cursor-pointer ${className}`}
+    className={`group flex flex-col overflow-hidden rounded-sm border border-black/10 bg-white shadow-sm transition-shadow hover:shadow-md cursor-pointer ${className}`}
     onClick={onOpen}
   >
     <div className={`relative w-full overflow-hidden bg-gradient-to-br ${gradientClass} ${featured ? 'h-56' : 'h-36'}`}>
@@ -67,7 +67,7 @@ const EventTicketCard: React.FC<EventTicketCardProps> = ({
             onShare(e);
           }}
           title="Share event"
-          className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-slate-600 hover:bg-[var(--brand-yellow)] hover:text-black transition-colors"
+          className="absolute right-2 top-2 rounded-sm bg-white/90 p-1.5 text-slate-600 hover:bg-[var(--brand-yellow)] hover:text-black transition-colors"
         >
           <Share2 size={13} />
         </button>

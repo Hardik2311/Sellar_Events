@@ -173,7 +173,10 @@ export const generateSlug = (value: string) =>
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
+    .replace(/[^a-z0-9-]/g, '')
+    // Dropped emoji/punctuation can leave stray hyphens ("🪔 Diwali" -> "-diwali")
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 
 export const buildEventSlugId = (title: string, id: string) => `${generateSlug(stripHtmlTags(title))}--${id}`;
 

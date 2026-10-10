@@ -23,6 +23,9 @@ export interface Attendee {
  source?: 'ticket' | 'walk_in' | 'import';
   // NEW — the private-event access code this ticket was booked with, if any
   accessCode?: string | null;
+  // NEW — shared by tickets booked in one order under the same name; the
+  // group gets one QR (the lead ticket's ticketId) and partial check-in.
+  bookingGroupId?: string | null;
 }
 
 export const CONFIRMED_TICKET_STATUSES = new Set<TicketStatus>(['valid', 'checked_in']);

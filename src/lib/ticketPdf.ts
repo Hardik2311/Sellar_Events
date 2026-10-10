@@ -40,7 +40,27 @@ export const buildAcknowledgementPdf = async (
   event: AcknowledgementEventData,
   qrCanvas: HTMLCanvasElement | null
 ): Promise<jsPDF> => {
-  const cleanEventTitle = event.eventTitle ? stripHtmlTagsLocal(event.eventTitle) : 'Event';
+  // Every organizer/buyer-typed string goes through toPdfText() — see its
+  // comment for why emoji etc. can't be drawn. Done once here so no call site
+  // below can forget it.
+  ticket = {
+    ...ticket,
+    ticketId: toPdfText(ticket.ticketId),
+    tierName: toPdfText(ticket.tierName),
+    tierTag: ticket.tierTag ? toPdfText(ticket.tierTag) : ticket.tierTag,
+    attendeeName: toPdfText(ticket.attendeeName),
+    attendeeEmail: ticket.attendeeEmail ? toPdfText(ticket.attendeeEmail) : ticket.attendeeEmail,
+    attendeePhone: ticket.attendeePhone ? toPdfText(ticket.attendeePhone) : ticket.attendeePhone,
+    paymentMode: ticket.paymentMode ? toPdfText(ticket.paymentMode) : ticket.paymentMode,
+  };
+  event = {
+    ...event,
+    eventVenue: event.eventVenue ? toPdfText(event.eventVenue) : event.eventVenue,
+    eventArriveBy: event.eventArriveBy ? toPdfText(event.eventArriveBy) : event.eventArriveBy,
+    eventAgeLimit: event.eventAgeLimit ? toPdfText(event.eventAgeLimit) : event.eventAgeLimit,
+    eventHelplineNumber: event.eventHelplineNumber ? toPdfText(event.eventHelplineNumber) : event.eventHelplineNumber,
+  };
+  const cleanEventTitle = (event.eventTitle ? toPdfText(htmlToPlainLines(event.eventTitle).replace(/\n/g, ' ')) : '') || 'Event';
   const pageW = 360;
   const outerMargin = 20;
   const cardX = outerMargin;
@@ -49,8 +69,8 @@ export const buildAcknowledgementPdf = async (
   const topMarginAfterBreak = 24;
   const hasBanner = !!event.eventBannerDataUrl;
   const hasQr = !!qrCanvas;
-  const consentText = event.eventConsentText ? htmlToPlainLines(event.eventConsentText) : '';
-  const goodToKnowText = event.eventGoodToKnowText ? stripHtmlTagsLocal(event.eventGoodToKnowText).trim() : '';
+  const consentText = event.eventConsentText ? toPdfText(htmlToPlainLines(event.eventConsentText)) : '';
+  const goodToKnowText = event.eventGoodToKnowText ? toPdfText(stripHtmlTagsLocal(event.eventGoodToKnowText)) : '';
 
   const PAGE_BG: [number, number, number] = [222, 234, 232];   // tinted, isi se notch/cut dikhega
   const CARD_BG: [number, number, number] = [255, 255, 255];   // neeche wale white boxes
@@ -85,7 +105,6 @@ export const buildAcknowledgementPdf = async (
 
   const termFontSize = 8.5;
   const termLineHeight = termFontSize * 1.4;
-  const termNumW = 16;
 
   // ── Box 1 data: "BEFORE THE EVENT" — logistics + organizer's checklist ──
   const ledeText = 'A few things to know before you head to the event.';
@@ -93,7 +112,6 @@ export const buildAcknowledgementPdf = async (
 
   const bulletFontSize = 8.5;
   const bulletLineHeight = bulletFontSize * 1.4;
-  const bulletMarkW = 14;
   const goodToKnowLines = goodToKnowText
     ? goodToKnowText.split(/\r?\n+/).map((t) => t.trim()).filter(Boolean)
     : [];
@@ -679,6 +697,24 @@ export const buildAcknowledgementPdf = async (
 
   return doc;
 };
+
+// jsPDF's built-in fonts (helvetica) only cover WinAnsi / Windows-1252. Any
+// other character — emoji especially — is written out as its raw UTF-16
+// halves, so "👌" (U+D83D U+DC4C) printed as "Ø=ÜL". Keep what the font can
+// draw and drop the rest. NFKC first so styled Unicode letters ("𝐇𝐞𝐲",
+// full-width "ＡＢ") fold to plain ASCII instead of being dropped.
+const WIN_ANSI_EXTRAS = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+function toPdfText(value: string): string {
+  return Array.from(value.normalize('NFKC').replace(/₹\s*/g, 'Rs. '))
+    .filter((ch) => {
+      const cp = ch.codePointAt(0)!;
+      return ch === '\n' || (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) || WIN_ANSI_EXTRAS.includes(ch);
+    })
+    .join('')
+    .replace(/[^\S\n]+/g, ' ') // any whitespace except newlines (incl. tab, nbsp)
+    .replace(/ *\n */g, '\n')
+    .trim();
+}
 
 function stripHtmlTagsLocal(html: string): string {
   return html.replace(/<[^>]*>/g, '').trim();

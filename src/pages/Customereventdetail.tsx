@@ -1,16 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, MapPin, Wifi, Heart, Share2, X, Navigation } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/card';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  MapPin,
+  Share2,
+  ShieldCheck,
+  Ticket,
+  Wifi,
+  X,
+} from 'lucide-react';
 import CoverImageDisplay from '../components/ui/CoverImageDisplay';
 import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
-  formatDateRange,
+  getAvailability,
   formatTime,
   isTierExpired,
 } from '../data/events';
-import { usePublicEvent, verifyAccessCode } from '../hooks/usePublicEvents';
+import { isAccessCodeUsed, usePublicEvent, verifyAccessCode } from '../hooks/usePublicEvents';
 import { DEFAULT_MAX_TICKETS_PER_ORDER } from '../data/events';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { getSubdomain } from '../lib/subdomain';
@@ -26,7 +39,57 @@ import SectionLabel from '../components/brand/SectionLabel';
 import PrivateAccessGate from '../components/brand/PrivateAccessGate';
 import TicketPanel from '../components/brand/TicketPanel';
 import CustomerFooter from '../components/CustomerFooter';
+import BrandCheckbox from '../components/brand/BrandCheckbox';
+import MobileCheckoutBar from '../components/brand/MobileCheckoutBar';
+import BrandButton from '../components/brand/BrandButton';
+import { brandButtonClass } from '../components/brand/brandButtonClass';
+import BrandTag from '../components/brand/BrandTag';
+import BrandEmptyState from '../components/brand/BrandEmptyState';
+import AutoplayVideo from '../components/brand/AutoplayVideo';
 import { stripHtmlTags } from '../lib/utils';
+import { dismissServerPreview } from '../lib/storefrontData';
+import { formatLongDateRange, formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
+
+// About text collapses to roughly five lines (26px line height) until "Read more".
+const ABOUT_COLLAPSED_HEIGHT = 130;
+
+const panelClass = 'rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] p-4 lg:p-5';
+
+// Rough width, in em, of the longest run of the title that can't wrap (text
+// between spaces). Anton capitals are about 0.52em wide; emoji about 1.25em.
+const longestRunEm = (title: string) =>
+  Math.max(
+    6,
+    ...title
+      .split(/\s+/)
+      .map((run) =>
+        [...run].reduce(
+          (em, ch) => em + (/\p{Extended_Pictographic}/u.test(ch) ? 1.25 : /[‍️]/.test(ch) ? 0 : 0.52),
+          0
+        )
+      )
+  );
+
+// Skeleton of the event page (cover, title, info rows, ticket panel) while it loads.
+const EventDetailSkeleton: React.FC = () => (
+  <div className="brand-theme flex min-h-dvh w-full flex-col bg-[var(--brand-cream)]" aria-busy="true" aria-label="Loading event">
+    <div className="h-16 border-b border-[var(--brand-line)] bg-[var(--brand-surface)]" />
+    <div className="aspect-[4/5] max-h-[60vh] w-full animate-pulse bg-[var(--brand-skeleton)] motion-reduce:animate-none sm:aspect-[8/3]" />
+    <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-8 px-4 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:px-24">
+      <div className="flex flex-col gap-4">
+        <div className="h-[22px] w-40 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+        <div className="h-10 w-3/4 animate-pulse rounded-lg bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="h-9 w-9 animate-pulse rounded-lg bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+            <div className="h-4 w-1/2 animate-pulse rounded-full bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+          </div>
+        ))}
+      </div>
+      <div className="h-72 animate-pulse rounded-xl bg-[var(--brand-skeleton)] motion-reduce:animate-none" />
+    </div>
+  </div>
+);
 
 const CustomerEventDetail: React.FC = () => {
   const { slug, companyId } = useParams<{ slug: string; companyId?: string }>();
@@ -36,7 +99,7 @@ const CustomerEventDetail: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
-  const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
+  const { event, loading: eventLoading, fromServer } = usePublicEvent(id, resolvedCompanyId);
   const { settings } = useCompanySettings(resolvedCompanyId);
 
   const loading = domainLoading || eventLoading;
@@ -47,41 +110,39 @@ const CustomerEventDetail: React.FC = () => {
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showManualQR, setShowManualQR] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Set when a CTA is tapped before consent; shows an error line under the checkbox until it's ticked
+  const [consentHighlight, setConsentHighlight] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
+  const [aboutOverflows, setAboutOverflows] = useState(false);
+  const aboutRef = useRef<HTMLDivElement>(null);
 
   // NEW — access-code gate state
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
+  // Event id unlocked with a code during this visit.
+  const [codeVerifiedFor, setCodeVerifiedFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!event?.id) return;
-
-    const isOrganizerLivePreview =
-      searchParams.get('preview') === '1' &&
-      !!profile?.companyId &&
-      profile.companyId === event.companyId;
-
-    if (isOrganizerLivePreview) {
-      setIsVerified(true);
-      return;
-    }
-
-    // Gate driven by `isPrivate` — `activeAccessCode` was never populated by
-    // the mapper, so this check was always false and every private event
-    // unlocked itself instantly without asking for a code.
-    if (!event.isPrivate) {
-      setIsVerified(true);
-      return;
-    }
-    const savedVerified = sessionStorage.getItem(`eventAccessVerified:${event.id}`);
-    if (savedVerified === 'true') {
-      setIsVerified(true);
-    }
-  }, [event?.id, event?.isPrivate, event?.companyId, profile?.companyId, searchParams]);
+  // Worked out during render, not in an effect: an effect only runs after the
+  // first paint, so every event (public ones too) flashed the private-event
+  // gate for a frame before being unlocked.
+  const isOrganizerLivePreview =
+    !!event &&
+    searchParams.get('preview') === '1' &&
+    !!profile?.companyId &&
+    profile.companyId === event.companyId;
+  // Gate driven by `isPrivate` — `activeAccessCode` was never populated by
+  // the mapper, so checking it left every private event unlocked.
+  const isVerified =
+    !!event &&
+    (!event.isPrivate ||
+      isOrganizerLivePreview ||
+      codeVerifiedFor === event.id ||
+      sessionStorage.getItem(`eventAccessVerified:${event.id}`) === 'true');
 
   useEffect(() => {
     setActiveImageIndex(0); // event change hone par reset
     setConsentAcknowledged(false);
+    setAboutExpanded(false);
 
     if (!event?.id) return;
     const saved = sessionStorage.getItem(`eventTicketQty:${event.id}`);
@@ -99,34 +160,47 @@ const CustomerEventDetail: React.FC = () => {
     if (!event?.id) return;
     sessionStorage.setItem(`eventTicketQty:${event.id}`, JSON.stringify(quantities));
   }, [quantities, event?.id]);
-  if (loading) {
-    return (
-      <div className="brand-theme flex h-dvh w-full items-center justify-center bg-[var(--brand-cream)]">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-teal)] border-t-transparent" />
-      </div>
-    );
+
+  // Only offer "Read more" when the description is actually taller than the collapsed box.
+  useEffect(() => {
+    const el = aboutRef.current;
+    if (!el) return;
+    setAboutOverflows(el.scrollHeight > ABOUT_COLLAPSED_HEIGHT + 4);
+  }, [event?.description, isVerified]);
+
+  // The server sends only a private event's gate fields, so a visitor who
+  // already unlocked it waits for the live data rather than seeing an empty page.
+  const showSkeleton = loading || (fromServer && !!event?.isPrivate && isVerified);
+
+  // Swap the server's plain-HTML preview for the real page once it's drawn.
+  useEffect(() => {
+    if (!showSkeleton) dismissServerPreview();
+  }, [showSkeleton]);
+
+  if (showSkeleton) {
+    return <EventDetailSkeleton />;
   }
 
   if (domainError || (!loading && !event)) {
     return (
-      <div className="brand-theme flex h-dvh w-full flex-col items-center justify-center gap-4 bg-[var(--brand-cream)] p-4 text-center">
-        <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center">
-          <span className="text-2xl">🎟️</span>
-        </div>
-        <h2 className="brand-display text-xl text-[var(--brand-black)]">Event not found</h2>
-        <p className="max-w-xs text-sm text-black/50">
-          We couldn&apos;t find this event. It might have been removed or the link is incorrect.
-        </p>
-        <button
-          onClick={() =>
-            navigate(
-              getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
-            )
+      <div className="brand-theme flex min-h-dvh w-full items-center justify-center bg-[var(--brand-cream)] p-4">
+        <BrandEmptyState
+          icon={Ticket}
+          title="This event isn't available"
+          body="It may have ended, or the link might be wrong. Have a look at what's on instead."
+          className="w-full max-w-md"
+          action={
+            <BrandButton
+              onClick={() =>
+                navigate(
+                  getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/'
+                )
+              }
+            >
+              All events
+            </BrandButton>
           }
-          className="brand-mono mt-2 rounded-sm bg-[var(--brand-yellow)] px-6 py-2.5 text-xs font-bold text-black shadow-sm hover:brightness-95"
-        >
-          Return to Events
-        </button>
+        />
       </div>
     );
   }
@@ -138,34 +212,35 @@ const CustomerEventDetail: React.FC = () => {
   // NEW — code gate: block everything below until verified
   if (!isVerified) {
     const handleVerify = () => {
+      // Codes only arrive with the live data; the gate shows "Checking…" until then.
+      if (fromServer) return;
       if (verifyAccessCode(event, codeInput)) {
         sessionStorage.setItem(`eventAccessVerified:${event.id}`, 'true');
         // Saved alongside the verified flag so it can be attached to the
         // ticket at booking time and shown back to the attendee.
         sessionStorage.setItem(`eventAccessCode:${event.id}`, codeInput.trim().toUpperCase());
-        setIsVerified(true);
+        setCodeVerifiedFor(event.id);
         setCodeError(false);
       } else {
         setCodeError(true);
       }
     };
 
-    const bgImage = event.coverImageDesktop || event.coverImageMobile || event.images?.[0];
-
     return (
       <PrivateAccessGate
         organizationName={settings.organizationName}
-        bgImage={bgImage}
         codeInput={codeInput}
         onCodeChange={(v) => { setCodeInput(v); setCodeError(false); }}
         onVerify={handleVerify}
         codeError={codeError}
+        verifying={fromServer}
       />
     );
   }
 
   const label = getCategoryLabel(event);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
+  const plainTitle = stripHtmlTags(event.title);
 
   const remainingFor = (tierId: string) => {
     const tier = event.tiers.find((t) => t.id === tierId);
@@ -207,8 +282,14 @@ const CustomerEventDetail: React.FC = () => {
     : event.tiers;
 
   const totalTickets = Object.values(quantities).reduce((s, n) => s + n, 0);
-  const allSoldOut =
+  const everyTierSoldOut =
     visibleTiers.length === 0 || visibleTiers.every((t) => t.sold >= t.quantity);
+  // Private event opened with a code that has already bought tickets: the
+  // page stays viewable, but booking is closed for this code. `event` is a
+  // live snapshot, so this also flips right after a purchase on this page.
+  const codeAlreadyUsed =
+    !isOrganizerLivePreview && isAccessCodeUsed(event, sessionStorage.getItem(`eventAccessCode:${event.id}`));
+  const allSoldOut = everyTierSoldOut || codeAlreadyUsed;
   const hasConsent = Boolean(event.consentText && event.consentText.trim().length > 0);
   const consentBlocking = hasConsent && !consentAcknowledged;
 
@@ -223,6 +304,12 @@ const CustomerEventDetail: React.FC = () => {
     }));
 
   const totalAmount = selectedTiersBreakdown.reduce((sum, b) => sum + b.subtotal, 0);
+  const totalLabel = formatRupees(totalAmount);
+  const ticketCountLabel = `${totalTickets} ticket${totalTickets === 1 ? '' : 's'}`;
+
+  const availablePrices = visibleTiers.filter((t) => t.sold < t.quantity).map((t) => t.price);
+  const startingPriceLabel = availablePrices.length > 0 ? formatRupees(Math.min(...availablePrices)) : '';
+  const fewLeft = getAvailability(visibleTiers).sellingFast;
 
   const handleBack = () => {
     navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/');
@@ -232,7 +319,7 @@ const CustomerEventDetail: React.FC = () => {
     const shareUrl = window.location.href;
     if (navigator.share) {
       try {
-        await navigator.share({ title: stripHtmlTags(event.title), url: shareUrl });
+        await navigator.share({ title: plainTitle, url: shareUrl });
       } catch {
         // user cancelled share sheet, no-op
       }
@@ -255,39 +342,87 @@ const CustomerEventDetail: React.FC = () => {
     navigate(checkoutPath, { state: { quantities, accessCode } });
   };
 
+  // Consent checkbox lives under "Before you book" — a CTA tapped before it's
+  // ticked scrolls the customer there and shows what's missing.
+  const scrollToConsent = () => {
+    document.getElementById('before-you-book')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setConsentHighlight(true);
+  };
+
+  const scrollToTickets = () => {
+    document.getElementById('tickets')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleCta = () => {
+    if (consentBlocking) {
+      scrollToConsent();
+      return;
+    }
+    handleGetTickets();
+  };
+
   const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`;
+  const isTicketed = event.registrationMode !== 'rsvp';
+  const showMobileBar = !allSoldOut && isTicketed;
+  const showBookingCard = isTicketed && !allSoldOut && totalTickets === 0;
+  const continueLabel = consentBlocking ? 'Acknowledge to continue' : 'Continue';
+
+  const infoRows = [
+    {
+      key: 'when',
+      icon: Calendar,
+      title: formatLongDateRange(event.date, event.endDate),
+      detail: [formatTime(event.time), event.arriveByTime ? `Arrive by ${formatTime(event.arriveByTime)}` : '']
+        .filter(Boolean)
+        .join(' · '),
+    },
+    {
+      key: 'where',
+      icon: event.isOnline ? Wifi : MapPin,
+      title: event.isOnline ? 'Online' : event.venue,
+      detail: event.isOnline ? 'The joining link is shared with ticket holders before the event.' : '',
+    },
+    ...(event.ageLimit ? [{ key: 'age', icon: ShieldCheck, title: event.ageLimit, detail: 'Age limit' }] : []),
+  ];
 
   // ── Ticket panel (right rail on desktop / right-after-title on mobile) ──
   const ticketPanel =
     event.registrationMode === 'rsvp' ? (
-      <div className="rounded-lg border border-black/10 bg-white p-4">
-        <h2 className="brand-display text-lg text-[var(--brand-black)]">RSVP</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          This event doesn&rsquo;t need a ticket — register through the organizer&rsquo;s form to attend.
+      <div className={`${panelClass} flex flex-col gap-3`}>
+        <h2 className="brand-display text-2xl leading-none text-[var(--brand-black)]">RSVP</h2>
+        <p className="text-[15px] leading-[22px] text-[var(--brand-muted)]">
+          This event doesn&rsquo;t need a ticket. Register through the organizer&rsquo;s form to attend.
         </p>
         {event.rsvpLink ? (
           <a
             href={consentBlocking ? undefined : event.rsvpLink}
             target="_blank"
             rel="noopener noreferrer"
-            aria-disabled={consentBlocking}
-            onClick={(e) => { if (consentBlocking) e.preventDefault(); }}
-            className={`brand-mono mt-3 inline-flex items-center gap-1.5 rounded-sm bg-[var(--brand-yellow)] px-4 py-2 text-xs font-bold text-black hover:brightness-95 ${consentBlocking ? 'opacity-40 pointer-events-none' : ''}`}
+            onClick={(e) => {
+              if (consentBlocking) {
+                e.preventDefault();
+                scrollToConsent();
+              }
+            }}
+            className={`${brandButtonClass('primary', { block: true })} cursor-pointer`}
           >
-            {event.rsvpButtonLabel || 'RSVP Now'}
+            {consentBlocking ? 'Acknowledge to continue' : event.rsvpButtonLabel || 'RSVP'}
           </a>
         ) : (
-          <p className="mt-3 text-xs text-red-500">RSVP link isn&rsquo;t set up yet — check back soon.</p>
-        )}
-        {consentBlocking && (
-          <p className="mt-2 text-xs text-red-500">Please acknowledge the important information above to continue.</p>
+          <p className="text-[13px] font-medium text-[var(--brand-danger)]">The RSVP link isn&rsquo;t set up yet. Check back soon.</p>
         )}
       </div>
     ) : (
       <TicketPanel
         maxPerOrder={maxPerOrder}
         allSoldOut={allSoldOut}
-        emptyMessage={visibleTiers.length === 0 ? 'No tickets are available for this event right now.' : 'All tickets for this event are sold out.'}
+        emptyMessage={
+          codeAlreadyUsed
+            ? 'You’ve already booked tickets with this access code. Ask the organizer for a new code to book more.'
+            : visibleTiers.length === 0
+              ? 'No tickets are available for this event right now.'
+              : 'All tickets for this event are sold out.'
+        }
         tiers={visibleTiers.map((tier) => {
           const remaining = remainingFor(tier.id);
           const soldOut = remaining <= 0;
@@ -295,8 +430,8 @@ const CustomerEventDetail: React.FC = () => {
           return {
             id: tier.id,
             name: tier.name,
-            priceLabel: tier.price === 0 ? 'Free' : `₹${tier.price.toLocaleString('en-IN')}`,
-            remainingLabel: settings.ticketDisplay.showTicketsRemaining ? (soldOut ? 'Sold out' : `${displayRemainingFor(tier.id)} left`) : undefined,
+            priceLabel: formatRupees(tier.price),
+            remainingLabel: settings.ticketDisplay.showTicketsRemaining && !soldOut ? `${displayRemainingFor(tier.id)} left` : undefined,
             qty,
             soldOut,
             salesEnded: soldOut && tier.sold >= tier.quantity,
@@ -306,34 +441,39 @@ const CustomerEventDetail: React.FC = () => {
             incrementDisabled: qty >= remaining || totalTickets >= maxPerOrder,
           };
         })}
-        consent={
-          hasConsent
-            ? { text: 'I acknowledge the important information above.', acknowledged: consentAcknowledged, onToggle: setConsentAcknowledged }
-            : undefined
-        }
         lineItems={selectedTiersBreakdown.map((b) => ({
           id: b.id,
-          label: `${b.qty}× ${b.name}`,
-          amountLabel: b.subtotal === 0 ? 'Free' : `₹${b.subtotal.toLocaleString('en-IN')}`,
+          label: `${b.qty} × ${b.name}`,
+          amountLabel: formatRupees(b.subtotal),
         }))}
-        totalLabel={totalAmount === 0 && totalTickets > 0 ? 'Free' : `₹${totalAmount.toLocaleString('en-IN')}`}
-        ctaLabel={consentBlocking ? 'Acknowledge to continue' : 'Continue to checkout'}
-        onCta={handleGetTickets}
-        ctaDisabled={totalTickets === 0 || consentBlocking}
+        countLabel={ticketCountLabel}
+        totalLabel={totalLabel}
+        ctaLabel={continueLabel}
+        onCta={handleCta}
+        ctaDisabled={totalTickets === 0}
+        hideCtaOnMobile={showMobileBar}
       />
     );
 
   return (
-    <div className="brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)] text-[var(--brand-black)]">
+    <div className={`brand-theme flex min-h-screen w-full flex-col bg-[var(--brand-cream)] text-[var(--brand-black)] ${showMobileBar ? 'pb-24 lg:pb-0' : ''}`}>
       <BrandNavHeader organizationName={settings.organizationName} onBrowse={handleBack} />
 
       {/* ── Cover banner ─────────────────────────────────────────────── */}
-      <div className={`relative h-64 w-full shrink-0 overflow-hidden bg-gradient-to-br sm:h-[26rem] ${gradient}`}>
+      {/* Sized to the organizer's uploaded covers: 4:5 on phones when a mobile
+          cover exists (1080×1350), 8:3 on desktop when a desktop cover exists
+          (1600×600) — so each fills the banner instead of being letterboxed. */}
+      <div
+        className={`relative w-full shrink-0 overflow-hidden bg-gradient-to-br ${gradient} ${
+          event.coverImageMobile ? 'aspect-[4/5] max-h-[80vh]' : 'h-64'
+        } ${event.coverImageDesktop ? 'sm:aspect-[8/3] sm:h-auto sm:max-h-[34rem]' : 'sm:aspect-auto sm:h-[26rem]'}`}
+      >
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay
             desktopSrc={event.coverImageDesktop}
             mobileSrc={event.coverImageMobile}
-            alt={event.title}
+            alt={plainTitle}
+            fill
           />
         ) : event.images && event.images.length > 0 && (
           <>
@@ -341,8 +481,8 @@ const CustomerEventDetail: React.FC = () => {
               <img
                 key={src + i}
                 src={src}
-                alt={`${event.title} photo ${i + 1}`}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'}`}
+                alt={`${plainTitle} photo ${i + 1}`}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 motion-reduce:transition-none ${i === activeImageIndex ? 'opacity-100' : 'opacity-0'}`}
               />
             ))}
             {event.images.length > 1 && (
@@ -351,26 +491,26 @@ const CustomerEventDetail: React.FC = () => {
                   onClick={() =>
                     setActiveImageIndex((i) => (i - 1 + event.images.length) % event.images.length)
                   }
-                  className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors"
+                  className="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-sm bg-[var(--brand-black)]/55 text-[var(--brand-cream)] transition-colors hover:bg-[var(--brand-black)]/75"
                   aria-label="Previous photo"
                 >
-                  <ArrowLeft size={16} />
+                  <ChevronLeft size={20} />
                 </button>
                 <button
                   onClick={() =>
                     setActiveImageIndex((i) => (i + 1) % event.images.length)
                   }
-                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-black/40 p-1.5 text-white hover:bg-black/60 transition-colors rotate-180"
+                  className="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-sm bg-[var(--brand-black)]/55 text-[var(--brand-cream)] transition-colors hover:bg-[var(--brand-black)]/75"
                   aria-label="Next photo"
                 >
-                  <ArrowLeft size={16} />
+                  <ChevronRight size={20} />
                 </button>
                 <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
                   {event.images.map((_, i) => (
                     <button
                       key={i}
                       onClick={() => setActiveImageIndex(i)}
-                      className={`h-1.5 rounded-sm transition-all ${i === activeImageIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                      className={`h-1.5 rounded-sm transition-all ${i === activeImageIndex ? 'w-6 bg-[var(--brand-yellow)]' : 'w-1.5 bg-white/60'
                         }`}
                       aria-label={`Photo ${i + 1}`}
                     />
@@ -385,180 +525,210 @@ const CustomerEventDetail: React.FC = () => {
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3 sm:p-4">
           <button
             onClick={handleBack}
-            className="brand-mono flex items-center gap-1.5 rounded-sm bg-black/50 px-3 py-2 text-xs font-bold text-white hover:bg-black/70 transition-colors"
+            className="flex h-10 items-center gap-1.5 rounded-sm bg-[var(--brand-black)]/55 px-3 text-sm font-semibold text-[var(--brand-cream)] transition-colors hover:bg-[var(--brand-black)]/75"
           >
-            <ArrowLeft size={14} /> All events
+            <ArrowLeft size={18} /> All events
           </button>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSaved((v) => !v)}
               aria-label="Save event"
-              className="rounded-sm bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+              aria-pressed={saved}
+              className="flex h-10 w-10 items-center justify-center rounded-sm bg-[var(--brand-black)]/55 text-[var(--brand-cream)] transition-colors hover:bg-[var(--brand-black)]/75"
             >
-              <Heart size={16} className={saved ? 'fill-[var(--brand-yellow)] text-[var(--brand-yellow)]' : ''} />
+              <Heart size={18} className={saved ? 'fill-[var(--brand-yellow)] text-[var(--brand-yellow)]' : ''} />
             </button>
             <button
               onClick={shareThisEvent}
               aria-label="Share event"
-              className="rounded-sm bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-sm bg-[var(--brand-black)]/55 text-[var(--brand-cream)] transition-colors hover:bg-[var(--brand-black)]/75"
             >
-              <Share2 size={16} />
+              <Share2 size={18} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Title band ───────────────────────────────────────────────── */}
-      <div className="border-b border-black/10 bg-white px-4 py-5 sm:px-8 lg:px-24">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="brand-mono flex items-center gap-2 text-[10px] font-bold">
-              <span className="rounded-sm bg-[var(--brand-yellow)] px-2 py-0.5 text-black">{label}</span>
-              <span className="rounded-sm bg-[var(--brand-teal)] px-2 py-0.5 text-white">{event.isOnline ? 'Online' : 'In person'}</span>
+      {/* ── Body: title + content on the left, tickets in the right rail ── */}
+      <main className="grow px-4 pt-6 pb-10 sm:px-8 lg:px-24 lg:pt-8">
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-12 lg:gap-y-0">
+          {/* Title block */}
+          <div className="flex flex-col gap-4 lg:col-start-1 lg:row-start-1">
+            <div className="flex flex-wrap gap-2">
+              <BrandTag variant="neutral">{event.isOnline ? 'Online' : 'In person'}</BrandTag>
+              <BrandTag variant="neutral">{label}</BrandTag>
             </div>
             <RichTextDisplay
               as="h1"
               html={event.title}
-              className="brand-display mt-2 text-3xl leading-tight text-[var(--brand-black)] sm:text-4xl"
-              style={
-                event.titleStyle
+              className="brand-display leading-none text-[var(--brand-black)] [--title-size:32px] [text-wrap:balance] sm:[--title-size:44px]"
+              style={{
+                // The organizer's chosen size (or 32px phone / 44px desktop), but never
+                // so big that the longest unbreakable run (a long word, or emojis
+                // stuck to a word) can't fit on one line of a narrow screen.
+                ['--title-size' as string]: event.titleStyle ? `${event.titleStyle.fontSize + 8}px` : undefined,
+                fontSize: `min(var(--title-size), calc((100vw - 4rem) / ${longestRunEm(plainTitle)}))`,
+                ...(event.titleStyle
                   ? {
-                    fontSize: event.titleStyle.fontSize + 8,
                     fontWeight: event.titleStyle.fontWeight,
                     fontStyle: event.titleStyle.fontStyle,
                     color: event.titleStyle.color === '#FFFFFF' ? undefined : event.titleStyle.color,
                   }
-                  : undefined
-              }
+                  : {}),
+              }}
             />
+            <ul className="mt-1 flex flex-col gap-4">
+              {infoRows.map(({ key, icon: Icon, title, detail }) => (
+                <li key={key} className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--brand-line)] bg-[var(--brand-surface)]">
+                    <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-semibold leading-[22px]">{title}</p>
+                    {detail && <p className="text-[13px] font-medium leading-[18px] text-[var(--brand-muted)]">{detail}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <div className="brand-mono flex shrink-0 flex-wrap gap-x-5 gap-y-1 text-[11px] text-black/50 sm:text-right">
-            <span>
-              <span className="text-black/30">Runs</span> {formatDateRange(event.date, event.endDate)}
-            </span>
-            <span>
-              <span className="text-black/30">Starts</span> {formatTime(event.time)}
-            </span>
-            <span>
-              <span className="text-black/30">Where</span> {event.isOnline ? 'Online' : event.venue}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Body: main column + ticket panel ────────────────────────── */}
-      <main className="grow px-4 py-6 pb-24 sm:px-8 lg:px-24 lg:pb-10">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
-          {/* Ticket panel — first on mobile (right after title), right rail on desktop */}
-          <div className="order-1 lg:order-2 lg:w-[380px] lg:shrink-0">
-            <div className="lg:sticky lg:top-6">{ticketPanel}</div>
-          </div>
+          {/* Right rail on desktop / right after the title on mobile */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto">
+            {showBookingCard && (
+              <div className={`${panelClass} hidden flex-col gap-4 lg:flex`}>
+                <div className="flex flex-wrap gap-2">
+                  <BrandTag variant="neutral">{event.isOnline ? 'Online' : 'In person'}</BrandTag>
+                  {fewLeft && <BrandTag variant="highlight">Few left</BrandTag>}
+                </div>
+                <p className="brand-display line-clamp-2 text-2xl leading-[1.1]">{plainTitle}</p>
+                <div className="flex flex-col gap-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <Calendar size={18} strokeWidth={1.75} aria-hidden="true" />
+                    {formatShortDateRange(event.date, event.endDate)}, {formatTime(event.time)}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    {event.isOnline ? <Wifi size={18} strokeWidth={1.75} aria-hidden="true" /> : <MapPin size={18} strokeWidth={1.75} aria-hidden="true" />}
+                    <span className="truncate">{event.isOnline ? 'Online' : event.venue}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 border-t border-[var(--brand-line)] pt-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] text-[var(--brand-muted)]">Starts at</p>
+                    <p className="brand-display text-2xl leading-none tabular-nums">{startingPriceLabel}</p>
+                  </div>
+                  <BrandButton onClick={scrollToTickets}>Book tickets</BrandButton>
+                </div>
+              </div>
+            )}
+            <div id="tickets" className="scroll-mt-6">
+              {ticketPanel}
+            </div>
+          </aside>
 
           {/* Content sections */}
-          <div className="order-2 flex flex-col gap-5 lg:order-1 lg:w-[760px]">
-            {/* 01 About the night */}
-            <div>
-              <SectionLabel index={1} className="mb-2">About the night</SectionLabel>
-              <Card className="shadow-sm border-black/10 bg-white">
-                <CardContent className="pt-4">
+          <div className="flex flex-col gap-10 lg:col-start-1 lg:row-start-2 lg:mt-12 lg:gap-12">
+            {/* About */}
+            <section className="flex flex-col gap-4">
+              <SectionLabel>About the event</SectionLabel>
+              <div className={panelClass}>
+                <div
+                  ref={aboutRef}
+                  className="relative overflow-hidden"
+                  style={!aboutExpanded && aboutOverflows ? { maxHeight: ABOUT_COLLAPSED_HEIGHT } : undefined}
+                >
                   <RichTextDisplay
                     as="p"
                     html={event.description}
-                    className={`whitespace-pre-line leading-relaxed break-words ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
-                      ? 'text-slate-800'
+                    className={`whitespace-pre-line break-words text-[17px] leading-[26px] ${!event.descriptionStyle?.color || event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color
+                      ? 'text-[var(--brand-black)]'
                       : ''
                       }`}
                     style={event.descriptionStyle ? { fontSize: event.descriptionStyle.fontSize, fontWeight: event.descriptionStyle.fontWeight, fontStyle: event.descriptionStyle.fontStyle, color: event.descriptionStyle.color === DEFAULT_TEXT_STYLE.color ? undefined : event.descriptionStyle.color } : undefined}
                   />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* 02 Where & when */}
-            <div>
-              <SectionLabel index={2} className="mb-2">Where &amp; when</SectionLabel>
-              <Card className="shadow-sm border-black/10 bg-white">
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-sm bg-slate-50 p-3 text-center">
-                      <p className="brand-mono text-[9px] text-black/40">Starts</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-800">{event.date}</p>
-                    </div>
-                    <div className="rounded-sm bg-slate-50 p-3 text-center">
-                      <p className="brand-mono text-[9px] text-black/40">Ends</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-800">{event.endDate || event.date}</p>
-                    </div>
-                    <div className="rounded-sm bg-slate-50 p-3 text-center">
-                      <p className="brand-mono text-[9px] text-black/40">Time</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-800">{formatTime(event.time)}</p>
-                    </div>
-                  </div>
-
-                  {event.isOnline ? (
-                    <div className="mt-3 flex items-center gap-3 rounded-sm bg-[var(--brand-black)] p-3">
-                      <Wifi size={18} className="shrink-0 text-[var(--brand-yellow)]" />
-                      <div>
-                        <p className="text-sm font-medium text-white">Online event</p>
-                        <p className="text-xs text-white/50">The joining link is shared with ticket holders before the event.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-sm bg-slate-50 p-3">
-                      <div className="flex items-start gap-3">
-                        <MapPin size={18} className="mt-0.5 shrink-0 text-[var(--brand-teal)]" />
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">{event.venue}</p>
-                          <p className="text-xs text-slate-500">Venue address</p>
-                        </div>
-                      </div>
-                      <a
-                        href={directionsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="brand-mono flex shrink-0 items-center gap-1 rounded-sm bg-[var(--brand-black)] px-3 py-1.5 text-[10px] font-bold text-white hover:brightness-110"
-                      >
-                        <Navigation size={11} /> Get directions
-                      </a>
-                    </div>
+                  {!aboutExpanded && aboutOverflows && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[var(--brand-surface)] to-transparent" />
                   )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* 03 From past nights */}
-            {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
-              <div>
-                <SectionLabel index={3} className="mb-2">From past nights</SectionLabel>
-                <Card className="shadow-sm border-black/10 bg-white">
-                  <CardContent className="pt-4">
-                    <div className="grid grid-cols-3 gap-2 sm:grid-rows-2 sm:[&>*:first-child]:col-span-2 sm:[&>*:first-child]:row-span-2">
-                      {event.pastEventsGallery.slice(0, 6).map((item, i) => {
-                        const remaining = event.pastEventsGallery.length - 6;
-                        const isLastVisible = i === 5 && remaining > 0;
-                        return (
-                          <button
-                            key={item.url + i}
-                            onClick={() => setLightboxIndex(i)}
-                            className="group relative aspect-square overflow-hidden rounded-sm bg-slate-100"
-                          >
-                            {item.type === 'video' ? (
-                              <video src={item.url} className="h-full w-full object-cover" muted playsInline />
-                            ) : (
-                              <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                            )}
-                            {isLastVisible && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                                +{remaining} more
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+                </div>
+                {aboutOverflows && (
+                  <BrandButton variant="link" className="mt-3" onClick={() => setAboutExpanded((v) => !v)} aria-expanded={aboutExpanded}>
+                    {aboutExpanded ? 'Show less' : 'Read more'}
+                  </BrandButton>
+                )}
               </div>
+            </section>
+
+            {/* Venue */}
+            <section className="flex flex-col gap-4">
+              <SectionLabel>{event.isOnline ? 'Joining online' : 'Venue'}</SectionLabel>
+              <div className={`${panelClass} flex flex-wrap items-center justify-between gap-4`}>
+                <div className="flex min-w-0 items-start gap-3">
+                  {event.isOnline ? (
+                    <Wifi size={20} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <MapPin size={20} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-semibold leading-[22px]">{event.isOnline ? 'Online event' : event.venue}</p>
+                    <p className="text-[13px] font-medium leading-[18px] text-[var(--brand-muted)]">
+                      {event.isOnline
+                        ? 'The joining link is shared with ticket holders before the event.'
+                        : 'Opens the venue in Google Maps.'}
+                    </p>
+                  </div>
+                </div>
+                {!event.isOnline && (
+                  <a
+                    href={directionsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={brandButtonClass('secondary', { size: 'sm' })}
+                  >
+                    <ArrowUpRight size={18} /> Get directions
+                  </a>
+                )}
+              </div>
+            </section>
+
+            {/* From past nights */}
+            {event.pastEventsGallery && event.pastEventsGallery.length > 0 && (
+              <section className="flex flex-col gap-4">
+                <SectionLabel>From past nights</SectionLabel>
+                {/* Bento with exactly as many cells as photos shown: one large tile,
+                    up to two stacked beside it; the last tile opens the rest. */}
+                <div
+                  className={`grid gap-2 sm:gap-3 ${
+                    event.pastEventsGallery.length === 1
+                      ? 'grid-cols-1 grid-rows-[330px] sm:grid-rows-[510px]'
+                      : event.pastEventsGallery.length === 2
+                        ? 'grid-cols-[2fr_1fr] grid-rows-[300px] sm:grid-rows-[480px]'
+                        : 'grid-cols-[2fr_1fr] grid-rows-[156px_156px] sm:grid-rows-[240px_240px] [&>*:first-child]:row-span-2'
+                  }`}
+                >
+                  {event.pastEventsGallery.slice(0, 3).map((item, i) => {
+                    const remaining = event.pastEventsGallery.length - 3;
+                    const isLastVisible = i === 2 && remaining > 0;
+                    return (
+                      <button
+                        key={item.url + i}
+                        onClick={() => setLightboxIndex(i)}
+                        aria-label={isLastVisible ? `Open past event photos, ${remaining} more` : `Open past event photo ${i + 1}`}
+                        className="group relative h-full w-full overflow-hidden rounded-xl bg-[var(--brand-skeleton)]"
+                      >
+                        {item.type === 'video' ? (
+                          <AutoplayVideo src={item.url} className="h-full w-full object-cover" />
+                        ) : (
+                          <img src={item.url} alt={`Past event ${i + 1}`} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105 motion-reduce:transform-none" />
+                        )}
+                        {isLastVisible && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                            +{remaining} more
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             )}
 
             {/* Lightbox */}
@@ -569,7 +739,7 @@ const CustomerEventDetail: React.FC = () => {
               >
                 <button
                   onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
-                  className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+                  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-sm bg-white/20 text-white hover:bg-white/30"
                   aria-label="Close"
                 >
                   <X size={20} />
@@ -578,23 +748,23 @@ const CustomerEventDetail: React.FC = () => {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! - 1 + event.pastEventsGallery.length) % event.pastEventsGallery.length); }}
-                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60"
+                      className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-sm bg-black/40 text-white hover:bg-black/60"
                       aria-label="Previous"
                     >
-                      <ArrowLeft size={20} />
+                      <ChevronLeft size={20} />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i! + 1) % event.pastEventsGallery.length); }}
-                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 rotate-180"
+                      className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-sm bg-black/40 text-white hover:bg-black/60"
                       aria-label="Next"
                     >
-                      <ArrowLeft size={20} />
+                      <ChevronRight size={20} />
                     </button>
                   </>
                 )}
                 <div className="max-h-[85vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
                   {event.pastEventsGallery[lightboxIndex].type === 'video' ? (
-                    <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay />
+                    <video src={event.pastEventsGallery[lightboxIndex].url} className="max-h-[85vh] max-w-[90vw]" controls autoPlay loop playsInline />
                   ) : (
                     <img
                       src={event.pastEventsGallery[lightboxIndex].url}
@@ -606,87 +776,87 @@ const CustomerEventDetail: React.FC = () => {
               </div>
             )}
 
-            {/* 04 Before you book — only if the organizer set consent text */}
+            {/* Before you book — only if the organizer set consent text */}
             {hasConsent && (
-              <div>
-                <SectionLabel index={4} className="mb-2">Before you book</SectionLabel>
-                <Card className="shadow-sm border-black/10 bg-white">
-                  <CardContent className="pt-4">
-                    <RichTextDisplay
-                      as="p"
-                      html={event.consentText ?? ''}
-                      className={`whitespace-pre-line leading-relaxed ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                        ? 'text-slate-800'
-                        : ''
-                        }`}
-                      style={
-                        event.consentStyle
-                          ? {
-                            fontSize: event.consentStyle.fontSize,
-                            fontWeight: event.consentStyle.fontWeight,
-                            fontStyle: event.consentStyle.fontStyle,
-                            color:
-                              event.consentStyle.color === DEFAULT_TEXT_STYLE.color
-                                ? undefined
-                                : event.consentStyle.color,
-                          }
-                          : undefined
-                      }
-                    />
-                    <p className="brand-mono mt-3 text-[10px] text-black/40">
-                      You&rsquo;ll acknowledge this in the ticket panel before continuing.
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* 05 Your host */}
-            <div>
-              <SectionLabel index={hasConsent ? 5 : 4} className="mb-2">Your host</SectionLabel>
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-[var(--brand-black)] p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-[var(--brand-yellow)]">
-                    <span className="brand-display text-lg text-black">{event.organizerName?.[0]?.toUpperCase() || 'S'}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{event.organizerName}</p>
-                    <p className="brand-mono text-[10px] text-white/40">Organizer</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleBack}
-                  className="brand-mono shrink-0 rounded-sm border border-white/20 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-white/10"
+              <section id="before-you-book" className="flex scroll-mt-6 flex-col gap-4">
+                <SectionLabel>Before you book</SectionLabel>
+                <div
+                  className={`${panelClass} transition-colors ${consentHighlight && consentBlocking ? 'border-[var(--brand-danger)]' : ''}`}
                 >
-                  More events &rarr;
-                </button>
-              </div>
-            </div>
+                  <RichTextDisplay
+                    as="p"
+                    html={event.consentText ?? ''}
+                    className={`whitespace-pre-line text-[15px] leading-[22px] ${!event.consentStyle?.color || event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                      ? 'text-[var(--brand-black)]'
+                      : ''
+                      }`}
+                    style={
+                      event.consentStyle
+                        ? {
+                          fontSize: event.consentStyle.fontSize,
+                          fontWeight: event.consentStyle.fontWeight,
+                          fontStyle: event.consentStyle.fontStyle,
+                          color:
+                            event.consentStyle.color === DEFAULT_TEXT_STYLE.color
+                              ? undefined
+                              : event.consentStyle.color,
+                        }
+                        : undefined
+                    }
+                  />
+                  <BrandCheckbox
+                    checked={consentAcknowledged}
+                    onChange={(checked) => {
+                      setConsentAcknowledged(checked);
+                      if (checked) setConsentHighlight(false);
+                    }}
+                    className="mt-4 font-medium"
+                  >
+                    I acknowledge the important information above.
+                  </BrandCheckbox>
+                  {consentHighlight && consentBlocking && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-[var(--brand-danger)]">
+                      <AlertCircle size={14} aria-hidden="true" /> Tick the box to continue booking.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </main>
 
-      <CustomerFooter variant="slim" organizationName={settings.organizationName} />
+      <CustomerFooter
+        variant="brand"
+        organizationName={settings.organizationName}
+        website={settings.website}
+        instagram={settings.instagram}
+        facebook={settings.facebook}
+        twitter={settings.twitter}
+        whatsappNumber={settings.whatsappNumber}
+        host={event.organizerName ? { name: event.organizerName, onMoreEvents: handleBack } : undefined}
+        bio={settings.storefront.bio}
+        contactEmail={settings.storefront.contactEmail}
+        storeBasePath={getSubdomain() ? '' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : ''}
+      />
 
       {/* ── Floating bottom bar — mobile only, ticketed events ───────── */}
-      {!allSoldOut && event.registrationMode !== 'rsvp' && (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-black/10 bg-white p-3 flex justify-center gap-3 z-30 lg:hidden">
-          <div className="flex w-full items-center gap-3">
-            <div className="flex-1">
-              <p className="brand-mono text-[10px] text-black/40">{totalTickets} ticket{totalTickets === 1 ? '' : 's'}</p>
-              <p className="brand-display text-lg text-[var(--brand-black)]">
-                {totalAmount === 0 && totalTickets > 0 ? 'Free' : `₹${totalAmount.toLocaleString('en-IN')}`}
-              </p>
-            </div>
-            <button
-              onClick={handleGetTickets}
-              disabled={totalTickets === 0 || consentBlocking}
-              className="brand-mono flex-1 rounded-sm bg-[var(--brand-yellow)] py-2.5 text-xs font-bold text-black hover:brightness-95 disabled:opacity-40 transition-colors"
-            >
-              {consentBlocking ? 'Acknowledge to continue' : 'Checkout'}
-            </button>
-          </div>
-        </div>
+      {showMobileBar && (
+        totalTickets === 0 ? (
+          <MobileCheckoutBar
+            countLabel="Starts at"
+            totalLabel={startingPriceLabel}
+            ctaLabel="Book tickets"
+            onCta={scrollToTickets}
+          />
+        ) : (
+          <MobileCheckoutBar
+            countLabel={ticketCountLabel}
+            totalLabel={totalLabel}
+            ctaLabel={continueLabel}
+            onCta={handleCta}
+          />
+        )
       )}
 
       {/* NEW — inline manual-QR payment card, rendered inside the same JSX tree */}

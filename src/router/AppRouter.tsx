@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration } from 'react-router-dom';
-import EventsLayout from '../Layout/EventsLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorScreen from '../components/ErrorScreen';
@@ -8,6 +7,9 @@ import { ROUTES } from '../constants/routes.constants';
 import { AppRegistry } from './AppRegistry';
 import { getSubdomain } from '../lib/subdomain';
 
+// Lazy so customers on a storefront never download the organizer shell
+// (sidebar, expense/income/user modals, dashboard data fetching).
+const EventsLayout = lazy(() => import('../Layout/EventsLayout'));
 const Login = lazy(() => import('../pages/LoginPage'));
 const Signup = lazy(() => import('../pages/SignUp'));
 const ForgotPasswordPage = lazy(() => import('../pages/ForgotPasswordPage'));
@@ -15,13 +17,14 @@ const ResetPassword = lazy(() => import('../pages/ResetPassword'));
 const CustomerEventDiscover = lazy(() => import('../pages/Customereventdiscover'));
 const CustomerEventDetail = lazy(() => import('../pages/Customereventdetail'));
 const CheckoutPage = lazy(() => import('../pages/Checkout'));
+const StorefrontPolicy = lazy(() => import('../pages/StorefrontPolicy'));
 
 // Super Admin — standalone, no Events sidebar/layout
 const SuperAdminHub = lazy(() => import('../pages/SuperAdmin/SuperAdminHub'));
 const SuperAdminSupportTickets = lazy(() => import('../pages/SuperAdmin/SupportAdminSupportTickets'));
 const SuperAdminPlanLeads = lazy(() => import('../pages/SuperAdmin/SuperAdminPlanLeads'));
-
-const Loading = () => <div>Loading...</div>;
+const SuperAdminCompanies = lazy(() => import('../pages/SuperAdmin/SuperAdminCompanies'));
+const SuperAdminOutsoldEvents = lazy(() => import('../pages/SuperAdmin/SuperAdminOutsoldEvents'));
 
 const generateDynamicRoutes = (layoutType: 'EVENTS') => {
   return AppRegistry.filter((app) => app.layout === layoutType).flatMap((app) =>
@@ -34,6 +37,16 @@ const generateDynamicRoutes = (layoutType: 'EVENTS') => {
 };
 
 const subdomain = getSubdomain();
+
+// Suspense fallback while a lazy page chunk loads — on a customer subdomain it
+// wears the brand theme so the store doesn't flash a bare grey screen.
+const Loading = () => (
+  <div
+    className={`flex h-dvh w-full items-center justify-center ${subdomain ? 'brand-theme bg-[var(--brand-cream)]' : ''}`}
+  >
+    <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#007A78] border-t-transparent" />
+  </div>
+);
 
 const router = subdomain
   ? createBrowserRouter([
@@ -49,6 +62,7 @@ const router = subdomain
           { index: true, element: <CustomerEventDiscover /> },
           { path: 'e/:slug', element: <CustomerEventDetail /> },
           { path: 'checkout/:id', element: <CheckoutPage /> },
+          { path: 'policies/:policy', element: <StorefrontPolicy /> },
           { path: '*', element: <Navigate to="/" replace /> },
         ],
       },
@@ -93,6 +107,8 @@ const router = subdomain
               { index: true, element: <SuperAdminHub /> },
               { path: 'support-tickets', element: <SuperAdminSupportTickets /> },
               { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
+              { path: 'companies', element: <SuperAdminCompanies /> },
+              { path: 'outsold-events', element: <SuperAdminOutsoldEvents /> },
             ],
           },
 
@@ -100,11 +116,13 @@ const router = subdomain
           { path: ROUTES.DISCOVER, element: <CustomerEventDiscover /> },
           { path: ROUTES.EVENT_DETAIL, element: <CustomerEventDetail /> },
           { path: ROUTES.CHECKOUT, element: <CheckoutPage /> },
+          { path: ROUTES.POLICY, element: <StorefrontPolicy /> },
 
           // Company-scoped fallback for merchants without a claimed subdomain
           { path: ROUTES.PUBLIC_STORE, element: <CustomerEventDiscover /> },
           { path: ROUTES.PUBLIC_EVENT_DETAIL, element: <CustomerEventDetail /> },
           { path: ROUTES.PUBLIC_CHECKOUT, element: <CheckoutPage /> },
+          { path: ROUTES.PUBLIC_POLICY, element: <StorefrontPolicy /> },
 
           // Unmatched URL
           { path: '*', element: <ErrorScreen heading="Page not found" message="This page doesn't exist or may have moved." icon="🔍" /> },

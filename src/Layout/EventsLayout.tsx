@@ -112,6 +112,9 @@ const EventsLayout = () => {
         endDate: '2100-01-01',
         cacheKey: `event_list_cache_v2_${profile.companyId}`,
         forceRefresh,
+        // Just a picker list for the Expense/Income/Share modals — EventListCard
+        // never renders salesTrend, so skip building it (see fetchEventDashboardData).
+        includeSalesTrend: false,
       })
         .then((result) => setEvents(result.events))
         .catch((e) => console.error('Failed to load events for expense modal:', e))

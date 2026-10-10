@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCog, Landmark, Settings2, Users, Wallet } from 'lucide-react'; // + ShieldCheck
+import { CalendarCog, FileText, Landmark, Settings2, Users, Wallet } from 'lucide-react'; // + ShieldCheck
 import { ROUTES } from '../constants/routes.constants';
 import BackButton from '../components/ui/BackButton';
 import { useAuth } from '../context/AuthContext';
@@ -58,6 +58,21 @@ const SettingsHub: React.FC = () => {
                         <div>
                             <p className="text-sm font-bold">Company Settings</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">GST scheme, tax rate, and rounding</p>
+                        </div>
+                    </Link>
+
+                    <Link
+                        to={`/${ROUTES.EVENTS}/${ROUTES.EVENTS_SETTINGS_STOREFRONT}`.replace('//', '/')}
+                        className="flex items-start gap-3 bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#007A78]/50 dark:hover:border-[#2DD4BF]/50 transition-all"
+                    >
+                        <div className="p-2.5 rounded-sm bg-[#007A78]/10 text-[#007A78] dark:bg-[#2DD4BF]/15 dark:text-[#2DD4BF] shrink-0">
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold">Storefront &amp; Policies</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Footer description, contact email, refund policy, terms and privacy
+                            </p>
                         </div>
                     </Link>
 

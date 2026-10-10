@@ -4,42 +4,14 @@ import { FiUpload, FiFileText, FiCheck, FiX, FiLoader, FiPlus, FiEye, FiDownload
 import { storage } from '../lib/firebase';
 import { compressPdfToTargetSize } from '../lib/pdfCompression';
 import { compressImage } from '../lib/identityCompression';
+import { SLOT_LABELS, normalizeDocFiles, type DocFile } from '../lib/docFiles';
+
+// Re-exported for existing importers (EditProfile, SignUp).
+export { normalizeDocFiles, type DocFile };
 
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 const ACCEPT_ATTR = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
 const MAX_FILES = 2;
-const SLOT_LABELS = ['Front', 'Back'];
-
-export interface DocFile {
-  url: string;
-  name: string;
-}
-
-/**
- * Best-effort filename recovery for documents that were uploaded before
- * filenames were tracked (or whose name wasn't passed in explicitly).
- * Falls back to the slot label (Front/Back) if nothing can be parsed.
- */
-const deriveNameFromUrl = (url: string, fallback: string): string => {
-  try {
-    const path = decodeURIComponent(new URL(url).pathname);
-    const last = path.split('/').pop();
-    return last && last.trim().length > 0 ? last : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-// Normalizes stored data into DocFile[]. Handles both new {url,name} objects
-// and legacy plain string[] URLs (old data), so nothing breaks.
-export const normalizeDocFiles = (input: unknown, fallbackLabels: string[] = SLOT_LABELS): DocFile[] => {
-  if (!Array.isArray(input)) return [];
-  return input.map((item, i) =>
-    typeof item === 'string'
-      ? { url: item, name: deriveNameFromUrl(item, fallbackLabels[i] || `File ${i + 1}`) }
-      : (item as DocFile)
-  );
-};
 
 const toDocFiles = (input: (DocFile | string)[]): DocFile[] => normalizeDocFiles(input);
 

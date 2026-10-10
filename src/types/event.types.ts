@@ -88,8 +88,11 @@ export const PAYMENT_COLLECTION_MODES = ['gateway', 'manual_qr'] as const;
 export type PaymentCollectionMode = (typeof PAYMENT_COLLECTION_MODES)[number];
 
 export interface GalleryMediaItem {
+  /** Storage URL once saved; a data: or blob: preview URL while the form is open. */
   url: string;
   type: 'image' | 'gif' | 'video';
+  /** Form-only: the compressed file waiting to be uploaded (videos). Never written to Firestore. */
+  file?: Blob;
 }
 export interface EventFormState {
   title: string;

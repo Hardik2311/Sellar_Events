@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs, serverTimestamp
 import { updateProfile } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { mapGstRegistrationType, reverseMapGstScheme } from '../lib/gstMapping';
-import { normalizeDocFiles, type DocFile } from '../components/IdentityUpload';
+import { normalizeDocFiles, type DocFile } from '../lib/docFiles';
 
 export interface ProfileData {
   name: string;
@@ -29,6 +29,8 @@ export interface ProfileData {
   twitter: string;
   whatsappNumber: string;
   role: string;
+  // Store-front hero banner (customer Discover page) — company-level, owner-only
+  brandCover: string;
 }
 
 export const useProfileData = (userId?: string, companyId?: string) => {
@@ -124,6 +126,7 @@ export const useProfileData = (userId?: string, companyId?: string) => {
         organizationName: companyData.organizationName || rootCompanyData.name || '',
         eventCategory: companyData.eventCategory || '',
         website: companyData.website || '',
+        brandCover: companyData.brandCoverUrl || '',
         gstinNumber: companyData.gstinNumber || '',
 // settings/general is the single source of truth for GST scheme — both
 // EditProfile and the Company Settings page write here, so always derive
@@ -176,6 +179,7 @@ gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
       organizationName,
       eventCategory,
       website,
+      brandCover,
       gstinNumber,
       gstType,
       panNumber,
@@ -237,6 +241,7 @@ gstType: reverseMapGstScheme(settingsData.gstScheme, settingsData.taxType),
       ...(organizationName !== undefined && { organizationName, name: organizationName }),
       ...(eventCategory !== undefined && { eventCategory }),
       ...(website !== undefined && { website }),
+      ...(brandCover !== undefined && { brandCoverUrl: brandCover }),
       ...(gstinNumber !== undefined && { gstinNumber }),
       ...(panNumber !== undefined && { panNumber }),
       ...(userFields.whatsappNumber !== undefined && { whatsappNumber: userFields.whatsappNumber }),

@@ -11,6 +11,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { getSubdomain } from "./subdomain";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_API_KEY,
@@ -26,18 +27,29 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Export service instances
-// Embedded in-app browsers (Instagram, Facebook, etc.) often run in a
-// restricted storage context where IndexedDB access throws — plain getAuth()
-// doesn't reliably fall back from that and can take the whole app down with
-// it. initializeAuth with an explicit persistence chain degrades gracefully
-// down to in-memory persistence instead.
+// Storefront pages (a merchant subdomain, or a /public/... link) skip
+// IndexedDB. On iOS (Safari, and in-app browsers like Instagram's — all
+// WebKit) indexedDB.open() can stall without ever succeeding or failing.
+// Auth awaits every persistence's availability check before it finishes
+// initializing, and Firestore waits for Auth's first token before sending any
+// request — so one stalled open left customer pages on their loading skeleton
+// forever. Nobody signs in on a storefront, so nothing is lost there.
+//
+// The organizer app keeps IndexedDB first: switching it to localStorage made
+// sign-in hang on iPhone Safari (seen 2026-10-08, even with site data
+// cleared), and this chain is the one that works there.
+const isStorefrontPage =
+    getSubdomain() !== null || window.location.pathname.startsWith("/public/");
+
 export const auth = initializeAuth(app, {
-    persistence: [
-        indexedDBLocalPersistence,
-        browserLocalPersistence,
-        browserSessionPersistence,
-        inMemoryPersistence,
-    ],
+    persistence: isStorefrontPage
+        ? [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
+        : [
+            indexedDBLocalPersistence,
+            browserLocalPersistence,
+            browserSessionPersistence,
+            inMemoryPersistence,
+        ],
 });
 export const db = getFirestore(app);
 export const storage = getStorage(app);

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
+import { uploadGalleryMedia } from '../lib/galleryUpload';
 import { generateAccessCode, isCreditExpired, isPastHardDeleteWindow, getNewCreditExpiry, type PublicEvent } from '../data/events';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
@@ -51,7 +52,10 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   goodToKnowText: d.goodToKnowText ?? undefined,
   goodToKnowStyle: d.goodToKnowStyle ?? undefined,
   descriptionStyle: d.descriptionStyle ?? undefined,
-  paymentCollectionMode: d.paymentCollectionMode || 'gateway',
+  // Payment gateway isn't wired up to a real processor yet (see CreateEvent.tsx) —
+  // a missing/legacy field must fall back to manual_qr, the one mode that works,
+  // not 'gateway', which silently routes attendees to the mock payment modal.
+  paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
@@ -155,25 +159,12 @@ export const useOrganizerEvents = () => {
     }
   };
 
+  // Multiple events can be featured at once — they rotate in the customer
+  // Discover page's hero slideshow (soonest first).
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {
     if (!profile?.companyId) return;
-    const nextFeatured = !currentFeatured;
-    const batch = writeBatch(db);
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
-    batch.update(eventRef, { featured: nextFeatured });
-
-    // Ek time pe sirf ek hi event featured ho sakta hai —
-    // isko ON kar rahe hain to baaki sab jo already featured hain unko OFF karo
-    if (nextFeatured) {
-      events
-        .filter((e) => e.id !== id && e.featured)
-        .forEach((e) => {
-          const otherRef = doc(db, 'companies', profile.companyId, 'events', e.id);
-          batch.update(otherRef, { featured: false });
-        });
-    }
-
-    await batch.commit();
+    await updateDoc(eventRef, { featured: !currentFeatured });
   };
 
   /// NEW — generates a fresh access code for a private event and ADDS it to the
@@ -259,7 +250,7 @@ export const useOrganizerEvents = () => {
         tierEndDate: t.tierEndDate ?? null,
         tierEndTime: t.tierEndTime ?? null,
       })),
-      paymentCollectionMode: original.paymentCollectionMode ?? 'gateway',
+      paymentCollectionMode: original.paymentCollectionMode ?? 'manual_qr',
       //qrImageUrl: original.qrImageUrl ?? null,
       upiId: original.upiId ?? null,
       payeeName: original.payeeName ?? null,
@@ -303,7 +294,12 @@ export const useOrganizerEvents = () => {
       coverImageUrl: form.images[0] || null,
       coverImageDesktop: form.coverImageDesktop || null,
       coverImageMobile: form.coverImageMobile || null,
-      pastEventsGallery: form.pastEventsGallery || [],
+      // New gallery photos/videos are still local — upload them so only
+      // Storage URLs end up in the event document.
+      pastEventsGallery: await uploadGalleryMedia(
+        form.pastEventsGallery || [],
+        `companies/${profile.companyId}/events/${id}`
+      ),
       registrationMode: form.registrationMode,
       rsvpLink: form.rsvpLink,
       rsvpButtonLabel: form.rsvpButtonLabel,
