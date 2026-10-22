@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { X, UploadCloud, AlertTriangle, CheckCircle2, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
@@ -12,6 +12,8 @@ interface ParsedRow {
     email: string;
     phone: string;
     tierName: string;
+    customFieldAnswers: Record<string, string>; // keyed by customField.id, same as checkout
+    amountPaid: number;
     valid: boolean;
     reason?: string;
     isDuplicate?: boolean;
@@ -31,7 +33,11 @@ const HEADER_ALIASES: Record<string, keyof ParsedRow> = {
     email: 'email', 'email address': 'email',
     phone: 'phone', mobile: 'phone', 'phone number': 'phone',
     tier: 'tierName', 'ticket tier': 'tierName',
+    'amount paid': 'amountPaid', amount: 'amountPaid',
 };
+
+// Header matching: case-insensitive, trailing " *" (required marker) ignored
+const normHeader = (s: string) => s.trim().toLowerCase().replace(/\s*\*$/, '');
 
 // SAME logic as CheckoutPage.tsx's getEventInitials — keeps ticket ID format
 // consistent across checkout, walk-in, and import flows.
@@ -55,9 +61,14 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
     const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // MOVED — existingEmails, handleFile, handleDownloadSample (all hooks/hook-dependent
-    // logic) must run on EVERY render regardless of isOpen/event, so the early return
-    // below is now the LAST thing before JSX, not before these declarations.
+    const isRsvp = event?.registrationMode === 'rsvp';
+    const eventTiers = event?.tiers ?? [];
+    // Same filter as CheckoutPage — skip questions the organizer never labeled
+    const customFields = useMemo(
+        () => (event?.customFields ?? []).filter((f) => f.label?.trim()),
+        [event?.customFields]
+    );
+
     const existingEmails = new Set(existingAttendees.map((a) => a.email.toLowerCase().trim()));
 
     const handleFile = useCallback((file: File) => {
@@ -72,7 +83,7 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
                 const json: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
                 if (json.length === 0) {
-                    setError('File khaali hai ya format samajh nahi aaya.');
+                    setError('The file is empty or its format is not recognised.');
                     setRows([]);
                     return;
                 }
@@ -80,45 +91,101 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
                 const seenInFile = new Set<string>();
                 const parsed: ParsedRow[] = json.map((raw) => {
                     const mapped: Partial<ParsedRow> = {};
+                    const byHeader: Record<string, string> = {};
                     Object.entries(raw).forEach(([key, val]) => {
-                        const norm = HEADER_ALIASES[key.trim().toLowerCase()];
-                        if (norm) (mapped as any)[norm] = String(val).trim();
+                        const h = normHeader(key);
+                        byHeader[h] = String(val).trim();
+                        const field = HEADER_ALIASES[h];
+                        if (field) (mapped as any)[field] = String(val).trim();
                     });
                     const name = mapped.name ?? '';
                     const email = (mapped.email ?? '').toLowerCase();
                     const phone = mapped.phone ?? '';
-                    const tierName = mapped.tierName || '';
 
-                    const isDuplicate = Boolean(email) && (existingEmails.has(email) || seenInFile.has(email));
+                    // ── Tier: must match one of the event's tiers (RSVP events may leave it blank)
+                    let tierName = mapped.tierName || '';
+                    let tierError: string | undefined;
+                    if (eventTiers.length > 0) {
+                        const matched = tierName
+                            ? eventTiers.find((t) => t.name.trim().toLowerCase() === tierName.toLowerCase())
+                            : eventTiers.length === 1 ? eventTiers[0] : undefined;
+                        if (matched) tierName = matched.name; // canonical name
+                        else if (tierName) tierError = 'Unknown tier';
+                        else if (!isRsvp) tierError = 'Tier missing';
+                    }
+
+                    // ── Custom questions (same answers shape as checkout: { [field.id]: string })
+                    const customFieldAnswers: Record<string, string> = {};
+                    let customError: string | undefined;
+                    customFields.forEach((f) => {
+                        let val = byHeader[normHeader(f.label)] ?? '';
+                        if (f.type === 'checkbox') {
+                            val = ['yes', 'true', 'y', '1'].includes(val.toLowerCase()) ? 'true' : 'false';
+                        } else if (f.type === 'select' && val) {
+                            const opt = (f.options ?? []).find((o) => o.trim().toLowerCase() === val.toLowerCase());
+                            if (opt) val = opt;
+                            else if (!customError) customError = `Invalid answer for "${f.label}"`;
+                        }
+                        if (f.required && !customError) {
+                            const missing = f.type === 'checkbox' ? val !== 'true' : !val;
+                            if (missing) customError = `"${f.label}" missing`;
+                        }
+                        customFieldAnswers[f.id] = val;
+                    });
+
+                    // ── Amount paid (optional, defaults to 0)
+                    const amountRaw = String((mapped as any).amountPaid ?? '').replace(/[₹,\s]/g, '');
+                    const amountPaid = amountRaw ? Number(amountRaw) : 0;
+                    const amountError = !Number.isFinite(amountPaid) || amountPaid < 0 ? 'Invalid amount' : undefined;
+
+                    // Duplicate-by-email only for RSVP; paid events can legitimately have
+                    // several tickets under one email (checkout allows "same details for all")
+                    const isDuplicate = isRsvp && Boolean(email) && (existingEmails.has(email) || seenInFile.has(email));
                     if (email) seenInFile.add(email);
 
-                    const valid = Boolean(name) && Boolean(email) && !isDuplicate;
-                    const reason = !name ? 'Name missing' : !email ? 'Email missing' : isDuplicate ? 'Already exists' : undefined;
+                    const reason = !name ? 'Name missing'
+                        : !email ? 'Email missing'
+                            : tierError ?? customError ?? amountError
+                            ?? (isDuplicate ? 'Already exists' : undefined);
 
-                    return { name, email, phone, tierName, valid, reason, isDuplicate };
+                    return {
+                        name, email, phone, tierName, customFieldAnswers, amountPaid,
+                        valid: !reason, reason, isDuplicate,
+                    };
                 });
 
                 setRows(parsed);
             } catch (err) {
                 console.error(err);
-                setError('File parse nahi ho payi. .xlsx ya .csv try karein.');
+                setError('Could not read the file. Please try a .xlsx or .csv file.');
             }
         };
         reader.readAsArrayBuffer(file);
-    }, [existingAttendees]);
+    }, [existingAttendees, isRsvp, eventTiers, customFields]);
 
-    // NEW — sample .xlsx generate karke browser se directly download karwata hai
     const handleDownloadSample = useCallback(() => {
-        const sampleData = [
+        const people = [
             { Name: 'Rahul Sharma', Email: 'rahul.sharma@example.com', Phone: '9876543210' },
             { Name: 'Priya Verma', Email: 'priya.verma@example.com', Phone: '9123456780' },
         ];
+        const sampleData = people.map((p) => {
+            const row: Record<string, string | number> = { ...p };
+            if (eventTiers.length > 0) row['Tier'] = eventTiers[0].name;
+            customFields.forEach((f) => {
+                row[f.label.trim()] =
+                    f.type === 'checkbox' ? 'Yes'
+                        : f.type === 'select' ? (f.options?.[0] ?? '')
+                            : 'Sample answer';
+            });
+            if (!isRsvp) row['Amount Paid'] = 0;
+            return row;
+        });
         const ws = XLSX.utils.json_to_sheet(sampleData);
-        ws['!cols'] = [{ wch: 20 }, { wch: 28 }, { wch: 15 }, { wch: 12 }];
+        ws['!cols'] = Object.keys(sampleData[0]).map((k) => ({ wch: Math.max(k.length + 4, 16) }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Attendees');
         XLSX.writeFile(wb, 'attendee_import_sample.xlsx');
-    }, []);
+    }, [eventTiers, customFields, isRsvp]);
     const validRows = rows.filter((r) => r.valid);
 
     const handleImport = async () => {
@@ -141,7 +208,7 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
                     if (!eventSnap.exists()) throw new Error('Event no longer exists.');
 
                     const currentTiers = (eventSnap.data().tiers || []) as {
-                        id: string; name: string; sold: number;
+                        id: string; name: string; sold: number; quantity: number;
                     }[];
                     const totalAlreadySold = currentTiers.reduce(
                         (sum, t) => sum + (Number.isFinite(t.sold) ? t.sold : 0), 0
@@ -163,11 +230,20 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
                             ...(matchedTier ? { ticketTierId: matchedTier.id } : {}),
                             ticketId: genTicketId(event.title, sequenceNumber),
                             status: 'valid',
-                            amountPaid: 0,
+                            amountPaid: row.amountPaid,
                             source: 'import',
-                            customFieldAnswers: {},
+                            customFieldAnswers: row.customFieldAnswers,
                             createdAt: serverTimestamp(),
                         });
+                    });
+
+                    // Same oversell guard as checkout
+                    currentTiers.forEach((t) => {
+                        const delta = soldDelta[t.id] ?? 0;
+                        const sold = Number.isFinite(t.sold) ? t.sold : 0;
+                        if (delta > 0 && sold + delta > t.quantity) {
+                            throw new Error(`SOLD_OUT:${t.name}`);
+                        }
                     });
 
                     const updatedTiers = currentTiers.map((t) =>
@@ -184,7 +260,12 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
             onClose();
         } catch (err) {
             console.error('Import failed:', err);
-            setError('Import fail ho gaya, dobara try karein.');
+            const msg = (err as Error)?.message ?? '';
+            setError(
+                msg.startsWith('SOLD_OUT:')
+                    ? `Not enough tickets left in "${msg.replace('SOLD_OUT:', '')}". Reduce the rows for this tier and try again.`
+                    : 'Import failed, please try again.'
+            );
         } finally {
             setIsImporting(false);
         }
@@ -207,8 +288,11 @@ const ImportAttendeesModal: React.FC<ImportAttendeesModalProps> = ({
 
                 <div className="grow overflow-y-auto p-4 space-y-3">
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Upload a .xlsx or .csv file — columns: <strong>Name, Email, Phone</strong> (Tier optional).
-                        A Google Form response sheet export will work directly if the column names match.
+                        Upload a .xlsx or .csv file — columns: <strong>Name, Email, Phone</strong>
+                        {eventTiers.length > 0 && <>, <strong>Tier</strong>{isRsvp ? ' (optional)' : ''}</>}
+                        {customFields.length > 0 && <>, plus: <strong>{customFields.map((f) => f.label.trim()).join(', ')}</strong></>}
+                        {!isRsvp && <> and optional <strong>Amount Paid</strong></>}.
+                        Use "Download Sample Excel" for the exact columns of this event.
                     </p>
 
                     {/* NEW — sample file jisme user attendee details fill karke seedha upload kar sake */}

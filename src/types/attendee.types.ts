@@ -24,7 +24,7 @@ export interface Attendee {
   razorpayPaymentId?: string;
   orderId?: string;
   paymentMode?: 'Cash' | 'UPI' | 'Card' | 'Netbanking' | 'Other';
- source?: 'ticket' | 'walk_in' | 'import';
+  source?: 'ticket' | 'walk_in' | 'import';
   // NEW — the private-event access code this ticket was booked with, if any
   accessCode?: string | null;
   // NEW — shared by tickets booked in one order under the same name; the

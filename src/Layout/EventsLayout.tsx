@@ -50,19 +50,22 @@ const EventsLayout = () => {
   const fanActions = [
     {
       key: 'add-event',
-      label: '+ Event',
+      prefix: 'Add',
+      label: 'Event',
       icon: <PlusCircle size={16} />,
       onClick: () => navigate('/events/create'),
     },
     showManageUsers && {
       key: 'add-user',
-      label: '+ User',
+      prefix: 'Add',
+      label: 'User',
       icon: <UserPlus size={16} />,
       onClick: () => setIsUserAddModalOpen(true),
     },
     {
       key: 'add-expense',
-      label: '+ Expense',
+      prefix: 'Add',
+      label: 'Expense',
       icon: <IndianRupee size={16} />,
       onClick: () => {
         setIsExpenseModalOpen(true);
@@ -71,7 +74,8 @@ const EventsLayout = () => {
     },
     {
       key: 'add-income',
-      label: '+ Income',
+      prefix: 'Add',
+      label: 'Income',
       icon: <Landmark size={16} />,
       onClick: () => {
         setIsIncomeModalOpen(true);
@@ -84,7 +88,7 @@ const EventsLayout = () => {
       icon: <Share2 size={16} />,
       onClick: () => setIsShareLinkModalOpen(true),
     },
-  ].filter(Boolean) as { key: string; label: string; icon: JSX.Element; onClick: () => void }[];
+  ].filter(Boolean) as { key: string; prefix?: string; label: string; icon: JSX.Element; onClick: () => void }[];
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isUserAddModalOpen, setIsUserAddModalOpen] = useState(false);
@@ -246,10 +250,17 @@ const EventsLayout = () => {
                   }}
                   className="flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-md bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-transform"
                 >
+                  <span className="h-2 text-[8px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-none">
+                    {item.prefix}
+                  </span>
+
+                  {/* 2. Icon — beech me */}
                   <span className="h-8 w-8 rounded-full bg-[#007A78]/10 dark:bg-[#2DD4BF]/15 text-[#007A78] dark:text-[#2DD4BF] flex items-center justify-center">
                     {item.icon}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 text-center leading-tight">
+
+                  {/* 3. Label (Event / User / Expense / Income / Share) — sabse neeche */}
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200 text-center leading-tight">
                     {item.label}
                   </span>
                 </button>
