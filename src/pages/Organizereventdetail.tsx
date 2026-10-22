@@ -73,6 +73,9 @@ const useEvent = (companyId?: string, id?: string) => {
           })),
           // NEW
           registrationMode: d.registrationMode || 'tickets',
+          paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
+          upiId: d.upiId || '',
+          payeeName: d.payeeName || '',
           rsvpLink: d.rsvpLink || '',
           rsvpButtonLabel: d.rsvpButtonLabel || 'RSVP Now',
           customFields: d.customFields || [],

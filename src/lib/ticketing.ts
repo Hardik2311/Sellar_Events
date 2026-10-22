@@ -41,6 +41,32 @@ export const assignBookingGroups = (names: string[], docIds: string[]): (string 
   });
 };
 
+/**
+ * Next ticket numbers for an event. Uses the monotonic `ticketSeq` counter on
+ * the event doc instead of Σ tiers[].sold: Razorpay checkouts hold seats in
+ * `sold` and give them back if unpaid, so `sold` can go down and would hand
+ * out a number twice. Seeded from Σ sold so it never re-uses an old number.
+ * Write the returned `ticketSeq` back in the same transaction.
+ * Mirrored in functions/payments/ticketing.js.
+ */
+export const nextTicketNumbers = (
+  eventData: { tiers?: { sold?: number }[]; ticketSeq?: number },
+  count: number
+): { numbers: number[]; ticketSeq: number } => {
+  const totalSold = (eventData.tiers ?? []).reduce(
+    (sum, t) => sum + (Number.isFinite(t.sold) ? (t.sold as number) : 0),
+    0
+  );
+  const start = Math.max(Number(eventData.ticketSeq) || 0, totalSold);
+  return {
+    numbers: Array.from({ length: count }, (_, i) => start + i + 1),
+    ticketSeq: start + count,
+  };
+};
+
+export const formatTicketId = (initials: string, ticketNumber: number): string =>
+  `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+
 // Server-side mirror of the frontend's isEventDateInFuture check.
 // Never trust the client's markCheckedIn flag alone — a direct API/console
 // call could bypass the UI guard entirely.
@@ -77,24 +103,58 @@ export interface WalkInAttendeeInput {
   customFieldAnswers?: Record<string, string>;
 }
 
+export interface WalkInAttendeesInput {
+  companyId: string;
+  eventId: string;
+  eventTitle: string;
+  tierId: string;
+  tierName: string;
+  // Per-ticket tierId / tierName / amountPaid override the top-level ones, so
+  // one walk-in group can mix tiers (2 × General + 1 × VIP) in one transaction.
+  attendees: {
+    name: string;
+    email: string;
+    phone: string;
+    tierId?: string;
+    tierName?: string;
+    amountPaid?: number;
+  }[];
+  amountPaid: number; // per ticket, same as the singular flow
+  paymentMode: string;
+  markCheckedIn: boolean;
+  allowOverbook: boolean; // organizer explicitly ticked "Add anyway"
+  allowOverbookTierIds?: string[]; // per-tier "Add anyway", for mixed-tier groups
+  customFieldAnswers?: Record<string, string>;
+  screenshotUrl?: string | null; // optional UPI payment proof, shared across the whole group
+}
+
 /**
- * Creates a single on-the-spot attendee, mirroring CheckoutPage's
- * transaction: increments tier.sold and generates the same
- * INITIALS-000 style ticketId, all inside one Firestore transaction
- * so it can never oversell relative to concurrent purchases.
+ * Creates one or more on-the-spot attendees in a single Firestore
+ * transaction — same approach as CheckoutPage's bulk purchase: increments
+ * tier.sold by the whole batch, hands out sequential INITIALS-000 ticketIds
+ * via nextTicketNumbers, and (same as a multi-ticket purchase under one
+ * buyer) links tickets that share a name under one bookingGroupId so the
+ * door can check in "N of M arrived" instead of scanning each one alone.
+ * All in one transaction so a walk-in group can never oversell relative to
+ * concurrent purchases.
  */
-export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<string> {
+export async function createWalkInAttendees(input: WalkInAttendeesInput): Promise<string[]> {
   const {
-    companyId, eventId, eventTitle, tierId, tierName,
-    name, email, phone, amountPaid, paymentMode,
-    markCheckedIn, allowOverbook, customFieldAnswers = {},
+    companyId, eventId, eventTitle, tierId, tierName, attendees,
+    amountPaid, paymentMode, markCheckedIn, allowOverbook, allowOverbookTierIds = [],
+    customFieldAnswers = {}, screenshotUrl = null,
   } = input;
 
+  const count = attendees.length;
+  if (count === 0) return [];
+
   const eventRef = doc(db, 'companies', companyId, 'events', eventId);
-  const attendeeRef = doc(collection(db, 'companies', companyId, 'events', eventId, 'attendees'));
+  const attendeeRefs = Array.from({ length: count }, () =>
+    doc(collection(db, 'companies', companyId, 'events', eventId, 'attendees'))
+  );
   const initials = getEventInitials(eventTitle);
 
-  let ticketId = '';
+  let ticketIds: string[] = [];
 
   await runTransaction(db, async (transaction) => {
     const eventSnap = await transaction.get(eventRef);
@@ -110,44 +170,76 @@ export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<
       id: string; name: string; price: number; quantity: number; sold: number;
     }[];
 
-    const tier = currentTiers.find((t) => t.id === tierId);
-    if (!tier) throw new Error('Selected ticket tier no longer exists.');
+    // How many tickets this batch takes from each tier.
+    const countByTier = new Map<string, number>();
+    attendees.forEach((a) => {
+      const id = a.tierId ?? tierId;
+      countByTier.set(id, (countByTier.get(id) ?? 0) + 1);
+    });
 
-    const currentSold = Number.isFinite(tier.sold) ? tier.sold : 0;
-    const remaining = tier.quantity - currentSold;
+    const soldByTier = new Map<string, number>();
+    countByTier.forEach((tierCount, id) => {
+      const tier = currentTiers.find((t) => t.id === id);
+      if (!tier) throw new Error('Selected ticket tier no longer exists.');
 
-    if (remaining <= 0 && !allowOverbook) {
-      throw new Error(`"${tier.name}" has no tickets remaining.`);
-    }
+      const currentSold = Number.isFinite(tier.sold) ? tier.sold : 0;
+      const remaining = tier.quantity - currentSold;
+
+      if (remaining < tierCount && !allowOverbook && !allowOverbookTierIds.includes(id)) {
+        throw new Error(
+          remaining <= 0
+            ? `"${tier.name}" has no tickets remaining.`
+            : `"${tier.name}" only has ${remaining} ticket${remaining === 1 ? '' : 's'} remaining.`
+        );
+      }
+      soldByTier.set(id, currentSold + tierCount);
+    });
 
     const updatedTiers = currentTiers.map((t) =>
-      t.id === tierId ? { ...t, sold: currentSold + 1 } : t
+      soldByTier.has(t.id) ? { ...t, sold: soldByTier.get(t.id)! } : t
     );
 
-    const totalAlreadySold = currentTiers.reduce(
-      (sum, t) => sum + (Number.isFinite(t.sold) ? t.sold : 0), 0
+    const { numbers, ticketSeq } = nextTicketNumbers(eventData, count);
+    ticketIds = numbers.map((n) => formatTicketId(initials, n));
+
+    const bookingGroupIds = assignBookingGroups(
+      attendees.map((a) => a.name),
+      attendeeRefs.map((r) => r.id)
     );
-    ticketId = `${initials}-${String(totalAlreadySold + 1).padStart(3, '0')}`;
 
-    transaction.update(eventRef, { tiers: updatedTiers });
+    transaction.update(eventRef, { tiers: updatedTiers, ticketSeq });
 
-    transaction.set(attendeeRef, {
-      name,
-      email,
-      phone,
-      tierName,
-      ticketTierId: tierId,
-      customFieldAnswers,
-      amountPaid,
-      paymentMode,
-      isWalkIn: true, // reporting ke liye — open question #3 ka jawab
-      ticketId,
-      status: effectiveMarkCheckedIn ? 'checked_in' : 'valid',
-      checkedInAt: effectiveMarkCheckedIn ? serverTimestamp() : null,
-      createdAt: serverTimestamp(),
-      purchasedAt: serverTimestamp(),
+    attendees.forEach((a, i) => {
+      transaction.set(attendeeRefs[i], {
+        name: a.name,
+        email: a.email,
+        phone: a.phone,
+        tierName: a.tierName ?? tierName,
+        ticketTierId: a.tierId ?? tierId,
+        customFieldAnswers,
+        amountPaid: a.amountPaid ?? amountPaid,
+        paymentMode,
+        screenshotUrl,
+        isWalkIn: true, // reporting ke liye — open question #3 ka jawab
+        ticketId: ticketIds[i],
+        bookingGroupId: bookingGroupIds[i],
+        status: effectiveMarkCheckedIn ? 'checked_in' : 'valid',
+        checkedInAt: effectiveMarkCheckedIn ? serverTimestamp() : null,
+        createdAt: serverTimestamp(),
+        purchasedAt: serverTimestamp(),
+      });
     });
   });
 
+  return ticketIds;
+}
+
+/** Thin wrapper over createWalkInAttendees for the single-attendee case. */
+export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<string> {
+  const { name, email, phone, ...shared } = input;
+  const [ticketId] = await createWalkInAttendees({
+    ...shared,
+    attendees: [{ name, email, phone }],
+  });
   return ticketId;
 }

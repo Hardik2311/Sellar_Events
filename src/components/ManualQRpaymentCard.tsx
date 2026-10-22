@@ -8,9 +8,9 @@ import { stripHtmlTags } from '../lib/utils';
 import { formatTime, type AccessCodeEntry, type PublicEvent } from '../data/events';
 import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import QRCode from 'qrcode';
-import { loadImageAsCoverBanner } from '../lib/imageBanner';
+import { loadTicketPdfHero } from '../lib/ticketPdf';
 import TicketConfirmation from './TicketConfirmation';
-import { assignBookingGroups, getEventInitials } from '../lib/ticketing';
+import { assignBookingGroups, formatTicketId, getEventInitials, nextTicketNumbers } from '../lib/ticketing';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import BrandNavHeader from './brand/BrandNavHeader';
@@ -30,8 +30,6 @@ import {
   brandPanelClass,
 } from './brand/brandForm';
 
-const PDF_BANNER_WIDTH = 760;
-const PDF_BANNER_HEIGHT = 220;
 
 interface PurchasedTicket {
   ticketId: string;
@@ -176,7 +174,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
   const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
 
+  // On-screen ticket hero: the portrait (mobile) poster first.
   const bannerSrc =
+    event.coverImageMobile ||
+    event.coverImageDesktop ||
+    event.coverImage ||
+    event.images?.[0] ||
+    null;
+  // PDF hero is wide, so the desktop cover looks better there; portrait is the fallback.
+  const pdfHeroSrc =
     event.coverImageDesktop ||
     event.coverImageMobile ||
     event.coverImage ||
@@ -186,12 +192,12 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
   useEffect(() => {
     let cancelled = false;
     setPdfBannerDataUrl(null);
-    if (!bannerSrc) return;
-    loadImageAsCoverBanner(bannerSrc, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+    if (!pdfHeroSrc) return;
+    loadTicketPdfHero(pdfHeroSrc).then((dataUrl) => {
       if (!cancelled) setPdfBannerDataUrl(dataUrl);
     });
     return () => { cancelled = true; };
-  }, [bannerSrc]);
+  }, [pdfHeroSrc]);
 
   // "Book more tickets" link inside the ticket PDF — same URL organizer's
   // "Live view" opens (organizer's base URL + /e/<slug-id>) for THIS event only.
@@ -348,10 +354,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           return { ...t, sold: currentSold + qty };
         });
 
-        const totalAlreadySold = currentTiers.reduce(
-          (sum, t) => sum + (Number.isFinite(t.sold) ? t.sold : 0),
-          0
-        );
+        const totalTickets = breakdown.reduce((sum, b) => sum + b.qty, 0);
+        const { numbers: ticketNumbers, ticketSeq } = nextTicketNumbers(data, totalTickets);
 
         // Same atomic check-and-consume as the gateway checkout flow — a code
         // is single-use, so once it's bought tickets once it's dead for any
@@ -378,12 +382,12 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
         tx.update(eventRef, {
           tiers: updatedTiers,
+          ticketSeq,
           ...(updatedAccessCodes ? { accessCodes: updatedAccessCodes } : {}),
         });
 
         // Pre-create every attendee doc ref so same-name tickets in this
         // order can share one QR / group check-in (lead = first doc id).
-        const totalTickets = taxedBreakdown.reduce((sum, t) => sum + t.qty, 0);
         const attendeeDocs = Array.from({ length: totalTickets }, () => doc(attendeesRef));
         const bookingGroupIds = assignBookingGroups(
           attendeeDocs.map((_, i) => (attendeeDetails[i]?.name ?? '').trim()),
@@ -399,8 +403,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
           for (let i = 0; i < tier.qty; i++) {
             const attendeeDoc = attendeeDocs[index];
-            const ticketNumber = totalAlreadySold + index + 1;
-            const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+            const ticketId = formatTicketId(initials, ticketNumbers[index]);
             const attendee = attendeeDetails[index] ?? { name: '', email: '', phone: '' };
 
             tx.set(attendeeDoc, {
@@ -466,12 +469,14 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         <BrandNavHeader organizationName={organizationName} variant="minimal" rightSlot={<span />} />
         <TicketConfirmation
           eventTitle={event.title}
+          eventCategory={event.category}
           eventDate={event.date}
           eventTime={event.time}
           eventVenue={event.venue}
           tickets={purchasedTickets}
           onDone={onClose}
           eventBannerDataUrl={pdfBannerDataUrl}
+          eventPosterUrl={bannerSrc}
           eventConsentText={event.consentText}
           eventGoodToKnowText={event.goodToKnowText}
           eventIsOnline={event.isOnline}

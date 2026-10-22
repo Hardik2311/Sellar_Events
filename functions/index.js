@@ -21,6 +21,27 @@ exports.deleteTeamMember = deleteTeamMember; // NEW
 exports.createCompany = createCompany;
 exports.deleteCompanyData = deleteCompanyData; // NEW
 
+// Razorpay ticket payments into the PLATFORM account + manual organizer
+// payouts — region asia-south1
+const { createRazorpayOrder } = require("./payments/createRazorpayOrder");
+const { verifyRazorpayPayment } = require("./payments/verifyRazorpayPayment");
+const { razorpayWebhook } = require("./payments/razorpayWebhook");
+const { releaseExpiredOrders } = require("./payments/releaseExpiredOrders");
+const { recordPayout } = require("./payments/recordPayout");
+const { createCreditOrder, verifyCreditPayment } = require("./payments/creditPurchases");
+exports.createRazorpayOrder = createRazorpayOrder;
+exports.verifyRazorpayPayment = verifyRazorpayPayment;
+exports.razorpayWebhook = razorpayWebhook;
+exports.releaseExpiredOrders = releaseExpiredOrders;
+exports.recordPayout = recordPayout;
+exports.createCreditOrder = createCreditOrder;
+exports.verifyCreditPayment = verifyCreditPayment;
+
+// Super Admin → Send Tickets: emails ticket PDFs via Gmail — region asia-south1
+const { sendTicketEmail, markTicketEmails } = require("./email/sendTicketEmail");
+exports.sendTicketEmail = sendTicketEmail;
+exports.markTicketEmails = markTicketEmails;
+
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
 // traffic spikes by instead downgrading performance. This limit is a

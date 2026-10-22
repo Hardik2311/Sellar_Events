@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../lib/firebase';
+import { db, storage } from '../lib/firebase';
 import { uploadGalleryMedia } from '../lib/galleryUpload';
 import { generateAccessCode, isCreditExpired, isPastHardDeleteWindow, getNewCreditExpiry, type PublicEvent } from '../data/events';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
@@ -280,6 +281,30 @@ export const useOrganizerEvents = () => {
       };
     });
 
+    // CoverPhotoUpload hands back a fresh pick as a base64 data URL (still
+    // just a local preview at that point) — storing that directly in the
+    // Firestore doc is what blew past Firestore's 1 MiB per-document limit
+    // ("document ... exceeds the maximum allowed size of 1,048,576 bytes"),
+    // since two ~1MB cover images alone can exceed it. CreateEvent.tsx
+    // already uploads these to Storage and saves only the URL — mirror that
+    // here. An unchanged cover is already a Storage URL (doesn't start with
+    // "data:"), so it's left alone instead of being re-uploaded.
+    const coverImageDesktopUrl = form.coverImageDesktop?.startsWith('data:')
+      ? await (async () => {
+          const r = ref(storage, `companies/${profile.companyId}/events/${id}/cover-desktop.jpg`);
+          await uploadString(r, form.coverImageDesktop as string, 'data_url');
+          return getDownloadURL(r);
+        })()
+      : form.coverImageDesktop || null;
+
+    const coverImageMobileUrl = form.coverImageMobile?.startsWith('data:')
+      ? await (async () => {
+          const r = ref(storage, `companies/${profile.companyId}/events/${id}/cover-mobile.jpg`);
+          await uploadString(r, form.coverImageMobile as string, 'data_url');
+          return getDownloadURL(r);
+        })()
+      : form.coverImageMobile || null;
+
     const payload: Record<string, any> = {
       title: form.title,
       category: form.category === 'Other' ? form.customCategory.trim() : form.category,
@@ -292,8 +317,8 @@ export const useOrganizerEvents = () => {
       isPrivate: form.isPrivate,
       coverImageUrls: form.images,
       coverImageUrl: form.images[0] || null,
-      coverImageDesktop: form.coverImageDesktop || null,
-      coverImageMobile: form.coverImageMobile || null,
+      coverImageDesktop: coverImageDesktopUrl,
+      coverImageMobile: coverImageMobileUrl,
       // New gallery photos/videos are still local — upload them so only
       // Storage URLs end up in the event document.
       pastEventsGallery: await uploadGalleryMedia(

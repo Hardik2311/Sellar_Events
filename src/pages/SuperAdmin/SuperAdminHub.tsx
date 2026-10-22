@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Users, Building2, ChevronRight, ShieldCheck, ArrowLeft, Globe } from 'lucide-react';
+import { Ticket, Users, Building2, ChevronRight, ShieldCheck, ArrowLeft, Globe, Percent, Banknote, Mail } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/card';
 import { ROUTES } from '../../constants/routes.constants';
 
@@ -32,6 +32,27 @@ const TILES = [
         description: 'Add, edit, publish, feature and delete events listed on outsold.in',
         icon: Globe,
         path: ROUTES.EVENTS_SUPER_ADMIN_OUTSOLD_EVENTS,
+    },
+    {
+        key: 'payments',
+        title: 'Payments & Platform Fee',
+        description: 'Turn online payments on/off, set the platform fee, GST and TCS/TDS rates',
+        icon: Percent,
+        path: ROUTES.EVENTS_SUPER_ADMIN_PAYMENTS,
+    },
+    {
+        key: 'payouts',
+        title: 'Organizer Payouts',
+        description: 'Balance owed to each organizer and record manual payouts',
+        icon: Banknote,
+        path: ROUTES.EVENTS_SUPER_ADMIN_PAYOUTS,
+    },
+    {
+        key: 'send-tickets',
+        title: 'Send Tickets',
+        description: 'Email ticket PDFs to every attendee of an event',
+        icon: Mail,
+        path: ROUTES.EVENTS_SUPER_ADMIN_SEND_TICKETS,
     },
 ];
 

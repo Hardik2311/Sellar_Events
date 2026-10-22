@@ -5,6 +5,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Search, ArrowLeft, Trash2, AlertTriangle, X } from 'lucide-react';
 import { deleteCompanyData } from '../../lib/AuthOperations';
+import { SUPER_ADMIN_UIDS } from '../../constants/superAdmins';
 
 interface CompanyData {
   id: string;
@@ -16,9 +17,6 @@ interface CompanyData {
   validity?: string;
   isTrial?: boolean;
 }
-
-// Keep in sync with functions/companies/DeleteCompany.js and isSuperAdmin() in firestore.rules.
-const SUPER_ADMIN_UIDS: string[] = ['sR4lj7OfkAc7DhdxfHhuC7XAzLC2'];
 
 const SuperAdminCompanies: React.FC = () => {
   const navigate = useNavigate();

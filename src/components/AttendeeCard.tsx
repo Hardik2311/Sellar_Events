@@ -13,6 +13,7 @@ interface AttendeeCardProps {
   onCheckIn?: (id: string) => void; // optional — hidden/disabled when the user lacks CHECK_IN_ATTENDEE permission
   onCancel?: (id: string) => void;  // optional — hidden/disabled when the user lacks CANCEL_ATTENDEE permission
   eventTitle?: string;
+  eventCategory?: string;
   eventDate?: string;
    eventTime?: string;
   eventVenue?: string;
@@ -28,9 +29,16 @@ interface AttendeeCardProps {
   customFields?: CustomField[];
   onRevive?: (id: string) => void;
   onEdit?: (attendee: Attendee) => void;
-  /** Set when this ticket is part of a group booking (one QR for the group). */
-  groupInfo?: { size: number; arrived: number };
+  /**
+   * Set when this ticket is part of a group booking (one QR for the group).
+   * The list shows the whole group as this one row.
+   */
+  groupInfo?: { size: number; arrived: number; ticketIds?: string[]; tierLabel?: string };
 }
+
+// "NUS-023 – NUS-027" for a group; a single ID otherwise.
+const formatTicketIds = (ids: string[]) =>
+  ids.length > 1 ? `${ids[0]} – ${ids[ids.length - 1]}` : ids[0] ?? '';
 
 const STATUS_STYLES: Record<Attendee['status'], string> = {
   valid: 'bg-gray-100 text-gray-600',
@@ -62,6 +70,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   onRevive,
   onEdit,
   eventTitle,
+  eventCategory,
   eventDate,
   eventTime,
   eventVenue,
@@ -93,6 +102,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   const buildTicketDataForPdf = (): AcknowledgementTicketData => ({
     ticketId: attendee.ticketId,
     tierName: attendee.tierName,
+    admits: groupInfo?.size,
     attendeeName: attendee.name,
     attendeeEmail: attendee.email,
     attendeePhone: attendee.phone,
@@ -105,6 +115,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
 
   const buildEventDataForPdf = (): AcknowledgementEventData => ({
     eventTitle,
+    eventCategory,
     eventDate,
     eventTime,
     eventVenue,
@@ -145,6 +156,11 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     }
   };
 
+  // A group row's status pill reflects the whole group, not just this ticket.
+  const groupStatus: Attendee['status'] = groupInfo
+    ? groupInfo.arrived >= groupInfo.size ? 'checked_in' : 'valid'
+    : attendee.status;
+
   return (
     <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-sm shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
       <div style={{ display: 'none' }}>
@@ -161,9 +177,22 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             <Phone size={18} />
           </a>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{attendee.name}</p>
+            <p className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{attendee.name}</span>
+              {attendee.source === 'walk_in' && (
+                <span
+                  className="shrink-0 rounded-sm border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-amber-700 dark:border-amber-500/30 dark:bg-amber-400/10 dark:text-amber-300"
+                  title="Added at the venue (walk-in)"
+                >
+                  WALK IN
+                </span>
+              )}
+            </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-              {attendee.tierName} · <span className="font-mono text-slate-600 dark:text-slate-300">{attendee.ticketId}</span>
+              {groupInfo?.tierLabel ?? attendee.tierName} ·{' '}
+              <span className="font-mono text-slate-600 dark:text-slate-300">
+                {groupInfo?.ticketIds ? formatTicketIds(groupInfo.ticketIds) : attendee.ticketId}
+              </span>
             </p>
             {attendee.accessCode && (
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">
@@ -178,9 +207,15 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
           </div>
         </button>
         <button onClick={onToggle} className="flex items-center gap-2 shrink-0 cursor-pointer">
-          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-sm ${STATUS_STYLES[attendee.status]}`}>
-            {STATUS_LABEL[attendee.status]}
-          </span>
+          {groupInfo && groupInfo.arrived > 0 && groupInfo.arrived < groupInfo.size ? (
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-sm bg-amber-50 text-amber-700">
+              {groupInfo.arrived}/{groupInfo.size} arrived
+            </span>
+          ) : (
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-sm ${STATUS_STYLES[groupStatus]}`}>
+              {STATUS_LABEL[groupStatus]}
+            </span>
+          )}
           <ChevronDown size={18} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
       </div>
@@ -240,6 +275,14 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                 )}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
+                {attendee.razorpayPaymentId && (
+                  <span
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    title={`Paid online — payment ID ${attendee.razorpayPaymentId}`}
+                  >
+                    ONLINE
+                  </span>
+                )}
                 {attendee.paymentMethod === 'manual_qr' && (
                   <span
                     className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"

@@ -39,6 +39,9 @@ export const ROUTES = {
   EVENTS_SUPER_ADMIN_LEADS: '/super-admin/plan-leads',
   EVENTS_SUPER_ADMIN_COMPANIES: '/super-admin/companies', // NEW – manage/delete companies
   EVENTS_SUPER_ADMIN_OUTSOLD_EVENTS: '/super-admin/outsold-events', // events listed on outsold.in (event_submissions)
+  EVENTS_SUPER_ADMIN_PAYMENTS: '/super-admin/payments', // platform gateway switch, platform fee, TCS/TDS
+  EVENTS_SUPER_ADMIN_PAYOUTS: '/super-admin/payouts',   // what the platform owes organizers + manual payout log
+  EVENTS_SUPER_ADMIN_SEND_TICKETS: '/super-admin/send-tickets', // bulk-email ticket PDFs for one event
 
   // Public, customer-facing routes
   // :slug is "event-title--<firestoreId>" — id is parsed out after the last "--"

@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
+import SuperAdminRoute from '../components/SuperAdminRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorScreen from '../components/ErrorScreen';
+import RouteError from '../components/RouteError';
 import { ROUTES } from '../constants/routes.constants';
 import { AppRegistry } from './AppRegistry';
 import { getSubdomain } from '../lib/subdomain';
@@ -25,6 +27,9 @@ const SuperAdminSupportTickets = lazy(() => import('../pages/SuperAdmin/SupportA
 const SuperAdminPlanLeads = lazy(() => import('../pages/SuperAdmin/SuperAdminPlanLeads'));
 const SuperAdminCompanies = lazy(() => import('../pages/SuperAdmin/SuperAdminCompanies'));
 const SuperAdminOutsoldEvents = lazy(() => import('../pages/SuperAdmin/SuperAdminOutsoldEvents'));
+const SuperAdminPayments = lazy(() => import('../pages/SuperAdmin/SuperAdminPayments'));
+const SuperAdminPayouts = lazy(() => import('../pages/SuperAdmin/SuperAdminPayouts'));
+const SuperAdminSendTickets = lazy(() => import('../pages/SuperAdmin/SuperAdminSendTickets'));
 
 const generateDynamicRoutes = (layoutType: 'EVENTS') => {
   return AppRegistry.filter((app) => app.layout === layoutType).flatMap((app) =>
@@ -58,6 +63,7 @@ const router = subdomain
             <Outlet />
           </>
         ),
+        errorElement: <RouteError />,
         children: [
           { index: true, element: <CustomerEventDiscover /> },
           { path: 'e/:slug', element: <CustomerEventDetail /> },
@@ -76,6 +82,7 @@ const router = subdomain
             <Outlet />
           </>
         ),
+        errorElement: <RouteError />,
         children: [
           { index: true, element: <Navigate to={ROUTES.EVENTS} replace /> },
 
@@ -95,12 +102,15 @@ const router = subdomain
             children: generateDynamicRoutes('EVENTS'),
           },
 
-          // Super Admin — protected (auth required) but NOT wrapped in EventsLayout/sidebar
+          // Super Admin — protected (auth required + super-admin UID check)
+          // but NOT wrapped in EventsLayout/sidebar
           {
             path: ROUTES.EVENTS_SUPER_ADMIN,
             element: (
               <ProtectedRoute>
-                <Outlet />
+                <SuperAdminRoute>
+                  <Outlet />
+                </SuperAdminRoute>
               </ProtectedRoute>
             ),
             children: [
@@ -109,6 +119,9 @@ const router = subdomain
               { path: 'plan-leads', element: <SuperAdminPlanLeads /> },
               { path: 'companies', element: <SuperAdminCompanies /> },
               { path: 'outsold-events', element: <SuperAdminOutsoldEvents /> },
+              { path: 'payments', element: <SuperAdminPayments /> },
+              { path: 'payouts', element: <SuperAdminPayouts /> },
+              { path: 'send-tickets', element: <SuperAdminSendTickets /> },
             ],
           },
 
@@ -125,7 +138,7 @@ const router = subdomain
           { path: ROUTES.PUBLIC_POLICY, element: <StorefrontPolicy /> },
 
           // Unmatched URL
-          { path: '*', element: <ErrorScreen heading="Page not found" message="This page doesn't exist or may have moved." icon="🔍" /> },
+          { path: '*', element: <ErrorScreen kind="not-found" /> },
         ],
       },
     ]);

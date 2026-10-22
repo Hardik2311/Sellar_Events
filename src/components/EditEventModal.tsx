@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import { X, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import FormField from './ui/FormField';
+import PaymentModeSelector from './PaymentModeSelector';
+import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
+import { describeFee } from '../lib/platformFee';
 import {
   FloatingLabelInput,
   FloatingLabelSelect,
@@ -87,6 +90,7 @@ const toFormState = (event: EventItem): EventFormState => ({
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
   const { settings: companySettings } = useCompanySettings();
+  const { config: feeConfig } = usePlatformFeeConfig(event.companyId, event.id);
   const [form, setForm] = useState<EventFormState>(() => toFormState(event));
   const titleEditorRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement>(null);
@@ -130,27 +134,53 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
     form.paymentCollectionMode !== 'manual_qr' ||
     isValidUpi(form.upiId);
 
-  const isSavable =
-    stripHtml(form.title).length > 0 &&
-    Boolean(form.date) &&
-    Boolean(form.time) &&
-    (form.isOnline || form.venue.trim().length > 0) &&
-    (!req.endDate || form.endDate) &&
-    (!form.date || !form.endDate || form.endDate >= form.date) &&
-    (!req.description || stripHtml(form.description).length > 0) &&
-    (!req.images || form.images.length > 0 || Boolean(form.coverImageDesktop) || Boolean(form.coverImageMobile)) &&
-    (!isOtherCategory || form.customCategory.trim().length > 0) &&
-    (form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink)) &&
-    isManualQRReady;
+  // Gateway mode collects into the platform's account, so it needs the
+  // platform gateway switched on and the organizer's payout bank account.
+  const isGatewayEnabled = feeConfig.gatewayEnabled;
+  const isPayoutReady = !!companySettings.payments.payoutAccountReady;
+  const isGatewayReady =
+    form.registrationMode !== 'tickets' ||
+    form.paymentCollectionMode !== 'gateway' ||
+    (isGatewayEnabled && isPayoutReady);
+
+  // Listed out (instead of one opaque boolean) so the disabled Save button
+  // can actually tell the organizer what's missing — previously it just sat
+  // greyed out with no explanation, which looked like the button was broken.
+  const missingReasons: string[] = [];
+  if (stripHtml(form.title).length === 0) missingReasons.push('Event title is required.');
+  if (!form.date) missingReasons.push('Event date is required.');
+  if (!form.time) missingReasons.push('Event time is required.');
+  if (!form.isOnline && form.venue.trim().length === 0) missingReasons.push('Venue is required for an in-person event.');
+  if (req.endDate && !form.endDate) missingReasons.push('End date is required.');
+  if (form.date && form.endDate && form.endDate < form.date) missingReasons.push('End date must be on or after the start date.');
+  if (req.description && stripHtml(form.description).length === 0) missingReasons.push('Event description is required.');
+  if (req.images && form.images.length === 0 && !form.coverImageDesktop && !form.coverImageMobile) missingReasons.push('At least one cover image is required.');
+  if (isOtherCategory && form.customCategory.trim().length === 0) missingReasons.push('Custom category name is required.');
+  if (form.registrationMode !== 'tickets' && !isValidUrl(form.rsvpLink)) missingReasons.push('A valid RSVP link (http/https) is required.');
+  if (!isManualQRReady) missingReasons.push('A valid UPI ID is required for manual QR payments.');
+  if (!isGatewayReady) missingReasons.push(
+    isGatewayEnabled ? 'Your payout bank account must be set up before using online payments.' : 'Online payments are not enabled for your account yet.'
+  );
+
+  const isSavable = missingReasons.length === 0;
 
   const [isSaving, setIsSaving] = useState(false);
   // True while the past-events gallery is still compressing photos/videos
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const handleSave = async () => {
     if (!isSavable || isSaving || galleryBusy) return;
     setIsSaving(true);
+    setSaveError(null);
     try {
       await onSave(form); // onSave prop type becomes (updated) => Promise<void>
+    } catch (err: any) {
+      console.error('Failed to save event:', err);
+      setSaveError(
+        err?.code === 'invalid-argument' || /exceeds the maximum allowed size/i.test(err?.message || '')
+          ? 'This event is too large to save — try a smaller/simpler cover image or shorten the description.'
+          : err?.message || 'Could not save changes. Please try again.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -514,34 +544,16 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                 {form.registrationMode === 'tickets' ? (
                   <>
                     {/* NEW — payment collection method (missing in the previous edit) */}
-                    {companySettings.payments.allowManualQR && (
-                      <FormField label="Payment collection" htmlFor="edit-payment-mode">
-                        <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
-                          <button
-                            type="button"
-                            disabled
-                            title="Coming soon — no live payment gateway is connected yet"
-                            className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-sm font-medium text-gray-400 dark:text-slate-600 opacity-50"
-                          >
-                            Payment gateway
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => update('paymentCollectionMode', 'manual_qr')}
-                            className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
-                              ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                              : 'text-gray-500 dark:text-slate-400'
-                              }`}
-                          >
-                            UPI QR (manual)
-                          </button>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                          {form.paymentCollectionMode === 'manual_qr'
-                            ? "Attendees scan your QR, pay directly, and upload a screenshot. They're added as attendees immediately — verify payment manually at check-in."
-                            : 'Payment gateway isn’t live yet — switch to UPI QR (manual) to actually collect payment.'}
-                        </p>
-                      </FormField>
+                    {(companySettings.payments.allowManualQR || isGatewayEnabled) && (
+                      <PaymentModeSelector
+                        id="edit-payment-mode"
+                        value={form.paymentCollectionMode}
+                        onChange={(mode) => update('paymentCollectionMode', mode)}
+                        allowManualQR={companySettings.payments.allowManualQR}
+                        gatewayEnabled={isGatewayEnabled}
+                        payoutReady={isPayoutReady}
+                        feeLabel={describeFee(feeConfig)}
+                      />
                     )}
 
                     {/* NEW — QR image + UPI details (missing in the previous edit) */}
@@ -684,6 +696,21 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
         </div>
 
         {/* Footer actions */}
+        {saveError && (
+          <div className="shrink-0 border-t border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-3 py-2">
+            <p className="text-xs font-semibold text-red-700 dark:text-red-400">{saveError}</p>
+          </div>
+        )}
+        {!isSavable && !isSaving && !galleryBusy && missingReasons.length > 0 && (
+          <div className="shrink-0 border-t border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Before you can save:</p>
+            <ul className="mt-1 list-disc pl-4 text-xs text-amber-700 dark:text-amber-400">
+              {missingReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1E293B] p-3">
           <button
             onClick={onClose}

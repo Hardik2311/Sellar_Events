@@ -65,6 +65,7 @@ export interface PublicEvent {
   payeeName?: string;
   creditExpiresAt?: string | null;
   accessCodes?: AccessCodeEntry[]; // ALL valid share codes ever generated for this event
+  ticketSeq?: number; // last ticket number issued — see nextTicketNumbers() in lib/ticketing.ts
   maxTicketsPerOrder?: number; // cap on tickets a single buyer can select in one order; undefined = default cap (10)
   // NEW — shown on the attendee's acknowledgement ticket/PDF
   arriveByTime?: string | null;

@@ -1,19 +1,10 @@
 import React from 'react';
 import ErrorScreen from './ErrorScreen';
-import { dismissServerPreview } from '../lib/storefrontData';
+import { handleAppError } from '../lib/appError';
 
-// Vite content-hashes chunk filenames, so a hash a visitor's browser is still
-// holding (an open tab spanning a deploy, or a stale cached index.html) can
-// point at a JS file that no longer exists after the next deploy. That 404s
-// the dynamic import(), and with nothing to catch the rejection React would
-// otherwise unmount straight to a blank white screen. This boundary catches
-// that specific failure and self-heals with a single automatic reload before
-// falling back to a manual "please refresh" screen.
-const CHUNK_ERROR_PATTERN =
-  /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk|Loading CSS chunk/i;
-
-const RELOAD_GUARD_KEY = 'errorBoundary:reloadedForChunkError';
-
+// Catches errors outside the router (providers, Suspense, router setup).
+// Errors thrown inside a route are caught by React Router first and shown
+// via RouteError instead; both share handleAppError's chunk-reload logic.
 interface State {
   hasError: boolean;
 }
@@ -26,22 +17,12 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.error('Unhandled error in app tree:', error);
-    // Otherwise the server's storefront preview would sit on top of the error screen.
-    dismissServerPreview();
-
-    if (CHUNK_ERROR_PATTERN.test(error.message)) {
-      const alreadyTriedReload = sessionStorage.getItem(RELOAD_GUARD_KEY) === '1';
-      if (!alreadyTriedReload) {
-        sessionStorage.setItem(RELOAD_GUARD_KEY, '1');
-        window.location.reload();
-      }
-    }
+    handleAppError(error);
   }
 
   render() {
     if (this.state.hasError) {
-      return <ErrorScreen />;
+      return <ErrorScreen kind="crash" />;
     }
 
     return this.props.children;
