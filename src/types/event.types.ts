@@ -19,6 +19,7 @@ export interface EventSummary {
   id: string;
   title: string;
   coverImage?: string;
+  posterImage?: string;            // portrait-first cover, for the ticket poster hero
   category: string;
   status: EventStatus;
   time?: string;
@@ -40,6 +41,10 @@ export interface EventSummary {
   ageLimit?: string | null;        // NEW — shown on the PDF acknowledgement
   helplineNumber?: string | null;  // NEW — shown on the PDF acknowledgement
   salesTrend: SalesTrendPoint[]; // per-event daily revenue, scoped to the selected date range
+  // NEW — organizer's manual UPI QR details, for showing a scannable QR
+  // when collecting a walk-in payment in person
+  upiId?: string;
+  payeeName?: string;
 }
 
 export interface SalesTrendPoint {

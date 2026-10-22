@@ -25,6 +25,9 @@ interface AppEvent {
   isPrivate: boolean;
   status: string; // 'draft' | 'published' | 'deleted'
   featured: boolean;
+  // outsold.in's query filters on the literal string "true" — not a boolean —
+  // so this must be written/read as a string, not `!!data.isWebsite`.
+  isWebsite: boolean;
   cover: string;
   ticketsSold: number;
   ticketsTotal: number;
@@ -75,6 +78,7 @@ const loadAppEvents = async (): Promise<{ companies: { id: string; name: string 
             isPrivate: !!data.isPrivate,
             status: data.status || 'draft',
             featured: !!data.featured,
+            isWebsite: data.isWebsite === 'true',
             cover: data.coverImageMobile || data.coverImageDesktop || data.coverImageUrls?.[0] || data.coverImageUrl || '',
             ticketsSold: tiers.reduce((s, t) => s + (Number(t.sold) || 0), 0),
             ticketsTotal: tiers.reduce((s, t) => s + (Number(t.quantity) || 0), 0),
@@ -174,6 +178,11 @@ const SuperAdminAppEvents: React.FC = () => {
       : run(e, { status: 'published', everPublished: true }, { status: 'published' });
 
   const toggleFeatured = (e: AppEvent) => run(e, { featured: !e.featured }, { featured: !e.featured });
+
+  // Written as the string "true"/"false" — outsold.in's query filters on
+  // the literal string, so a boolean here would silently never match.
+  const toggleWebsite = (e: AppEvent) =>
+    run(e, { isWebsite: e.isWebsite ? 'false' : 'true' }, { isWebsite: !e.isWebsite });
 
   // Same soft delete the organizer app uses: restorable, hard-deleted after the grace window.
   const softDelete = async (e: AppEvent) => {
@@ -343,6 +352,27 @@ const SuperAdminAppEvents: React.FC = () => {
                         </span>
                         <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${live ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} aria-hidden="true">
                           <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${live ? 'translate-x-4' : ''}`} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={e.isWebsite}
+                        aria-label={`${e.title} live on outsold.in`}
+                        onClick={() => toggleWebsite(e)}
+                        disabled={busy}
+                        className={`flex items-center justify-between gap-3 rounded-sm border px-2.5 py-1.5 text-xs font-bold transition-colors disabled:opacity-60 ${
+                          e.isWebsite
+                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                            : 'border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${e.isWebsite ? 'bg-emerald-500 motion-safe:animate-pulse' : 'bg-slate-400'}`} aria-hidden="true" />
+                          {e.isWebsite ? 'Live on outsold.in' : 'Not on outsold.in'}
+                        </span>
+                        <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${e.isWebsite ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} aria-hidden="true">
+                          <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${e.isWebsite ? 'translate-x-4' : ''}`} />
                         </span>
                       </button>
                       <div className="flex flex-wrap gap-2">

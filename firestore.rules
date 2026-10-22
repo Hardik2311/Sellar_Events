@@ -149,6 +149,49 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // ── Platform payments (functions/payments/*) ─────────────────────────
+    // Fee settings: public so checkout can show the fee before paying;
+    // only super admins change them (Super Admin → Payments).
+    match /platform/{docId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+    // Custom platform fee for one event — doc id "{companyId}__{eventId}".
+    match /eventFeeOverrides/{overrideId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+    // Organizer's bank details for manual payouts. Read is open to any
+    // company member (not just the owner) so door staff adding walk-in
+    // attendees can fetch the UPI id to generate a payment QR; only the
+    // owner can change the account.
+    match /payoutAccounts/{companyId} {
+      allow read: if isCompanyMember(companyId) || isSuperAdmin();
+      allow write: if isOwner(companyId);
+    }
+    // What the platform owes each organizer (+ per-event breakdown under
+    // /events) — maintained by Cloud Functions. {document=**} also matches
+    // the ledger doc itself.
+    match /payoutLedger/{companyId}/{document=**} {
+      allow read: if isCompanyMember(companyId) || isSuperAdmin();
+      allow write: if false;
+    }
+    // Event-credit purchases paid online (Account → Recharge) — written only
+    // by functions/payments/creditPurchases.js.
+    match /creditPurchases/{purchaseId} {
+      allow read: if isSuperAdmin() || isCompanyMember(resource.data.companyId);
+      allow write: if false;
+    }
+    // Manual payouts, written by the recordPayout callable.
+    match /payouts/{payoutId} {
+      allow read: if isSuperAdmin() || isCompanyMember(resource.data.companyId);
+      allow write: if false;
+    }
+    // Super Admin → Payouts reads every company's orders.
+    match /{path=**}/orders/{orderId} {
+      allow read: if isSuperAdmin();
+    }
+
     // Lets a super admin add OR remove credits (Manage Credits page) — only
     // the eventCredits field may change, and it can never go negative.
     function isSuperAdminCreditChange(companyId) {
@@ -229,7 +272,17 @@ service cloud.firestore {
           || hasPermission(companyId, 'toggleEventFeatured')
           || hasPermission(companyId, 'duplicateEvent')
           || (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tiers', 'accessCodes']) &&
+            // Gateway (Razorpay) events: seats/codes are only ever changed
+            // by Cloud Functions, so the public can't touch them. Members
+            // still can — walk-ins by team staff go through this branch.
+            (resource.data.get('paymentCollectionMode', null) != 'gateway' || isCompanyMember(companyId)) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tiers', 'accessCodes', 'ticketSeq']) &&
+            // ticketSeq (ticket-number counter) may only move forward
+            (
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ticketSeq']) ||
+              (request.resource.data.ticketSeq is int &&
+                request.resource.data.ticketSeq >= resource.data.get('ticketSeq', 0))
+            ) &&
             request.resource.data.tiers.size() == resource.data.tiers.size() &&
             (
               !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accessCodes']) ||
@@ -253,13 +306,29 @@ service cloud.firestore {
           // doc itself. It cannot catch a fabricated tierId or wrong amount.
           // Move this server-side (Cloud Function) before real payments go
           // live — see update-rule comment above re: the same limitation.
-          allow create: if isOwner(companyId) || (
+          // Tickets paid through Razorpay are written only by Cloud Functions
+          // (functions/payments/fulfillOrder.js): nobody else may create a
+          // ticket on a gateway event, or one carrying Razorpay/order ids.
+          allow create: if (
+            !request.resource.data.keys().hasAny(['razorpayPaymentId', 'razorpayOrderId', 'orderId']) &&
+            (
+              isCompanyMember(companyId) ||
+              get(/databases/$(database)/documents/companies/$(companyId)/events/$(eventId)).data.get('paymentCollectionMode', null) != 'gateway'
+            )
+          ) && (isOwner(companyId) || (
             request.resource.data.status == 'valid' &&
             request.resource.data.checkedInAt == null &&
             request.resource.data.amountPaid is number && request.resource.data.amountPaid >= 0 &&
             request.resource.data.ticketId is string &&
             request.resource.data.ticketTierId is string
-          );
+          ));
+        }
+
+        // Gateway checkout orders — written only by Cloud Functions
+        // (functions/payments/*). Organizers can read them for support.
+        match /orders/{orderId} {
+          allow read: if isCompanyMember(companyId);
+          allow write: if false;
         }
 
         // Expenses (Event budgeting/expenses) — CHANGED
@@ -275,9 +344,15 @@ service cloud.firestore {
         }
       }
 
-      // Catch-all for any other company subcollections
+      // Server-only data — Cloud Functions only.
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+
+      // Catch-all for any other company subcollections. Rules are OR'd, so
+      // `private` must be excluded here or the deny above has no effect.
       match /{collection}/{docId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read, write: if isCompanyMember(companyId) && collection != 'private';
       }
     }
   }

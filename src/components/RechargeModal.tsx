@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { Wallet, Zap, PhoneCall, ArrowLeft, Check } from 'lucide-react';
+import { Wallet, Zap, PhoneCall, ArrowLeft, Check, CreditCard, CheckCircle2 } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { useEventCredits } from '../hooks/useEventCredits';
+import { useAuth } from '../context/AuthContext';
+import { buyEventCredits, PaymentCancelledError } from '../lib/razorpay';
 
+// Displayed prices. The amount actually charged is set on the server in
+// functions/payments/creditPurchases.js (CREDIT_PLANS) — keep them in sync.
+// Prices include 18% GST.
 const PLANS = [
   {
     events: 1,
@@ -56,8 +61,50 @@ const PLANS = [
 
 const RechargePage: React.FC = () => {
   const { credits, loading } = useEventCredits();
+  const { profile } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
   const [showContactPopup, setShowContactPopup] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [purchased, setPurchased] = useState<number | null>(null); // credits just added
+
+  const choosePlan = (plan: typeof PLANS[number] | null) => {
+    setSelectedPlan(plan);
+    setPayError(null);
+    setPurchased(null);
+  };
+
+  const handlePay = async () => {
+    if (!selectedPlan || !profile?.companyId) return;
+    setPaying(true);
+    setPayError(null);
+    try {
+      const phone = (profile.phone ?? '').replace(/\D/g, '').slice(-10);
+      const added = await buyEventCredits(
+        profile.companyId,
+        selectedPlan.events,
+        {
+          name: profile.fullName || undefined,
+          email: profile.email || undefined,
+          contact: phone ? `+91${phone}` : undefined,
+        },
+        '#007A78'
+      );
+      setPurchased(added);
+    } catch (err) {
+      const code = (err as { message?: string })?.message;
+      if (err instanceof PaymentCancelledError) {
+        setPayError('Payment was cancelled. No credits were added. You can try again.');
+      } else if (code === 'GATEWAY_NOT_CONFIGURED' || code === 'PAYMENT_INIT_FAILED') {
+        setPayError('Online payment isn’t available right now. Contact our team to activate this plan.');
+      } else {
+        console.error('Credit purchase failed:', err);
+        setPayError('We couldn’t confirm your payment. If money was debited, your credits will be added shortly. Contact our team if they don’t appear.');
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -113,7 +160,7 @@ const RechargePage: React.FC = () => {
                     {PLANS.map((plan) => (
                       <button
                         key={plan.events}
-                        onClick={() => setSelectedPlan(plan)}
+                        onClick={() => choosePlan(plan)}
                         className="relative flex flex-col gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-slate-800 px-4 py-4 hover:border-[#007A78] dark:hover:border-[#2DD4BF] hover:shadow-md transition-all text-left h-full"
                       >
                         {plan.tag && (
@@ -151,10 +198,28 @@ const RechargePage: React.FC = () => {
                     </p>
                   </div>
                 </div>
+              ) : purchased !== null ? (
+                <div className="flex flex-col items-center text-center gap-3 py-6">
+                  <div className="p-3 rounded-full bg-emerald-100 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300">
+                    <CheckCircle2 size={26} />
+                  </div>
+                  <p className="text-base font-bold text-slate-900 dark:text-white">
+                    {purchased} event credit{purchased === 1 ? '' : 's'} added
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Payment received. Your new balance is shown above.
+                  </p>
+                  <button
+                    onClick={() => choosePlan(null)}
+                    className="mt-1 rounded-sm border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    Done
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-col items-center text-center gap-3 py-4">
                   <div className="p-3 rounded-full bg-[#007A78]/10 dark:bg-[#2DD4BF]/15 text-[#007A78] dark:text-[#2DD4BF]">
-                    <PhoneCall size={22} />
+                    <CreditCard size={22} />
                   </div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {selectedPlan.events} Event plan ₹{selectedPlan.price.toLocaleString('en-IN')}
@@ -168,7 +233,7 @@ const RechargePage: React.FC = () => {
                     ))}
                   </ul>
                   <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mt-1">
-                    Online payment isn't available yet. Contact our team to activate this plan we'll manually add credits to your account.
+                    Pay securely online by UPI, card, net banking or wallet. Credits are added to your account as soon as the payment goes through. Price includes 18% GST.
                   </p>
                   <div className="w-full max-w-xs rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-2.5 text-left">
                     <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5">
@@ -178,20 +243,31 @@ const RechargePage: React.FC = () => {
                       By purchasing this plan you acknowledge that credits are <span className="font-bold">strictly non-refundable</span> once consumed on publishing an event, regardless of the reason (event deleted, cancelled, duplicated by mistake, or otherwise). Each credit only keeps that event live for <span className="font-bold">3 months</span> after it expires, republishing will use another credit. Please confirm only if you are sure you need these credits.
                     </p>
                   </div>
+                  {payError && (
+                    <p className="w-full max-w-xs text-xs font-semibold text-red-600 dark:text-red-400">{payError}</p>
+                  )}
                   <div className="flex gap-2 w-full max-w-xs mt-1">
                     <button
-                      onClick={() => setSelectedPlan(null)}
+                      onClick={() => choosePlan(null)}
+                      disabled={paying}
                       className="flex-1 flex items-center justify-center gap-1 rounded-sm border border-slate-300 dark:border-slate-700 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                     >
                       <ArrowLeft size={13} /> Back
                     </button>
                     <button
-                      onClick={() => setShowContactPopup(true)}
-                      className="flex-1 rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] py-2 text-xs font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5]"
+                      onClick={handlePay}
+                      disabled={paying}
+                      className="flex-[2] rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] py-2 text-xs font-semibold text-white dark:text-slate-950 hover:bg-[#006361] dark:hover:bg-[#22b8a5] disabled:opacity-50"
                     >
-                      Contact Admin
+                      {paying ? 'Processing…' : `Pay ₹${selectedPlan.price.toLocaleString('en-IN')}`}
                     </button>
                   </div>
+                  <button
+                    onClick={() => setShowContactPopup(true)}
+                    className="flex items-center gap-1 text-xs font-semibold text-[#007A78] dark:text-[#2DD4BF] underline"
+                  >
+                    <PhoneCall size={12} /> Prefer to pay offline? Contact admin
+                  </button>
                 </div>
               )}
             </CardContent>

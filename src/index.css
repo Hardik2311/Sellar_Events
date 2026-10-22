@@ -47,6 +47,81 @@
   text-transform: uppercase;
 }
 
+/* ── Error screen (404 + crash) ─────────────────────────────────────────
+   Wears .brand-theme; on organizer pages it also follows dark mode by
+   re-pointing the brand tokens at an ink palette. Storefront stays light. */
+.error-screen .error-stub {
+  background: var(--brand-black);
+  color: var(--brand-cream);
+}
+.error-screen .error-stamp {
+  color: var(--brand-danger);
+  border-color: currentColor;
+}
+.error-btn-primary {
+  background: var(--brand-black);
+  color: var(--brand-cream);
+}
+.error-btn-primary:hover {
+  background: #2b2925;
+}
+.error-btn-secondary {
+  border: 1px solid var(--brand-black);
+  background: var(--brand-surface);
+  color: var(--brand-black);
+}
+.error-btn-secondary:hover {
+  background: var(--brand-cream);
+}
+
+.dark .error-screen:not(.error-screen--storefront) {
+  --brand-black: #f4efe4;
+  --brand-cream: #14120f;
+  --brand-surface: #1e1c18;
+  --brand-muted: #a9a49a;
+  --brand-line: rgb(244 239 228 / 0.14);
+  --brand-line-strong: #8a8882;
+  --brand-danger: #f28b82;
+  --brand-teal: #2dd4bf;
+  --brand-shadow-raise: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+.dark .error-screen:not(.error-screen--storefront) .error-btn-primary:hover {
+  background: #ffffff;
+}
+.dark .error-screen:not(.error-screen--storefront) .error-btn-secondary {
+  background: transparent;
+}
+.dark .error-screen:not(.error-screen--storefront) .error-btn-secondary:hover {
+  background: var(--brand-surface);
+}
+
+/* The ticket rests slightly askew; on load it drops in, then the VOID stamp lands. */
+.error-ticket {
+  rotate: -3deg;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .error-ticket {
+    animation: error-ticket-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .error-ticket .error-stamp {
+    animation: error-stamp-in 260ms cubic-bezier(0.3, 1.4, 0.5, 1) 520ms both;
+  }
+}
+@keyframes error-ticket-in {
+  from {
+    opacity: 0;
+    transform: translateY(-28px);
+    rotate: -9deg;
+  }
+}
+@keyframes error-stamp-in {
+  from {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
 @font-face {
   font-family: 'Figtree';
   src: url('./assets/fonts/Figtree-Variable.woff2') format('woff2');

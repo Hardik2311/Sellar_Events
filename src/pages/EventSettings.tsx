@@ -7,6 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { useCompanySettings, type EventFieldRequirements } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
+import OnlinePaymentsCard from '../components/OnlinePaymentsCard';
+import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
+import { ROLES } from '../enum/enum';
 
 const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean }> = ({
   checked,
@@ -38,6 +41,7 @@ const FIELD_LABELS: { key: keyof EventFieldRequirements; label: string; hint: st
 const EventFieldSettings: React.FC = () => {
   const { profile } = useAuth();
   const { settings, loading } = useCompanySettings();
+  const { config: feeConfig } = usePlatformFeeConfig(profile?.companyId);
 
   type DraftEventSettings = Pick<typeof settings,
     'rsvpEnabled' | 'eventFieldRequirements' | 'autoFeatureNearest' | 'ticketDisplay' | 'attendeeQuestionsEnabled' | 'payments'
@@ -80,6 +84,9 @@ const EventFieldSettings: React.FC = () => {
     }));
   };
 
+  // Manual QR can only be switched off when the platform's payment gateway is on.
+  const isGatewayEnabled = feeConfig.gatewayEnabled;
+
   const handleSaveSettings = async () => {
     if (!profile?.companyId) {
       setSaveError('Company not found. Please try again.');
@@ -90,7 +97,13 @@ const EventFieldSettings: React.FC = () => {
     setSaveSuccess(false);
     try {
       const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
-      await setDoc(settingsRef, { ...draft }, { merge: true });
+      // Only the manual-QR toggle is saved from here; a deep merge leaves
+      // `payments.payoutAccountReady` (set by OnlinePaymentsCard) intact.
+      await setDoc(
+        settingsRef,
+        { ...draft, payments: { allowManualQR: draft.payments.allowManualQR || !isGatewayEnabled } },
+        { merge: true }
+      );
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -212,11 +225,14 @@ const EventFieldSettings: React.FC = () => {
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Allow manual UPI QR payments</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Adds UPI QR as an alternative to the gateway. QR is generated automatically from your UPI ID. Attendees scan, pay, upload a screenshot, and are added instantly for manual verification at check-in.
+                    {!isGatewayEnabled && ' It can be turned off once online payments are available.'}
                   </p>
                 </div>
                 <SettingToggle
-                  checked={draft.payments.allowManualQR}
-                  disabled={true}
+                  checked={draft.payments.allowManualQR || !isGatewayEnabled}
+                  // Manual QR can only be switched off once the platform gateway
+                  // is on — otherwise events would have no way to collect payment.
+                  disabled={loading || !isGatewayEnabled}
                   onChange={() =>
                     setDraft((prev) => ({
                       ...prev,
@@ -227,6 +243,14 @@ const EventFieldSettings: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {profile?.companyId && (
+            <OnlinePaymentsCard
+              companyId={profile.companyId}
+              canManage={(profile.role || ROLES.ORGANIZER) === ROLES.ORGANIZER}
+              payoutAccountReady={!!settings.payments.payoutAccountReady}
+            />
+          )}
 
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>

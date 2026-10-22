@@ -1,14 +1,31 @@
-import { jsPDF } from 'jspdf';
+import { jsPDF, GState } from 'jspdf';
+import QRCode from 'qrcode';
+import { loadImageAsPosterHero } from './imageBanner';
+import { PDF_FONT_METRICS, PdfFont, registerPdfFonts, type PdfFontName } from './pdfFonts';
+import {
+  MONTHS,
+  WEEKDAYS,
+  buildCalendarUrl,
+  buildDirectionsUrl,
+  formatAmount,
+  formatClock,
+  formatFullDate,
+  htmlToPlainLines,
+  maskEmail,
+  maskPhone,
+  parseIsoDate,
+  type RGB,
+} from './ticketFormat';
 
-export interface BrandLogo {
-  dataUrl: string;
-  width: number;   // natural px width
-  height: number;  // natural px height
-}
+// Ticket PDF, built to the "PDF ticket, A4" artboard of the Outsold e-ticket
+// design. Every layout number below is a design px (794 x 1123 = A4 at 96dpi);
+// the Pen helper converts to PDF points (x 0.75) at draw time, so the numbers
+// can be compared 1:1 with the design.
+
 export interface AcknowledgementTicketData {
   ticketId: string;
   tierName: string;
-  tierTag?: string;
+  admits?: number;      // group pass: one QR admits this many people
   attendeeName: string;
   attendeeEmail?: string;
   attendeePhone?: string;
@@ -21,783 +38,734 @@ export interface AcknowledgementTicketData {
 
 export interface AcknowledgementEventData {
   eventTitle?: string;
+  eventCategory?: string;
   eventDate?: string;
   eventTime?: string;
   eventVenue?: string;
-  eventBannerDataUrl?: string | null;
+  eventBannerDataUrl?: string | null; // pre-composited hero from loadTicketPdfHero()
   eventConsentText?: string;
-  eventGoodToKnowText?: string;     // NEW — organizer's "before the event" notes
-  eventIsOnline?: boolean;          // NEW — hides "Get directions"
-  eventIsPrivate?: boolean;         // NEW — hides "Book more tickets"
+  eventGoodToKnowText?: string;     // organizer's "before the event" notes
+  eventIsOnline?: boolean;          // hides "Directions"
+  eventIsPrivate?: boolean;         // hides "Book more tickets"
   eventArriveBy?: string | null;
   eventAgeLimit?: string | null;
   eventHelplineNumber?: string | null;
   bookMoreTicketsUrl?: string | null;
 }
 
+// ── Design tokens (Outsold storefront) ──
+const INK: RGB = [20, 18, 15];
+const WHITE: RGB = [255, 255, 255];
+const LINE: RGB = [214, 210, 200];
+const MUTED: RGB = [98, 95, 90];
+const TEAL: RGB = [0, 122, 120];
+const YELLOW: RGB = [245, 197, 24];
+const SOFT_YELLOW: RGB = [255, 247, 207];
+const RED: RGB = [180, 35, 24];
+const CUT_LINE: RGB = [138, 136, 130];
+
+// ── Page geometry (design px) ──
+const PAGE_W = 794;
+const PAGE_H = 1123;
+const PAD = 48;
+const CONTENT_W = PAGE_W - PAD * 2;   // 698
+const GAP = 20;
+const FOOTER_H = 1 + 16 + 16;         // border + padding-top + one 16px line
+const CONTENT_BOTTOM = PAGE_H - PAD - FOOTER_H - GAP;
+
+const HERO_H = 210;
+const POSTER_H = 186;
+const DATE_BOX_W = 80;
+const CUT_BAND_W = 60;     // ink "ADMIT ONE" band on the ticket's left edge
+const CUT_QR_COL_W = 236;
+const QR_SIZE = 184;
+
+const PX = 0.75; // design px -> PDF pt
+
+/**
+ * Pre-fetches the event poster and composites the PDF hero (blurred backdrop +
+ * centred poster). Call it ahead of time (e.g. on event load) and pass the
+ * result as `eventBannerDataUrl`, so building the PDF needs no network.
+ */
+export const loadTicketPdfHero = (url: string) => loadImageAsPosterHero(url, CONTENT_W, HERO_H, POSTER_H);
+
+// ── Drawing helper: all inputs in design px ──
+const HELVETICA_METRICS = { ascent: 0.77, descent: 0.23 };
+
+class Pen {
+  private fontName: PdfFontName = PdfFont.Body;
+  private sizePx = 14;
+  readonly doc: jsPDF;
+  private readonly branded: boolean;
+
+  constructor(doc: jsPDF, branded: boolean) {
+    this.doc = doc;
+    this.branded = branded;
+  }
+
+  font(name: PdfFontName, sizePx: number) {
+    this.fontName = name;
+    this.sizePx = sizePx;
+    if (this.branded) {
+      this.doc.setFont(name, 'normal');
+    } else if (name === PdfFont.Mono) {
+      this.doc.setFont('courier', 'bold');
+    } else {
+      this.doc.setFont('helvetica', name === PdfFont.Body ? 'normal' : 'bold');
+    }
+    this.doc.setFontSize(sizePx * PX);
+    return this;
+  }
+
+  color(c: RGB) {
+    this.doc.setTextColor(...c);
+    return this;
+  }
+
+  /** Rendered width in px, including letter-spacing between characters. */
+  width(text: string, letterSpacing = 0) {
+    return this.doc.getTextWidth(text) / PX + letterSpacing * Math.max(0, text.length - 1);
+  }
+
+  /**
+   * Draws one line whose CSS line box starts at `top` with height `lineHeight`
+   * — the baseline is placed exactly where a browser would put it.
+   */
+  text(
+    str: string,
+    x: number,
+    top: number,
+    lineHeight: number,
+    opts: { align?: 'left' | 'center' | 'right'; letterSpacing?: number; link?: string } = {}
+  ) {
+    const m = this.branded ? PDF_FONT_METRICS[this.fontName] : HELVETICA_METRICS;
+    const fs = this.sizePx;
+    const baseline = top + (lineHeight - (m.ascent + m.descent) * fs) / 2 + m.ascent * fs;
+    const ls = opts.letterSpacing ?? 0;
+    const w = this.width(str, ls);
+    const left = opts.align === 'right' ? x - w : opts.align === 'center' ? x - w / 2 : x;
+    this.doc.text(str, left * PX, baseline * PX, ls ? { charSpace: ls * PX } : undefined);
+    if (opts.link) this.doc.link(left * PX, top * PX, w * PX, lineHeight * PX, { url: opts.link });
+    return w;
+  }
+
+  /** Word-wraps to `maxWidth`; with `maxLines`, the last kept line ends in an ellipsis. */
+  wrap(str: string, maxWidth: number, maxLines = Infinity, letterSpacing = 0): string[] {
+    const lines: string[] = [];
+    // splitTextToSize ignores letter-spacing, so reserve room for it up front.
+    const approxChars = maxWidth / (this.sizePx * 0.45);
+    const wrapWidth = maxWidth - letterSpacing * approxChars;
+    str.split('\n').forEach((para) => {
+      const wrapped = this.doc.splitTextToSize(para || ' ', wrapWidth * PX) as string[];
+      lines.push(...wrapped);
+    });
+    if (lines.length <= maxLines) return lines;
+    const kept = lines.slice(0, maxLines);
+    let last = kept[maxLines - 1];
+    while (last.length > 1 && this.width(`${last}…`, letterSpacing) > maxWidth) last = last.slice(0, -1);
+    kept[maxLines - 1] = `${last.trimEnd()}…`;
+    return kept;
+  }
+
+  /** Shrinks the font from `maxSize` down to `minSize` until `str` fits in `maxLines`. */
+  fit(name: PdfFontName, str: string, maxWidth: number, maxLines: number, maxSize: number, minSize: number, letterSpacing = 0) {
+    for (let size = maxSize; size >= minSize; size -= 2) {
+      this.font(name, size);
+      const lines = this.wrap(str, maxWidth, Infinity, letterSpacing);
+      if (lines.length <= maxLines) return { size, lines };
+    }
+    this.font(name, minSize);
+    return { size: minSize, lines: this.wrap(str, maxWidth, maxLines, letterSpacing) };
+  }
+
+  rect(x: number, y: number, w: number, h: number, fill: RGB) {
+    this.doc.setFillColor(...fill);
+    this.doc.rect(x * PX, y * PX, w * PX, h * PX, 'F');
+  }
+
+  roundRect(x: number, y: number, w: number, h: number, r: number, fill?: RGB, stroke?: RGB, strokeW = 1) {
+    if (fill) this.doc.setFillColor(...fill);
+    if (stroke) {
+      this.doc.setDrawColor(...stroke);
+      this.doc.setLineWidth(strokeW * PX);
+    }
+    const style = fill && stroke ? 'FD' : fill ? 'F' : 'S';
+    this.doc.roundedRect(x * PX, y * PX, w * PX, h * PX, r * PX, r * PX, style);
+  }
+
+  line(x1: number, y1: number, x2: number, y2: number, color: RGB, w = 1, dash?: number[]) {
+    this.doc.setDrawColor(...color);
+    this.doc.setLineWidth(w * PX);
+    if (dash) this.doc.setLineDashPattern(dash.map((d) => d * PX), 0);
+    this.doc.line(x1 * PX, y1 * PX, x2 * PX, y2 * PX);
+    if (dash) this.doc.setLineDashPattern([], 0);
+  }
+
+  /** Horizontal rule drawn as a filled box so 1px lines stay crisp and exact. */
+  hr(x: number, y: number, w: number, color: RGB = LINE) {
+    this.rect(x, y, w, 1, color);
+  }
+
+  circle(cx: number, cy: number, r: number, fill?: RGB, stroke?: RGB, strokeW = 1) {
+    if (fill) this.doc.setFillColor(...fill);
+    if (stroke) {
+      this.doc.setDrawColor(...stroke);
+      this.doc.setLineWidth(strokeW * PX);
+    }
+    this.doc.circle(cx * PX, cy * PX, r * PX, fill && stroke ? 'FD' : fill ? 'F' : 'S');
+  }
+
+  /** One line rotated to read bottom-to-top, centred on (cx, cy) — like CSS vertical-rl + rotate(180deg). */
+  textUp(str: string, cx: number, cy: number, letterSpacing = 0) {
+    // Anton's cap height is 1760/2048 em; Helvetica's about 0.72.
+    const cap = (this.branded && this.fontName === PdfFont.Display ? 1760 / 2048 : 0.72) * this.sizePx;
+    const w = this.width(str, letterSpacing);
+    this.doc.text(str, (cx + cap / 2) * PX, (cy + w / 2) * PX, {
+      angle: 90,
+      ...(letterSpacing ? { charSpace: letterSpacing * PX } : {}),
+    });
+  }
+
+  /** Lucide "scissors" icon, `size` px square with its top-left at (x, y). */
+  scissors(x: number, y: number, size: number, color: RGB) {
+    const s = size / 24;
+    const p = (v: number) => v * s * PX;
+    this.doc.setDrawColor(...color);
+    this.doc.setLineWidth(1.75 * s * PX);
+    this.doc.setLineCap('round');
+    this.doc.circle(x * PX + p(6), y * PX + p(6), p(3), 'S');
+    this.doc.circle(x * PX + p(6), y * PX + p(18), p(3), 'S');
+    const seg = (x1: number, y1: number, x2: number, y2: number) =>
+      this.doc.line(x * PX + p(x1), y * PX + p(y1), x * PX + p(x2), y * PX + p(y2));
+    seg(8.12, 8.12, 12, 12);
+    seg(20, 4, 8.12, 15.88);
+    seg(14.8, 14.8, 20, 20);
+    this.doc.setLineCap('butt');
+  }
+
+  /** Stroke icon from a 24-unit grid (lucide-style polyline points). */
+  icon(points: [number, number][][], x: number, y: number, size: number, color: RGB, strokeW: number) {
+    const s = size / 24;
+    this.doc.setDrawColor(...color);
+    this.doc.setLineWidth(strokeW * s * PX);
+    this.doc.setLineCap('round');
+    this.doc.setLineJoin('round');
+    points.forEach((poly) => {
+      const [start, ...rest] = poly;
+      let [px, py] = start;
+      const deltas = rest.map(([nx, ny]) => {
+        const d = [(nx - px) * s * PX, (ny - py) * s * PX];
+        px = nx;
+        py = ny;
+        return d;
+      });
+      this.doc.lines(deltas, (x + start[0] * s) * PX, (y + start[1] * s) * PX, [1, 1], 'S', false);
+    });
+    this.doc.setLineCap('butt');
+    this.doc.setLineJoin('miter');
+  }
+}
+
+const CHECK_ICON: [number, number][][] = [[[20, 6], [9, 17], [4, 12]]];
+const X_ICON: [number, number][][] = [[[18, 6], [6, 18]], [[6, 6], [18, 18]]];
+
+// ── Outsold logo: fetched once, trimmed of its padding, downscaled ──
+let logoPromise: Promise<{ dataUrl: string; aspect: number } | null> | null = null;
+const loadLogo = () => {
+  if (!logoPromise) {
+    logoPromise = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const sw = 600;
+          const sh = Math.round((img.height / img.width) * sw);
+          const scan = document.createElement('canvas');
+          scan.width = sw;
+          scan.height = sh;
+          const sctx = scan.getContext('2d');
+          if (!sctx) { resolve(null); return; }
+          sctx.drawImage(img, 0, 0, sw, sh);
+          const { data } = sctx.getImageData(0, 0, sw, sh);
+          let minX = sw, minY = sh, maxX = -1, maxY = -1;
+          for (let y = 0; y < sh; y++) {
+            for (let x = 0; x < sw; x++) {
+              const i = (y * sw + x) * 4;
+              const blank = data[i + 3] < 16 || (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240);
+              if (blank) continue;
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+          if (maxX < 0) { resolve(null); return; }
+          const cw = maxX - minX + 1;
+          const ch = maxY - minY + 1;
+          const outW = 720; // ~300dpi at the 180px print width
+          const outH = Math.round((ch / cw) * outW);
+          const out = document.createElement('canvas');
+          out.width = outW;
+          out.height = outH;
+          const octx = out.getContext('2d');
+          if (!octx) { resolve(null); return; }
+          // Flattened onto the page's white and saved as JPEG: the logo's grain
+          // texture makes a PNG ~4x bigger with no visible difference.
+          octx.fillStyle = '#ffffff';
+          octx.fillRect(0, 0, outW, outH);
+          octx.imageSmoothingQuality = 'high';
+          octx.drawImage(img, (minX / sw) * img.width, (minY / sh) * img.height, (cw / sw) * img.width, (ch / sh) * img.height, 0, 0, outW, outH);
+          resolve({ dataUrl: out.toDataURL('image/jpeg', 0.9), aspect: outH / outW });
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => { logoPromise = null; resolve(null); };
+      img.src = encodeURI('/OUTSOLD Logo PNG.png'); // "Tickets Available on OUTSOLD" ticket
+    });
+  }
+  return logoPromise;
+};
+
+// ── QR as vector modules (crisp in print, independent of any canvas) ──
+const drawQr = (pen: Pen, value: string, x: number, y: number, size: number, fallback: HTMLCanvasElement | null) => {
+  try {
+    const { modules } = QRCode.create(value, { errorCorrectionLevel: 'M' });
+    const quiet = 2;
+    const n = modules.size;
+    const cell = size / (n + quiet * 2);
+    // Every dark run joins one path and is filled once — filling rects one by
+    // one leaves anti-aliased hairline seams between touching modules.
+    pen.doc.setFillColor(...INK);
+    for (let r = 0; r < n; r++) {
+      let c = 0;
+      while (c < n) {
+        if (!modules.get(r, c)) { c++; continue; }
+        const start = c;
+        while (c < n && modules.get(r, c)) c++;
+        pen.doc.rect(
+          (x + (quiet + start) * cell) * PX,
+          (y + (quiet + r) * cell) * PX,
+          (c - start) * cell * PX,
+          cell * PX,
+          null
+        );
+      }
+    }
+    pen.doc.fill();
+  } catch {
+    if (fallback) pen.doc.addImage(fallback.toDataURL('image/png'), 'PNG', x * PX, y * PX, size * PX, size * PX);
+  }
+};
+
 export const buildAcknowledgementPdf = async (
   ticket: AcknowledgementTicketData,
   event: AcknowledgementEventData,
   qrCanvas: HTMLCanvasElement | null
 ): Promise<jsPDF> => {
-  // Every organizer/buyer-typed string goes through toPdfText() — see its
-  // comment for why emoji etc. can't be drawn. Done once here so no call site
-  // below can forget it.
-  ticket = {
-    ...ticket,
-    ticketId: toPdfText(ticket.ticketId),
-    tierName: toPdfText(ticket.tierName),
-    tierTag: ticket.tierTag ? toPdfText(ticket.tierTag) : ticket.tierTag,
-    attendeeName: toPdfText(ticket.attendeeName),
-    attendeeEmail: ticket.attendeeEmail ? toPdfText(ticket.attendeeEmail) : ticket.attendeeEmail,
-    attendeePhone: ticket.attendeePhone ? toPdfText(ticket.attendeePhone) : ticket.attendeePhone,
-    paymentMode: ticket.paymentMode ? toPdfText(ticket.paymentMode) : ticket.paymentMode,
-  };
-  event = {
-    ...event,
-    eventVenue: event.eventVenue ? toPdfText(event.eventVenue) : event.eventVenue,
-    eventArriveBy: event.eventArriveBy ? toPdfText(event.eventArriveBy) : event.eventArriveBy,
-    eventAgeLimit: event.eventAgeLimit ? toPdfText(event.eventAgeLimit) : event.eventAgeLimit,
-    eventHelplineNumber: event.eventHelplineNumber ? toPdfText(event.eventHelplineNumber) : event.eventHelplineNumber,
-  };
-  const cleanEventTitle = (event.eventTitle ? toPdfText(htmlToPlainLines(event.eventTitle).replace(/\n/g, ' ')) : '') || 'Event';
-  const pageW = 360;
-  const outerMargin = 20;
-  const cardX = outerMargin;
-  const cardW = pageW - outerMargin * 2;
-  const bottomMargin = 30;
-  const topMarginAfterBreak = 24;
-  const hasBanner = !!event.eventBannerDataUrl;
-  const hasQr = !!qrCanvas;
-  const consentText = event.eventConsentText ? toPdfText(htmlToPlainLines(event.eventConsentText)) : '';
-  const goodToKnowText = event.eventGoodToKnowText ? toPdfText(stripHtmlTagsLocal(event.eventGoodToKnowText)) : '';
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const [branded, logo] = await Promise.all([registerPdfFonts(doc), loadLogo()]);
+  const pen = new Pen(doc, branded);
+  // Helvetica can't draw ₹; the brand fonts can.
+  const txt = (v?: string | null) => (v ? toPdfText(v, branded) : '');
+  const rupee = branded ? '₹' : 'Rs. ';
 
-  const PAGE_BG: [number, number, number] = [222, 234, 232];   // tinted, isi se notch/cut dikhega
-  const CARD_BG: [number, number, number] = [255, 255, 255];   // neeche wale white boxes
-  const STUB_BG: [number, number, number] = [240, 247, 246];   // NEW: stub ka inner panel
-  const CARD_BORDER: [number, number, number] = [226, 232, 240];
-  const INK: [number, number, number] = [11, 59, 58];
+  const hasPoster = !!event.eventBannerDataUrl;
 
-  // Story-style theming: pull TEAL/DARK_GREEN from the banner itself when present,
-  // otherwise keep the original fixed brand colors.
-  const { primary: TEAL, dark: DARK_GREEN } = hasBanner
-    ? await extractPaletteFromImage(event.eventBannerDataUrl!)
-    : { primary: DEFAULT_TEAL, dark: DEFAULT_DARK_GREEN };
-  const DATE_ACCENT = DARK_GREEN;
-  const TEXT_DARK: [number, number, number] = [17, 24, 39];
-  const MUTED: [number, number, number] = [107, 114, 128];
-  const GREEN_BG: [number, number, number] = [209, 250, 229];
-  const GREEN_TXT: [number, number, number] = [4, 120, 87];
-  const RED_BG: [number, number, number] = [254, 226, 226];
-  const RED_TXT: [number, number, number] = [185, 28, 28];
-
+  // ── Data ──
+  const title = (event.eventTitle ? txt(htmlToPlainLines(event.eventTitle).replace(/\n/g, ' ')) : '') || 'Event';
+  const category = txt(event.eventCategory);
+  const showCategory = !!category && category.toLowerCase() !== 'other';
+  const subtitle = [showCategory ? category : '', event.eventIsOnline ? 'Online' : ''].filter(Boolean).join(' · ');
+  const venue = event.eventIsOnline ? 'Online' : txt(event.eventVenue) || 'TBA';
+  const dateObj = parseIsoDate(event.eventDate);
+  const startTime = formatClock(txt(event.eventTime));
+  const gatesTime = formatClock(txt(event.eventArriveBy));
+  const timeFact = gatesTime ? { label: 'Gates open', value: gatesTime } : startTime ? { label: 'Starts', value: startTime } : null;
+  const admits = Math.max(1, ticket.admits ?? 1);
   const isCancelled = !!ticket.isCancelled;
-  const statusLabel = isCancelled ? 'Cancelled' : 'Confirmed';
-  const statusBg = isCancelled ? RED_BG : GREEN_BG;
-  const statusTxt = isCancelled ? RED_TXT : GREEN_TXT;
-
-  const measureDoc = new jsPDF({ unit: 'pt', format: [pageW, 100] });
-  const wrap = (text: string, fontSize: number, bold: boolean, maxWidth: number): string[] => {
-    measureDoc.setFont('helvetica', bold ? 'bold' : 'normal');
-    measureDoc.setFontSize(fontSize);
-    return measureDoc.splitTextToSize(text || '—', maxWidth) as string[];
-  };
-
-  const termFontSize = 8.5;
-  const termLineHeight = termFontSize * 1.4;
-
-  // ── Box 1 data: "BEFORE THE EVENT" — logistics + organizer's checklist ──
-  const ledeText = 'A few things to know before you head to the event.';
-  const ledeLines = wrap(ledeText, 9, false, cardW - 28);
-
-  const bulletFontSize = 8.5;
-  const bulletLineHeight = bulletFontSize * 1.4;
-  const goodToKnowLines = goodToKnowText
-    ? goodToKnowText.split(/\r?\n+/).map((t) => t.trim()).filter(Boolean)
-    : [];
-  const wrappedGoodToKnow = goodToKnowLines.map((t) => wrap(t, bulletFontSize, false, cardW - 28));
-  const hasGoodToKnow = wrappedGoodToKnow.length > 0;
-  const goodToKnowBlockH = wrappedGoodToKnow.reduce((sum, lines) => sum + lines.length * bulletLineHeight + 6, 0);
-
-  const hasArriveByForBox1 = !!event.eventArriveBy;
-  const hasAgeLimitForBox1 = !!event.eventAgeLimit;
-  const hasHelplineForBox1 = !!event.eventHelplineNumber;
-  const infoBoxCountForBox1 = [hasArriveByForBox1, hasAgeLimitForBox1, hasHelplineForBox1].filter(Boolean).length;
-  const infoBoxesHForBox1 = infoBoxCountForBox1 > 0 ? 46 : 0;
-
-  const box1InnerPad = 14;
-  const box1ContentH =
-    (ledeLines.length ? ledeLines.length * 12 + 8 : 0) +
-    (infoBoxCountForBox1 > 0 ? infoBoxesHForBox1 + 12 : 0) +
-    (hasGoodToKnow ? goodToKnowBlockH : 0);
-  const hasBox1 = box1ContentH > 0;
-  const box1H = hasBox1 ? 24 + box1ContentH + box1InnerPad * 2 : 0;
-
-  // ── Box 2 data: "TERMS & CONDITIONS" — organizer's consent text, its OWN block ──
-  const termLines = consentText
-    ? consentText.split(/\r?\n+/).map((t) => t.trim()).filter(Boolean)
-    : [];
-  const wrappedTerms = termLines.map((t) => wrap(t, termFontSize, false, cardW - 28));
-  const hasTerms = wrappedTerms.length > 0;
-  const box2InnerPad = 14;
-  const termsBlockH = wrappedTerms.reduce((sum, lines) => sum + lines.length * termLineHeight + 6, 0);
-  const box2H = hasTerms ? 24 + termsBlockH + box2InnerPad * 2 : 0;
-
-  const titleLines = wrap(cleanEventTitle.toUpperCase(), 19, true, cardW - 40).slice(0, 2);
-  const heroH = (hasBanner ? 148 : 108) + (titleLines.length - 1) * 22;
-
-  const eventDateObj = event.eventDate
-    ? new Date(`${event.eventDate.slice(0, 10)}T00:00:00`)
-    : null;
-  const dayNum = eventDateObj ? eventDateObj.getDate().toString() : '--';
-  const monthAbbr = eventDateObj ? eventDateObj.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase() : '';
-  const weekday = eventDateObj ? eventDateObj.toLocaleDateString('en-IN', { weekday: 'long' }) : '';
-  const formatEventTime = (t?: string): string | null => {
-    if (!t) return null;
-    const [h, m] = t.split(':').map(Number);
-    if (isNaN(h) || isNaN(m)) return null;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; // 24-hour, e.g. 22:00
-  };
-  const timeStr = formatEventTime(event.eventTime);
-
-  const dateBoxW = 92;
-  const venueTextX = cardX + dateBoxW + 18;
-  const venueTextW = cardX + cardW - 18 - venueTextX;
-  const venueLines = event.eventVenue ? wrap(event.eventVenue, 12, true, venueTextW) : [];
-  const dateVenueH = Math.max(60, 22 + venueLines.length * 15 + (timeStr ? 30 : 0));
-
-  // Online events have no physical venue — never show directions for them.
-  const directionsUrl = event.eventVenue && !event.eventIsOnline
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.eventVenue)}`
-    : null;
-  const calendarUrl = event.eventDate
-    ? (() => {
-      const dateStr = event.eventDate!.replace(/-/g, '');
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
-        cleanEventTitle
-      )}&dates=${dateStr}/${dateStr}&location=${encodeURIComponent(event.eventVenue || '')}`;
-    })()
-    : null;
-  const actionLinks: { label: string; url: string }[] = [];
-  if (directionsUrl) actionLinks.push({ label: 'Get directions', url: directionsUrl });
-  if (calendarUrl) actionLinks.push({ label: 'Add to calendar', url: calendarUrl });
-  // Private events are single-session/invite-only — there's nothing more to book.
-  if (event.bookMoreTicketsUrl && !event.eventIsPrivate) {
-    actionLinks.push({ label: 'Book more tickets', url: event.bookMoreTicketsUrl });
-  }
-  // Buttons ab date box ke bagal (venue column) me aayenge; jagah kam pade to 2nd row me wrap
-  const btnPad = 9, btnH = 22, btnGap = 6, btnRowGap = 6;
-  measureDoc.setFont('helvetica', 'bold');
-  measureDoc.setFontSize(8.5);
-  let rowX = 0, rowNo = 0;
-  const btnLayout = actionLinks.map((l) => {
-    const w = measureDoc.getTextWidth(l.label) + btnPad * 2;
-    if (rowX > 0 && rowX + w > venueTextW) { rowNo++; rowX = 0; }
-    const item = { ...l, w, x: rowX, row: rowNo };
-    rowX += w + btnGap;
-    return item;
-  });
-  const btnRows = actionLinks.length ? rowNo + 1 : 0;
-  const actionBandH = btnRows ? btnRows * btnH + (btnRows - 1) * btnRowGap + 16 : 0;
-
-  const tearGap = 24;
-
-  const stubInset = 10;                 // inner panel ka card edge se gap
-  const stubPadX = 24;                  // stub content ka left/right padding
-  const stubLeft = cardX + stubPadX;
-  const qrBoxSize = 118;
-  const qrLeft = cardX + cardW - stubPadX - qrBoxSize;
-  const leftColW = qrLeft - stubLeft - 12;
-
-  const nameLines = wrap(ticket.attendeeName, 18, true, leftColW).slice(0, 2);
-  const tierLabel = (ticket.tierName || 'General').toUpperCase();
-  const paidLabel = `PAID VIA ${(ticket.paymentMode || '—').toUpperCase()}`;
-  const paidValue = `Rs. ${(ticket.amountPaid ?? 0).toLocaleString('en-IN')}`;
+  const ticketId = txt(ticket.ticketId);
+  const holder = txt(ticket.attendeeName) || 'Guest';
+  const tierName = txt(ticket.tierName) || 'General';
+  const email = txt(ticket.attendeeEmail);
+  const phone = txt(ticket.attendeePhone);
+  const contact = email ? maskEmail(email) : phone ? maskPhone(phone) : '—';
   const bookedMs = ticket.purchasedAt ?? ticket.createdAt;
-  const bookedStr = bookedMs
-    ? new Date(bookedMs).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-    : '—';
-  const ticketIdLines = wrap(ticket.ticketId, 11, true, qrBoxSize);
+  const bookedOn = bookedMs ? formatFullDate(new Date(bookedMs)) : '—';
+  const paymentMode = txt(ticket.paymentMode);
+  const goodToKnow = event.eventGoodToKnowText ? txt(htmlToPlainLines(event.eventGoodToKnowText)) : '';
+  const consent = event.eventConsentText ? txt(htmlToPlainLines(event.eventConsentText)) : '';
+  const helpline = txt(event.eventHelplineNumber);
+  const ageLimit = txt(event.eventAgeLimit);
 
-  const nameLineH = 20;
-  const contactLineH = 12;
-  const tierStampH = 30;
-  const factsRowH = 34;
+  const directionsUrl = event.eventVenue && !event.eventIsOnline
+    ? buildDirectionsUrl(event.eventVenue)
+    : null;
+  const calendarUrl = dateObj ? buildCalendarUrl(title, dateObj, event.eventTime, event.eventIsOnline ? 'Online' : event.eventVenue || '') : null;
+  const bookMoreUrl = event.bookMoreTicketsUrl && !event.eventIsPrivate ? event.bookMoreTicketsUrl : null;
 
-  const leftColH =
-    16 + nameLines.length * nameLineH + 8 + contactLineH * 2 + 6 + (tierStampH + 4) + 14 + factsRowH;
-  const rightColH = hasQr ? 14 + qrBoxSize + 12 + ticketIdLines.length * 12 + 6 + 9 + 10 + 1 : 0;
-  const stubH = 16 + Math.max(leftColH, rightColH) + 4 + stubInset;
+  let y = PAD;
 
-  const cardH = heroH + dateVenueH + actionBandH + tearGap + stubH;
-
-  const page1Height =
-    outerMargin + cardH + 22 +
-    (hasBox1 ? box1H + 16 : 0) +
-    (hasTerms ? box2H + 16 : 0) +
-    (14 + 11 + 11) +
-    bottomMargin;
-
-  const STANDARD_PAGE_H = 780;
-  const doc = new jsPDF({ unit: 'pt', format: [pageW, page1Height] });
-  let pageH = page1Height;
-  let y = 0;
-
-  const fillPageBg = () => {
-    doc.setFillColor(...PAGE_BG);
-    doc.rect(0, 0, pageW, pageH, 'F');
-  };
-  fillPageBg();
-
+  // ── Pagination ──
   const ensureSpace = (needed: number) => {
-    if (y + needed <= pageH - bottomMargin) return;
-    doc.addPage([pageW, STANDARD_PAGE_H]);
-    pageH = STANDARD_PAGE_H;
-    fillPageBg();
-    y = topMarginAfterBreak;
+    if (y + needed <= CONTENT_BOTTOM) return;
+    doc.addPage('a4');
+    y = PAD;
+    pen.font(PdfFont.Mono, 11).color(MUTED).text(`E-TICKET · ${ticketId} · CONTINUED`, PAD, y, 14, { letterSpacing: 0.88 });
+    y += 14 + GAP;
   };
 
-  const pill = (
-    text: string,
-    x: number,
-    yPos: number,
-    bg: [number, number, number],
-    textColor: [number, number, number]
-  ) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    const w = doc.getTextWidth(text.toUpperCase()) + 12;
-    doc.setFillColor(...bg);
-    doc.roundedRect(x, yPos, w, 14, 7, 7, 'F');
-    doc.setTextColor(...textColor);
-    doc.text(text.toUpperCase(), x + 6, yPos + 10);
-    return w;
-  };
+  const heading = (text: string, x: number, top: number, size = 22, lineHeight = 26) =>
+    pen.font(PdfFont.Display, size).color(INK).text(text.toUpperCase(), x, top, lineHeight, { letterSpacing: size * 0.01 });
 
-  const cardTop = outerMargin;
-
-  doc.saveGraphicsState();
-  // @ts-ignore
-  doc.roundedRect(cardX, cardTop, cardW, cardH, 18, 18, null);
-  doc.clip();
-  doc.discardPath();
-
-  // poora card solid teal (hero + date row + tear + stub sab isi ke upar)
-  doc.setFillColor(...TEAL);
-  doc.rect(cardX, cardTop, cardW, cardH, 'F');
-
-  if (hasBanner && event.eventBannerDataUrl) {
-    try {
-      doc.addImage(event.eventBannerDataUrl, 'JPEG', cardX, cardTop, cardW, heroH);
-    } catch {
-      /* gradient underneath still shows if the image fails to decode */
-    }
-    const scrimBands = 12;
-    const scrimBandH = heroH / scrimBands;
-    for (let i = 0; i < scrimBands; i++) {
-      const opacity = Math.pow(i / (scrimBands - 1), 1.4) * 0.95;
-      doc.saveGraphicsState();
-      // @ts-ignore
-      doc.setGState(new (doc as any).GState({ opacity }));
-      doc.setFillColor(...TEAL);
-      doc.rect(cardX, cardTop + i * scrimBandH, cardW, scrimBandH + 1, 'F');
-      doc.restoreGraphicsState();
-    }
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  const eyebrowW = doc.getTextWidth('E-TICKET') + 16;
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(cardX + 16, cardTop + 14, eyebrowW, 16, 8, 8, 'F');
-  doc.setTextColor(...INK);
-  doc.text('E-TICKET', cardX + 24, cardTop + 25);
-
-  pill(statusLabel, cardX + cardW - 16 - 70, cardTop + 14, statusBg, statusTxt);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(19);
-  doc.setTextColor(255, 255, 255);
-  const titleBaseY = cardTop + heroH - 20 - (titleLines.length - 1) * 22;
-  titleLines.forEach((line, i) => doc.text(line, cardX + 16, titleBaseY + i * 22));
-
-  const dvTop = cardTop + heroH;
-  const dateRowH = dateVenueH + actionBandH;       // date box buttons tak lamba
-
-  // hero aur date row ke beech patli line
-  doc.setDrawColor(60, 160, 157);
-  doc.setLineWidth(0.75);
-  doc.line(cardX, dvTop, cardX + cardW, dvTop);
-
-  doc.setFillColor(...DATE_ACCENT);
-  doc.rect(cardX, dvTop, dateBoxW, dateRowH, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  const dateContentH = 78;
-  const dateOffsetY = Math.max(12, (dateRowH - dateContentH) / 2);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(32);
-  doc.text(dayNum, cardX + 13, dvTop + dateOffsetY + 32);
-  doc.setFontSize(12);
-  doc.text(monthAbbr, cardX + 16, dvTop + dateOffsetY + 50);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(weekday, cardX + 16, dvTop + dateOffsetY + 65, { maxWidth: dateBoxW - 24 });
-
-  let vy = dvTop + 20;
-  if (timeStr) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(220, 240, 238);
-    doc.text('SHOW STARTS', venueTextX, vy);
-    vy += 12;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.text(timeStr, venueTextX, vy);
-    vy += 18;
-  } else {
-    vy += 6;
-  }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12.5);
-  doc.setTextColor(255, 255, 255);
-  venueLines.forEach((line) => {
-    doc.text(line, venueTextX, vy);
-    vy += 15;
-  });
-
-  if (btnLayout.length > 0) {
-    const bandTop = dvTop + dateVenueH;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    btnLayout.forEach((b, i) => {
-      const bx = venueTextX + b.x;
-      const by = bandTop + 2 + b.row * (btnH + btnRowGap);
-      if (i === 0) {
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(bx, by, b.w, btnH, btnH / 2, btnH / 2, 'F');
-        doc.setTextColor(...INK);
-      } else {
-        doc.setDrawColor(255, 255, 255);
-        doc.setLineWidth(1);
-        doc.roundedRect(bx, by, b.w, btnH, btnH / 2, btnH / 2, 'S');
-        doc.setTextColor(255, 255, 255);
+  // ── Hero: poster on its blurred backdrop, or the yellow pattern ──
+  {
+    doc.saveGraphicsState();
+    doc.roundedRect(PAD * PX, y * PX, CONTENT_W * PX, HERO_H * PX, 12 * PX, 12 * PX, null);
+    doc.clip();
+    doc.discardPath();
+    if (hasPoster) {
+      try {
+        doc.addImage(event.eventBannerDataUrl!, 'JPEG', PAD * PX, y * PX, CONTENT_W * PX, HERO_H * PX);
+      } catch {
+        pen.rect(PAD, y, CONTENT_W, HERO_H, INK);
       }
-      doc.text(b.label, bx + btnPad, by + btnH / 2 + 3);
-      doc.link(bx, by, b.w, btnH, { url: b.url });
+    } else {
+      pen.rect(PAD, y, CONTENT_W, HERO_H, YELLOW);
+      pen.circle(PAD + 40 + 75, y + 30 + 75, 73.5, undefined, INK, 3);
+      pen.circle(PAD + 150 + 48, y + 86 + 48, 48, TEAL);
+      pen.circle(PAD + CONTENT_W + 60 - 110, y + HERO_H + 60 - 110, 110, INK);
+    }
+    doc.restoreGraphicsState();
+    y += HERO_H + GAP;
+  }
+
+  // ── Title row: date block, title + subtitle, Outsold logo ──
+  {
+    const logoW = 180; // wide ticket logo; narrower and its tagline is unreadable
+    const logoH = logo ? logoW * logo.aspect : 28;
+    const titleX = PAD + DATE_BOX_W + 16;
+    const titleW = CONTENT_W - DATE_BOX_W - 16 - 24 - logoW;
+    const titleFit = pen.fit(PdfFont.Display, title.toUpperCase(), titleW, 2, 52, 34, 0.52);
+    const subtitleLines = subtitle ? pen.font(PdfFont.BodyBold, 17).wrap(subtitle, titleW, 1) : [];
+    const titleBlockH = titleFit.lines.length * titleFit.size + (subtitleLines.length ? 4 + 22 : 0);
+    const dateH = Math.max(84, titleBlockH);
+    const rowH = Math.max(dateH, logoH);
+    const bottom = y + rowH;
+
+    // Date block
+    const dTop = bottom - dateH;
+    pen.roundRect(PAD, dTop, DATE_BOX_W, dateH, 8, YELLOW);
+    const dcx = PAD + DATE_BOX_W / 2;
+    const dContent = dTop + (dateH - 74) / 2;
+    pen.font(PdfFont.Mono, 11).color(INK).text(dateObj ? WEEKDAYS[dateObj.getDay()].toUpperCase() : 'DATE', dcx, dContent, 14, { align: 'center', letterSpacing: 0.88 });
+    pen.font(PdfFont.Display, 40).text(dateObj ? String(dateObj.getDate()) : '--', dcx, dContent + 14, 42, { align: 'center' });
+    pen.font(PdfFont.Display, 16).text(dateObj ? MONTHS[dateObj.getMonth()].toUpperCase() : 'TBA', dcx, dContent + 56, 18, { align: 'center', letterSpacing: 0.64 });
+
+    // Title + subtitle, bottom-aligned with the date block
+    let ty = bottom - titleBlockH;
+    pen.font(PdfFont.Display, titleFit.size).color(INK);
+    titleFit.lines.forEach((l) => {
+      pen.text(l, titleX, ty, titleFit.size, { letterSpacing: 0.52 });
+      ty += titleFit.size;
     });
+    if (subtitleLines.length) pen.font(PdfFont.BodyBold, 17).color(TEAL).text(subtitleLines[0], titleX, ty + 4, 22);
+
+    // Logo
+    if (logo) {
+      doc.addImage(logo.dataUrl, 'JPEG', (PAD + CONTENT_W - logoW) * PX, (bottom - logoH) * PX, logoW * PX, logoH * PX);
+    } else {
+      pen.font(PdfFont.Display, 24).color(INK).text('OUTSOLD', PAD + CONTENT_W, bottom - 28, 28, { align: 'right' });
+    }
+    y = bottom + GAP;
   }
 
-  const tearY = dvTop + dateVenueH + actionBandH + tearGap / 2;
-  doc.setFillColor(...PAGE_BG);                       // page ke color ke circle = "cut" wala look
-  doc.circle(cardX, tearY, 11, 'F');
-  doc.circle(cardX + cardW, tearY, 11, 'F');
-  doc.setDrawColor(150, 210, 207);                    // light teal dotted line (white pe dikhti nahi thi)
-  doc.setLineWidth(1.2);
-  doc.setLineDashPattern([5, 4], 0);
-  doc.line(cardX + 20, tearY, cardX + cardW - 20, tearY);
-  doc.setLineDashPattern([], 0);
+  // ── Print-and-cut ticket ──
+  {
+    const outerX = PAD;
+    const outerW = CONTENT_W;
+    const innerX = outerX + 2 + 10;          // dashed border + padding
+    const innerW = outerW - 24;
+    const midX = innerX + 2 + CUT_BAND_W;
+    const qrColX = innerX + innerW - 2 - CUT_QR_COL_W;
+    const divX = qrColX - 1;                 // centre of the 2px dashed divider
+    const midW = divX - 1 - midX;
+    const cX = midX + 24;
+    const cW = midW - 48;
+    const factColW = (cW - 20) / 2;
 
-  const stubTop = dvTop + dateVenueH + actionBandH + tearGap;
+    const facts = [
+      { label: 'Date', value: dateObj ? formatFullDate(dateObj) : 'TBA' },
+      ...(timeFact ? [timeFact] : []),
+      { label: 'Venue', value: venue },
+      { label: 'Ticket holder', value: holder },
+    ];
+    pen.font(PdfFont.BodyBold, 18);
+    const factLines = facts.map((f) => pen.wrap(f.value, factColW, 2));
+    const factRows: number[] = [];
+    for (let i = 0; i < facts.length; i += 2) {
+      factRows.push(14 + 4 + Math.max(factLines[i].length, factLines[i + 1]?.length ?? 0) * 22);
+    }
+    const factsH = factRows.reduce((s, h) => s + h, 0) + 16 * (factRows.length - 1);
+    const midH = 22 + 30 + 16 + factsH + 22;
 
-  // Inner rounded panel (image jaisa)
-  const panelX = cardX + stubInset;
-  const panelW = cardW - stubInset * 2;
-  const panelH = cardH - (stubTop - cardTop) - stubInset;
-  doc.setFillColor(...STUB_BG);
-  doc.roundedRect(panelX, stubTop, panelW, panelH, 14, 14, 'F');
+    const idLines = pen.font(PdfFont.Mono, 11).wrap(ticketId, CUT_QR_COL_W - 40, 2, 0.88);
+    const qrColH = 18 + QR_SIZE + 8 + idLines.length * 14 + 18;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...MUTED);
-  doc.text('TICKET HOLDER', stubLeft, stubTop + 16);
+    const contentH = Math.max(midH, qrColH);
+    const innerH = contentH + 4;
+    const outerH = innerH + 24;
+    ensureSpace(outerH + 8 + 16);
+    const oy = y;
+    const iy = oy + 12;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(...TEXT_DARK);
-  let ny = stubTop + 36;
-  nameLines.forEach((line) => {
-    doc.text(line, stubLeft, ny, { maxWidth: leftColW });
-    ny += nameLineH;
-  });
+    // Outer cut line + scissors
+    doc.setLineDashPattern([6 * PX, 4 * PX], 0);
+    pen.roundRect(outerX + 1, oy + 1, outerW - 2, outerH - 2, 15, undefined, CUT_LINE, 2);
+    doc.setLineDashPattern([], 0);
+    pen.rect(outerX + 28, oy - 11, 28, 22, WHITE);
+    pen.scissors(outerX + 32, oy - 9, 20, MUTED);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...MUTED);
-  doc.text(ticket.attendeeEmail || '—', stubLeft, ny);
-  ny += contactLineH;
-  doc.text(ticket.attendeePhone || '—', stubLeft, ny);
-  ny += contactLineH + 6;
+    // Ticket card with the ink "ADMIT" band
+    pen.roundRect(innerX + 1, iy + 1, innerW - 2, innerH - 2, 9, WHITE, INK, 2);
+    doc.saveGraphicsState();
+    doc.roundedRect((innerX + 2) * PX, (iy + 2) * PX, (innerW - 4) * PX, (innerH - 4) * PX, 8 * PX, 8 * PX, null);
+    doc.clip();
+    doc.discardPath();
+    pen.rect(innerX + 2, iy + 2, CUT_BAND_W, innerH - 4, INK);
+    doc.restoreGraphicsState();
+    const admitLabel = admits > 1 ? `ADMITS ${admits}` : 'ADMIT ONE';
+    pen.font(PdfFont.Display, 22).color(YELLOW).textUp(admitLabel, innerX + 2 + CUT_BAND_W / 2, iy + innerH / 2, 2.64);
 
-  // ── Tier stamp: rounded, thoda tilted, shadow ke saath (dark green) ──
-  const TILT_DEG = 3;                       // 0 kar do to seedha ho jayega
-  const tierTag = (ticket.tierTag || '').toUpperCase();
-  const stampPadX = 14;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
-  const tagW = tierTag ? doc.getTextWidth(tierTag) + 10 : 0;
-  const maxLabelW = leftColW - stampPadX * 2 - (tagW ? tagW + 6 : 0) - 4;
-  let stampFs = 15;
-  doc.setFontSize(stampFs);
-  while (doc.getTextWidth(tierLabel) > maxLabelW && stampFs > 8) {
-    stampFs -= 1;
-    doc.setFontSize(stampFs);
-  }
-  const labelW = doc.getTextWidth(tierLabel);
-  const stampW = stampPadX * 2 + labelW + (tagW ? tagW + 6 : 0);
+    // Middle: tier + status, then the facts grid
+    let my = iy + 2 + (contentH - midH) / 2 + 22;
+    const tierFit = pen.fit(PdfFont.Display, tierName.toUpperCase(), cW - 28 - 120, 1, 15, 11, 0.75);
+    pen.font(PdfFont.Display, tierFit.size);
+    const pillW = pen.width(tierFit.lines[0], 0.75) + 28;
+    pen.roundRect(cX, my, pillW, 30, 15, YELLOW);
+    pen.color(INK).text(tierFit.lines[0], cX + 14, my, 30, { letterSpacing: 0.75 });
+    const statusColor = isCancelled ? RED : TEAL;
+    const sx = cX + pillW + 12;
+    pen.icon(isCancelled ? X_ICON : CHECK_ICON, sx, my + 7, 16, statusColor, 2.25);
+    pen.font(PdfFont.BodyBold, 14).color(statusColor).text(isCancelled ? 'Cancelled' : 'Confirmed', sx + 22, my + 5, 20);
+    my += 30 + 16;
+    for (let r = 0; r < factRows.length; r++) {
+      [0, 1].forEach((c) => {
+        const i = r * 2 + c;
+        if (!facts[i]) return;
+        const fx = cX + c * (factColW + 20);
+        pen.font(PdfFont.Mono, 11).color(MUTED).text(facts[i].label.toUpperCase(), fx, my, 14, { letterSpacing: 0.88 });
+        pen.font(PdfFont.BodyBold, 18).color(INK);
+        factLines[i].forEach((l, j) => pen.text(l, fx, my + 18 + j * 22, 22));
+      });
+      my += factRows[r] + 16;
+    }
 
-  const rad = (TILT_DEG * Math.PI) / 180;
-  const cosT = Math.cos(rad), sinT = Math.sin(rad);
-  const pvX = stubLeft + stampW / 2;
-  const pvY = doc.internal.pageSize.getHeight() - (ny + tierStampH / 2);
+    // Dashed divider
+    pen.line(divX, iy + 2 + 16, divX, iy + innerH - 2 - 16, CUT_LINE, 2, [6, 4]);
 
-  doc.saveGraphicsState();
-  doc.setCurrentTransformationMatrix(
-    new (doc as any).Matrix(
-      cosT, sinT, -sinT, cosT,
-      pvX - pvX * cosT + pvY * sinT,
-      pvY - pvX * sinT - pvY * cosT
-    )
-  );
-  doc.setFillColor(...INK);                                            // shadow
-  doc.roundedRect(stubLeft + 3, ny + 4, stampW, tierStampH, 9, 9, 'F');
-  doc.setFillColor(...DARK_GREEN);                                     // stamp
-  doc.roundedRect(stubLeft, ny, stampW, tierStampH, 9, 9, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(stampFs);
-  doc.setTextColor(255, 255, 255);
-  doc.text(tierLabel, stubLeft + stampPadX, ny + tierStampH / 2 + stampFs * 0.35);
-  if (tierTag) {
-    const chipX = stubLeft + stampPadX + labelW + 6;
-    doc.setFillColor(190, 225, 215);
-    doc.roundedRect(chipX, ny + tierStampH / 2 - 6, tagW, 12, 6, 6, 'F');
-    doc.setFontSize(6.5);
-    doc.setTextColor(...DARK_GREEN);
-    doc.text(tierTag, chipX + 5, ny + tierStampH / 2 + 2.3);
-  }
-  doc.restoreGraphicsState();
-  ny += tierStampH + 4 + 14;
+    // QR column
+    const qrCx = qrColX + CUT_QR_COL_W / 2;
+    let qy = iy + 2 + (contentH - qrColH) / 2 + 18;
+    drawQr(pen, ticketId, qrCx - QR_SIZE / 2, qy, QR_SIZE, qrCanvas);
+    if (isCancelled) {
+      doc.saveGraphicsState();
+      doc.setGState(new GState({ opacity: 0.8 }));
+      pen.rect(qrCx - QR_SIZE / 2, qy, QR_SIZE, QR_SIZE, WHITE);
+      doc.restoreGraphicsState();
+      pen.font(PdfFont.Display, 20);
+      const stampW = pen.width('CANCELLED', 0.8) + 24;
+      pen.roundRect(qrCx - stampW / 2, qy + QR_SIZE / 2 - 18, stampW, 36, 6, RED);
+      pen.color(WHITE).text('CANCELLED', qrCx, qy + QR_SIZE / 2 - 18, 36, { align: 'center', letterSpacing: 0.8 });
+    }
+    qy += QR_SIZE + 8;
+    pen.font(PdfFont.Mono, 11).color(INK);
+    idLines.forEach((l) => {
+      pen.text(l, qrCx, qy, 14, { align: 'center', letterSpacing: 0.88 });
+      qy += 14;
+    });
 
-  // ── Facts row ──
-  const factsGap = 8;
-  const factsColX2 = stubLeft + (leftColW - factsGap) / 2 + factsGap;
-  doc.setDrawColor(...CARD_BORDER);
-  doc.setLineWidth(0.75);
-  doc.line(stubLeft, ny, stubLeft + leftColW, ny);
-  ny += 14;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...MUTED);
-  doc.text(paidLabel, stubLeft, ny);
-  doc.text('BOOKED', factsColX2, ny);
-  ny += 13;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...TEAL);
-  doc.text(paidValue, stubLeft, ny);
-  doc.setTextColor(...TEXT_DARK);
-  doc.text(bookedStr, factsColX2, ny);
-
-  // ── QR: rounded teal border ──
-  if (hasQr && qrCanvas) {
-    const qrTop = stubTop + 14;
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(...TEAL);
-    doc.setLineWidth(2);
-    doc.roundedRect(qrLeft, qrTop, qrBoxSize, qrBoxSize, 12, 12, 'FD');
-    const pad = 12;
-    doc.addImage(
-      qrCanvas.toDataURL('image/png'), 'PNG',
-      qrLeft + pad, qrTop + pad, qrBoxSize - pad * 2, qrBoxSize - pad * 2
+    y = oy + outerH + 8;
+    pen.font(PdfFont.Body, 12).color(MUTED).text(
+      'Print and cut along the dashed line, or show this page on your phone. Each QR code scans once.',
+      PAD, y, 16
     );
+    y += 16 + GAP;
+  }
 
-    let qy = qrTop + qrBoxSize + 14;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...TEAL);
-    ticketIdLines.forEach((line) => {
-      doc.text(`#${line}`, qrLeft + qrBoxSize / 2, qy, { align: 'center' });
-      qy += 12;
+  // ── Booking / Getting there ──
+  {
+    // A fact shows plain text or a set of links ("Map · Calendar"); wide ones span both sub-columns.
+    type Fact = { label: string; value: string; links?: { text: string; url: string }[]; wide?: boolean };
+    const LINK_SEP = '  ·  ';
+    const colW = (CONTENT_W - 24) / 2;
+    const subW = (colW - 16) / 2;
+    const quickLinks = [
+      ...(directionsUrl ? [{ text: 'Map', url: directionsUrl }] : []),
+      ...(calendarUrl ? [{ text: 'Calendar', url: calendarUrl }] : []),
+      ...(bookMoreUrl ? [{ text: 'Book more', url: bookMoreUrl }] : []),
+    ];
+    const booking: Fact[] = [
+      { label: 'Tickets', value: tierName.includes('×') ? tierName : `${admits} × ${tierName}` },
+      { label: paymentMode ? `Paid via ${paymentMode}` : 'Amount paid', value: formatAmount(ticket.amountPaid, rupee) },
+      { label: 'Booked on', value: bookedOn },
+      { label: 'Contact', value: contact },
+    ];
+    const gettingThere: Fact[] = [
+      { label: 'Venue', value: venue, wide: !ageLimit },
+      ...(ageLimit ? [{ label: 'Age limit', value: ageLimit }] : []),
+      ...(quickLinks.length
+        ? [{ label: 'Quick links', value: quickLinks.map((l) => l.text).join(LINK_SEP), links: quickLinks, wide: true }]
+        : []),
+    ];
+
+    // Greedy 2-column layout: a wide fact (or a lone last one) takes the whole row.
+    const layout = (facts: Fact[]) => {
+      const rows: { items: (Fact & { lines: string[] })[]; h: number }[] = [];
+      let i = 0;
+      while (i < facts.length) {
+        const pair = facts[i].wide || !facts[i + 1] || facts[i + 1].wide ? [facts[i]] : [facts[i], facts[i + 1]];
+        const w = pair.length === 1 ? colW : subW;
+        pen.font(PdfFont.BodySemiBold, 14);
+        const items = pair.map((f) => ({ ...f, lines: f.links ? [f.value] : pen.wrap(f.value, w, 3) }));
+        rows.push({ items, h: 14 + 2 + Math.max(...items.map((it) => it.lines.length)) * 20 });
+        i += pair.length;
+      }
+      return rows;
+    };
+    const bookingRows = layout(booking);
+    const gettingRows = layout(gettingThere);
+    const colH = (rows: { h: number }[]) => 3 + 14 + 24 + 10 + rows.reduce((s, r) => s + r.h, 0) + 8 * (rows.length - 1);
+    ensureSpace(Math.max(colH(bookingRows), colH(gettingRows)));
+
+    const drawColumn = (title: string, rule: RGB, rows: ReturnType<typeof layout>, x: number) => {
+      pen.rect(x, y, colW, 3, rule);
+      heading(title, x, y + 3 + 14, 20, 24);
+      let ry = y + 3 + 14 + 24 + 10;
+      rows.forEach((row) => {
+        row.items.forEach((it, c) => {
+          const fx = x + c * (subW + 16);
+          pen.font(PdfFont.Mono, 11).color(MUTED).text(it.label.toUpperCase(), fx, ry, 14, { letterSpacing: 0.88 });
+          pen.font(PdfFont.BodySemiBold, 14);
+          if (it.links) {
+            let lx = fx;
+            it.links.forEach((l, li) => {
+              if (li > 0) lx += pen.color(MUTED).text(LINK_SEP, lx, ry + 16, 20);
+              lx += pen.color(TEAL).text(l.text, lx, ry + 16, 20, { link: l.url });
+            });
+          } else {
+            pen.color(INK);
+            it.lines.forEach((l, j) => pen.text(l, fx, ry + 16 + j * 20, 20));
+          }
+        });
+        ry += row.h + 8;
+      });
+      return ry - 8;
+    };
+    const end1 = drawColumn('Booking', INK, bookingRows, PAD);
+    const end2 = drawColumn('Getting there', TEAL, gettingRows, PAD + colW + 24);
+    y = Math.max(end1, end2) + GAP;
+  }
+
+  // Flowing paragraphs (used when text may run past a page)
+  const flow = (title: string, text: string, size: number, lh: number, color: RGB) => {
+    pen.font(PdfFont.Body, size);
+    const paras = text.split(/\n+/).map((p) => p.trim()).filter(Boolean).map((p) => pen.wrap(p, CONTENT_W));
+    if (!paras.length) return;
+    ensureSpace(26 + 8 + lh * Math.min(2, paras[0].length));
+    heading(title, PAD, y);
+    y += 26 + 8;
+    paras.forEach((lines, pi) => {
+      lines.forEach((l) => {
+        ensureSpace(lh);
+        pen.font(PdfFont.Body, size).color(color).text(l, PAD, y, lh);
+        y += lh;
+      });
+      if (pi < paras.length - 1) y += 6;
     });
-    qy += 4;
-    doc.setFontSize(7);
-    doc.text('SCAN AT ENTRY', qrLeft + qrBoxSize / 2, qy, { align: 'center' });
-    qy += 12;
-    pill('Admits 1', qrLeft + qrBoxSize / 2 - 28, qy, GREEN_BG, GREEN_TXT);
+    y += GAP;
+  };
+
+  // ── Before you go ──
+  {
+    const atGate = admits > 1
+      ? `Show the QR code on this ticket, on your phone or printed. It admits all ${admits} people in your group, so arrive together. Each code scans once.`
+      : "Show the QR code on this ticket, on your phone or printed. Each code scans once, so don't share it.";
+    const innerW = CONTENT_W - 48;
+    const colW = (innerW - 24) / 2;
+    pen.font(PdfFont.Body, 15);
+    let gateLines = pen.wrap(atGate, goodToKnow ? colW : innerW);
+    let orgLines = goodToKnow ? pen.wrap(goodToKnow, colW) : [];
+    // Long organiser notes get their own flowing section instead of a panel
+    // that could outgrow the page.
+    const orgInPanel = orgLines.length > 0 && orgLines.length <= 10;
+    if (!orgInPanel) {
+      gateLines = pen.wrap(atGate, innerW);
+      orgLines = [];
+    }
+    const colBlock = (lines: string[]) => 14 + 6 + lines.length * 22;
+    const panelH = 20 + 26 + 12 + Math.max(colBlock(gateLines), orgLines.length ? colBlock(orgLines) : 0) + 20;
+    ensureSpace(panelH);
+    pen.roundRect(PAD, y, CONTENT_W, panelH, 12, SOFT_YELLOW);
+    heading('Before you go', PAD + 24, y + 20);
+    const drawCol = (label: string, lines: string[], x: number) => {
+      const top = y + 20 + 26 + 12;
+      pen.font(PdfFont.Mono, 11).color(MUTED).text(label.toUpperCase(), x, top, 14, { letterSpacing: 0.88 });
+      pen.font(PdfFont.Body, 15).color(INK);
+      lines.forEach((l, i) => pen.text(l, x, top + 20 + i * 22, 22));
+    };
+    drawCol('At the gate', gateLines, PAD + 24);
+    if (orgLines.length) drawCol('From the organiser', orgLines, PAD + 24 + colW + 24);
+    y += panelH + GAP;
+    if (goodToKnow && !orgInPanel) flow('From the organiser', goodToKnow, 15, 22, INK);
   }
 
-  doc.restoreGraphicsState();
+  // ── Terms & conditions ──
+  if (consent) flow('Terms & conditions', consent, 12, 18, MUTED);
 
-  y = cardTop + cardH + 10;
-
-  const hasArriveBy = !!event.eventArriveBy;
-  const hasAgeLimit = !!event.eventAgeLimit;
-  const hasHelpline = !!event.eventHelplineNumber;
-  const infoBoxCount = [hasArriveBy, hasAgeLimit, hasHelpline].filter(Boolean).length;
-
-  // ── Box 1: BEFORE THE EVENT ──
-  if (hasBox1) {
-    const innerPad = box1InnerPad;
-    ensureSpace(box1H);
-
-    doc.setFillColor(...CARD_BG);
-    doc.setDrawColor(...CARD_BORDER);
-    doc.setLineWidth(0.75);
-    doc.rect(cardX, y, cardW, box1H, 'FD');
-
-    let ty = y + innerPad + 4;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...TEAL);
-    doc.text('GOOD TO DO BEFORE THE EVENT', cardX + innerPad, ty);
-    ty += 16;
-
-    if (ledeLines.length) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(...MUTED);
-      ledeLines.forEach((line) => {
-        doc.text(line, cardX + innerPad, ty);
-        ty += 12;
-      });
-      ty += 6;
-    }
-
-    if (infoBoxCount > 0) {
-      const boxGap = 8;
-      const boxW = (cardW - innerPad * 2 - boxGap * (infoBoxCount - 1)) / infoBoxCount;
-      const boxH = 34;
-      const boxItems: { label: string; value: string }[] = [];
-      if (hasArriveBy) boxItems.push({
-        label: 'ARRIVE BY',
-        value: formatEventTime(event.eventArriveBy as string) ?? (event.eventArriveBy as string),
-      });
-      if (hasAgeLimit) boxItems.push({ label: 'AGE LIMIT', value: event.eventAgeLimit as string });
-      if (hasHelpline) boxItems.push({ label: 'NEED HELP?', value: event.eventHelplineNumber as string });
-
-      boxItems.forEach((item, i) => {
-        const bx = cardX + innerPad + i * (boxW + boxGap);
-        doc.setFillColor(248, 250, 252);
-        doc.setDrawColor(...CARD_BORDER);
-        doc.setLineWidth(0.75);
-        doc.rect(bx, ty, boxW, boxH, 'FD');
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(...MUTED);
-        doc.text(item.label, bx + 8, ty + 13);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10.5);
-        doc.setTextColor(...TEXT_DARK);
-        doc.text(item.value, bx + 8, ty + 27, { maxWidth: boxW - 16 });
-      });
-      ty += boxH + 12;
-    }
-
-    if (hasGoodToKnow) {
-      wrappedGoodToKnow.forEach((lines) => {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(bulletFontSize);
-        doc.setTextColor(...MUTED);
-        lines.forEach((line, i) => doc.text(line, cardX + innerPad, ty + i * bulletLineHeight));
-        ty += lines.length * bulletLineHeight + 6;
-      });
-    }
-
-    y += box1H + 16;
-  }
-
-  // ── Box 2: TERMS & CONDITIONS — completely separate block, consent text only ──
-  if (hasTerms) {
-    const innerPad = box2InnerPad;
-    ensureSpace(box2H);
-
-    doc.setFillColor(...CARD_BG);
-    doc.setDrawColor(...CARD_BORDER);
-    doc.setLineWidth(0.75);
-    doc.rect(cardX, y, cardW, box2H, 'FD');
-
-    let ty = y + innerPad + 4;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...TEAL);
-    doc.text('TERMS & CONDITIONS', cardX + innerPad, ty);
-    ty += 16;
-
-    wrappedTerms.forEach((lines) => {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(termFontSize);
-      doc.setTextColor(...MUTED);
-      lines.forEach((line, i) => doc.text(line, cardX + innerPad, ty + i * termLineHeight));
-      ty += lines.length * termLineHeight + 6;
+  // ── Footer on every page ──
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    const fTop = PAGE_H - PAD - FOOTER_H;
+    pen.hr(PAD, fTop, CONTENT_W);
+    const textTop = fTop + 1 + 16;
+    pen.font(PdfFont.Body, 12).color(MUTED);
+    const left = [helpline ? `Event questions: ${helpline}` : '', pages > 1 ? `Page ${p} of ${pages}` : '']
+      .filter(Boolean)
+      .join('  ·  ');
+    if (left) pen.text(left, PAD, textTop, 16);
+    pen.text('Ticketing by Outsold · A product by Sellar.in', PAD + CONTENT_W, textTop, 16, {
+      align: 'right',
+      link: 'https://app.outsold.in',
     });
-
-    y += box2H + 16;
   }
-
-  ensureSpace(40);
-  doc.setDrawColor(...CARD_BORDER);
-  doc.setLineWidth(0.5);
-  doc.line(cardX, y, cardX + cardW, y);
-  y += 14;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(...MUTED);
-  doc.text(`TICKET #${ticket.ticketId}`, cardX, y);
-  y += 11;
-  doc.text(`GENERATED: ${new Date().toLocaleString('en-IN')}`, cardX, y);
-  pill('Verified', cardX + cardW - 56, y - 20, GREEN_BG, GREEN_TXT);
-
-  // ── Footer: Made by Outsold.in ───────────────────────────────
-  // Keep footer fixed at the very bottom of the page
-  const pageHeight = doc.internal.pageSize.getHeight();
-
-  const footerY = pageHeight - 12;
-  const footerX = cardX + cardW / 2;
-
-  const footerPrefix = 'Made by ';
-  const footerBrand = 'Outsold.in';
-
-  // "Made by"
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...MUTED);
-
-  const prefixWidth = doc.getTextWidth(footerPrefix);
-
-  // "Outsold.in"
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...TEAL);
-
-  const brandWidth = doc.getTextWidth(footerBrand);
-
-  const totalWidth = prefixWidth + brandWidth;
-  const startX = footerX - totalWidth / 2;
-
-  // Draw "Made by"
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...MUTED);
-  doc.text(footerPrefix, startX, footerY);
-
-  // Draw "Outsold.in"
-  const brandX = startX + prefixWidth;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...TEAL);
-  doc.text(footerBrand, brandX, footerY);
-
-  // Make ONLY "Outsold.in" clickable
-  doc.link(
-    brandX,
-    footerY - 7,
-    brandWidth,
-    9,
-    { url: 'https://app.outsold.in' }
-  );
+  doc.setPage(1);
 
   return doc;
 };
 
-// jsPDF's built-in fonts (helvetica) only cover WinAnsi / Windows-1252. Any
-// other character — emoji especially — is written out as its raw UTF-16
-// halves, so "👌" (U+D83D U+DC4C) printed as "Ø=ÜL". Keep what the font can
-// draw and drop the rest. NFKC first so styled Unicode letters ("𝐇𝐞𝐲",
-// full-width "ＡＢ") fold to plain ASCII instead of being dropped.
+// jsPDF's built-in Helvetica only covers WinAnsi (Windows-1252); the brand
+// TTFs add ₹ on top of that. Anything else — emoji especially — would print
+// as garbage ("👌" came out as "Ø=ÜL"), so keep what the font can draw and
+// drop the rest. NFKC first so styled Unicode letters ("𝐇𝐞𝐲", full-width
+// "ＡＢ") fold to plain ASCII instead of being dropped.
 const WIN_ANSI_EXTRAS = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
-function toPdfText(value: string): string {
-  return Array.from(value.normalize('NFKC').replace(/₹\s*/g, 'Rs. '))
+function toPdfText(value: string, allowRupee: boolean): string {
+  let s = value.normalize('NFKC');
+  if (!allowRupee) s = s.replace(/₹\s*/g, 'Rs. ');
+  return Array.from(s)
     .filter((ch) => {
       const cp = ch.codePointAt(0)!;
-      return ch === '\n' || (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) || WIN_ANSI_EXTRAS.includes(ch);
+      return (
+        ch === '\n' ||
+        (cp >= 0x20 && cp <= 0x7e) ||
+        (cp >= 0xa0 && cp <= 0xff) ||
+        WIN_ANSI_EXTRAS.includes(ch) ||
+        (allowRupee && ch === '₹')
+      );
     })
     .join('')
     .replace(/[^\S\n]+/g, ' ') // any whitespace except newlines (incl. tab, nbsp)
     .replace(/ *\n */g, '\n')
     .trim();
-}
-
-function stripHtmlTagsLocal(html: string): string {
-  return html.replace(/<[^>]*>/g, '').trim();
-}
-
-// Multi-line rich-text (consent / good-to-know) ke liye:
-// block tags aur <br> ko newline banata hai taaki har line alag rahe.
-function htmlToPlainLines(html: string): string {
-  return html
-    .replace(/\r\n?/g, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr)>/gi, '\n')
-    .replace(/<(p|div|li|h[1-6])[^>]*>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&amp;/gi, '&')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
-}
-
-// Instagram-story-style palette pick: samples the banner, buckets pixels by
-// quantized color, skips near-white/near-black/low-saturation (gray) pixels
-// so we land on a vibrant color instead of "average brownish gray", then
-// derives a darker shade for the stamp/accent color from the same hue.
-const DEFAULT_TEAL: [number, number, number] = [0, 122, 120];
-const DEFAULT_DARK_GREEN: [number, number, number] = [4, 78, 60];
-
-function extractPaletteFromImage(
-  dataUrl: string
-): Promise<{ primary: [number, number, number]; dark: [number, number, number] }> {
-  return new Promise((resolve) => {
-    const fallback = { primary: DEFAULT_TEAL, dark: DEFAULT_DARK_GREEN };
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-
-    img.onload = () => {
-      try {
-        const size = 60;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(fallback); return; }
-        ctx.drawImage(img, 0, 0, size, size);
-        const { data } = ctx.getImageData(0, 0, size, size);
-
-        const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
-          if (a < 200) continue;
-          const max = Math.max(r, g, b), min = Math.min(r, g, b);
-          const lightness = (max + min) / 2;
-          const sat = max === min ? 0 : (max - min) / (255 - Math.abs(2 * lightness - 255));
-          if (lightness > 235 || lightness < 20 || sat < 0.15) continue; // white/black/gray — skip
-          const key = `${r >> 4}-${g >> 4}-${b >> 4}`; // quantize to 16 levels/channel
-          const bucket = buckets.get(key);
-          if (bucket) { bucket.count++; bucket.r += r; bucket.g += g; bucket.b += b; }
-          else buckets.set(key, { count: 1, r, g, b });
-        }
-
-        let best: { count: number; r: number; g: number; b: number } | null = null;
-        for (const v of buckets.values()) {
-          if (!best || v.count > best.count) best = v;
-        }
-        if (!best) { resolve(fallback); return; }
-
-        const pr = Math.round(best.r / best.count);
-        const pg = Math.round(best.g / best.count);
-        const pb = Math.round(best.b / best.count);
-        const darken = (v: number) => Math.max(0, Math.round(v * 0.55));
-
-        resolve({ primary: [pr, pg, pb], dark: [darken(pr), darken(pg), darken(pb)] });
-      } catch {
-        resolve(fallback);
-      }
-    };
-
-    img.onerror = () => resolve(fallback);
-    img.src = dataUrl;
-  });
 }

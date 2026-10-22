@@ -54,6 +54,10 @@ export const auth = initializeAuth(app, {
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
+// Razorpay payment functions (functions/payments/*) run in Mumbai, next to
+// Razorpay and the Firestore database; the older functions stay in us-central1.
+export const PAYMENTS_REGION = "asia-south1";
+export const paymentFunctions = getFunctions(app, PAYMENTS_REGION);
 
 // Initialize Analytics if supported in the environment (e.g. browser)
 export let analytics: any = null;

@@ -12,6 +12,7 @@ import {
   orderBy,
   doc,
   updateDoc,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   writeBatch,
@@ -39,11 +40,9 @@ import ConfirmCancelModal from '../components/ConfirmCancelModal';
 import ConfirmReviveModal from '../components/ConfirmReviveModal';
 import EditAttendeeModal from '../components/EditAttendeeModal';
 import { useEventCredits } from '../hooks/useEventCredits';
-import { loadImageAsCoverBanner } from '../lib/imageBanner';
+import { loadTicketPdfHero } from '../lib/ticketPdf';
 
 // Matches the PDF acknowledgement's banner box in AttendeeCard.tsx.
-const PDF_BANNER_WIDTH = 760;
-const PDF_BANNER_HEIGHT = 220;
 
 type SortOption = 'name_asc' | 'name_desc' | 'purchased_first' | 'purchased_last' | 'checked_in' | 'pending' | 'cancelled';
 
@@ -82,6 +81,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     id,
     title: data.title,
     coverImage: data.coverImageDesktop || data.coverImageMobile || data.coverImageUrl || undefined,
+    posterImage: data.coverImageMobile || data.coverImageDesktop || data.coverImageUrl || undefined,
     category: data.category,
     status: data.status,
     startDate: data.date,
@@ -102,6 +102,8 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     arriveByTime: data.arriveByTime ?? null,
     ageLimit: data.ageLimit ?? null,
     helplineNumber: data.helplineNumber ?? null,
+    upiId: data.upiId ?? undefined,
+    payeeName: data.payeeName ?? undefined,
   };
 };
 
@@ -120,10 +122,13 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   paymentMode: data.paymentMode ?? undefined,
   paymentMethod: data.paymentMethod ?? undefined,
   screenshotUrl: data.screenshotUrl ?? undefined,
+  razorpayPaymentId: data.razorpayPaymentId ?? undefined,
   accessCode: data.accessCode ?? undefined,
   purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
   createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
   bookingGroupId: data.bookingGroupId ?? null,
+  // Walk-ins are saved with isWalkIn: true (lib/ticketing.ts), not a source field.
+  source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
 });
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
@@ -145,7 +150,7 @@ const Attendees: React.FC = () => {
   const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; initialArrived: number } | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
-  const [walkInTicket, setWalkInTicket] = useState<{
+  const [walkInTickets, setWalkInTickets] = useState<{
     ticketId: string;
     tierName: string;
     attendeeName: string;
@@ -154,7 +159,7 @@ const Attendees: React.FC = () => {
     amountPaid?: number;
     paymentMode?: string;
     purchasedAt?: number;
-  } | null>(null);
+  }[] | null>(null);
   const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
   const [pendingReviveAttendee, setPendingReviveAttendee] = useState<Attendee | null>(null);
   const [pendingEditAttendee, setPendingEditAttendee] = useState<Attendee | null>(null);
@@ -196,8 +201,9 @@ const Attendees: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setPdfBannerDataUrl(null);
+    // PDF hero is wide, so use the desktop-first cover; portrait is the fallback.
     if (!selectedEvent?.coverImage) return;
-    loadImageAsCoverBanner(selectedEvent.coverImage, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+    loadTicketPdfHero(selectedEvent.coverImage).then((dataUrl) => {
       if (!cancelled) setPdfBannerDataUrl(dataUrl);
     });
     return () => { cancelled = true; };
@@ -401,6 +407,7 @@ const Attendees: React.FC = () => {
         tierId?: string;
         amountPaid?: number;
         paymentMode?: Attendee['paymentMode'];
+        screenshotUrl?: string | null;
       }
     ) => {
       if (!profile?.companyId || !selectedEventId) return;
@@ -413,7 +420,38 @@ const Attendees: React.FC = () => {
       setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...writePayload } : a)));
 
       const attendeeRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId, 'attendees', id);
-      updateDoc(attendeeRef, writePayload)
+      const eventRef = doc(db, 'companies', profile.companyId, 'events', selectedEventId);
+
+      // Same fallback EditAttendeeModal uses to find the attendee's CURRENT
+      // tier (older records predate ticketTierId and only have tierName).
+      const previousTierId = pendingEditAttendee
+        ? selectedEvent?.tiers.find(
+            (t) => t.id === pendingEditAttendee.ticketTierId || t.name === pendingEditAttendee.tierName
+          )?.id
+        : undefined;
+      const tierChanged = !!tierId && !!previousTierId && tierId !== previousTierId;
+
+      // Moving an attendee to a different tier without also moving their
+      // seat in tiers[].sold is exactly how sold counts quietly drift from
+      // the real attendee count — the Discover page's "X sold" badge reads
+      // straight from tiers[].sold, so it'd undercount the new tier and
+      // overcount the old one forever after a plain updateDoc here.
+      const savePromise = tierChanged
+        ? runTransaction(db, async (transaction) => {
+            const eventSnap = await transaction.get(eventRef);
+            if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+            const currentTiers = (eventSnap.data().tiers || []) as { id: string; sold?: number }[];
+            const updatedTiers = currentTiers.map((t) => {
+              if (t.id === previousTierId) return { ...t, sold: Math.max(0, (t.sold ?? 0) - 1) };
+              if (t.id === tierId) return { ...t, sold: (t.sold ?? 0) + 1 };
+              return t;
+            });
+            transaction.update(eventRef, { tiers: updatedTiers });
+            transaction.update(attendeeRef, writePayload);
+          })
+        : updateDoc(attendeeRef, writePayload);
+
+      savePromise
         .then(() => {
           setScanFeedback({ type: 'success', message: `${updates.name}'s details updated.` });
         })
@@ -424,7 +462,7 @@ const Attendees: React.FC = () => {
 
       setPendingEditAttendee(null);
     },
-    [profile?.companyId, selectedEventId]
+    [profile?.companyId, selectedEventId, pendingEditAttendee, selectedEvent]
   );
 
   const handleCancelEdit = useCallback(() => setPendingEditAttendee(null), []);
@@ -502,26 +540,37 @@ const Attendees: React.FC = () => {
   }, []);
 
   const handleWalkInAdded = useCallback(
-    (data: {
-      name: string;
-      ticketId: string;
-      tierName: string;
-      email: string;
-      phone: string;
-      amountPaid: number;
-      paymentMode: string;
-    }) => {
-      setScanFeedback({ type: 'success', message: `${data.name} added as walk-in (${data.ticketId}).` });
-      setWalkInTicket({
-        ticketId: data.ticketId,
-        tierName: data.tierName,
-        attendeeName: data.name,
-        attendeeEmail: data.email,
-        attendeePhone: data.phone,
-        amountPaid: data.amountPaid,
-        paymentMode: data.paymentMode,
-        purchasedAt: Date.now(),
+    (
+      data: {
+        name: string;
+        ticketId: string;
+        tierName: string;
+        email: string;
+        phone: string;
+        amountPaid: number;
+        paymentMode: string;
+      }[]
+    ) => {
+      setScanFeedback({
+        type: 'success',
+        message:
+          data.length > 1
+            ? `${data.length} attendees added as walk-in (${data[0].ticketId}–${data[data.length - 1].ticketId}).`
+            : `${data[0].name} added as walk-in (${data[0].ticketId}).`,
       });
+      const purchasedAt = Date.now();
+      setWalkInTickets(
+        data.map((d) => ({
+          ticketId: d.ticketId,
+          tierName: d.tierName,
+          attendeeName: d.name,
+          attendeeEmail: d.email,
+          attendeePhone: d.phone,
+          amountPaid: d.amountPaid,
+          paymentMode: d.paymentMode,
+          purchasedAt,
+        }))
+      );
     },
     []
   );
@@ -565,6 +614,19 @@ const Attendees: React.FC = () => {
         return searchedAttendees;
     }
   }, [searchedAttendees, sortOption]);
+
+  // A group booking shows as ONE row (its first ticket in the current
+  // order/filter), with the group's size, ticket IDs and arrivals on it.
+  // Cancelled tickets have left their group and keep their own row.
+  const listedAttendees = useMemo(() => {
+    const seenGroups = new Set<string>();
+    return sortedAttendees.filter((a) => {
+      if (a.status === 'cancelled' || !a.bookingGroupId || !getGroupMembers(a)) return true;
+      if (seenGroups.has(a.bookingGroupId)) return false;
+      seenGroups.add(a.bookingGroupId);
+      return true;
+    });
+  }, [sortedAttendees, getGroupMembers]);
 
   const stats = useMemo(() => {
     const checkedIn = attendees.filter((a) => a.status === 'checked_in').length;
@@ -765,13 +827,13 @@ const Attendees: React.FC = () => {
               {/* 5. Attendee list */}
               {isLoadingAttendees ? (
                 <div className="text-center py-10 text-sm text-gray-500">Loading attendees…</div>
-              ) : sortedAttendees.length === 0 ? (
+              ) : listedAttendees.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500">
                   {attendees.length === 0 ? 'No tickets sold for this event yet' : 'No attendees match your search'}
                 </div>
               ) : (
                 <div>
-                  {sortedAttendees.map((attendee) => (
+                  {listedAttendees.map((attendee) => (
                     <AttendeeCard
                       key={attendee.id}
                       attendee={attendee}
@@ -782,6 +844,7 @@ const Attendees: React.FC = () => {
                       onRevive={can(Permission.CANCEL_ATTENDEE) ? requestRevive : undefined}
                       onEdit={can(Permission.EDIT_ATTENDEE) ? requestEdit : undefined}
                       eventTitle={selectedEvent.title}
+                      eventCategory={selectedEvent.category}
                       eventDate={selectedEvent.startDate}
                       eventTime={selectedEvent.time}
                       eventVenue={selectedEvent.venue}
@@ -796,10 +859,16 @@ const Attendees: React.FC = () => {
                       bookMoreTicketsUrl={bookMoreTicketsUrl}
                       customFields={selectedEvent.customFields}
                       groupInfo={(() => {
+                        if (attendee.status === 'cancelled') return undefined;
                         const group = getGroupMembers(attendee);
-                        return group
-                          ? { size: group.length, arrived: group.filter((m) => m.status === 'checked_in').length }
-                          : undefined;
+                        if (!group) return undefined;
+                        const tiers = Array.from(new Set(group.map((m) => m.tierName)));
+                        return {
+                          size: group.length,
+                          arrived: group.filter((m) => m.status === 'checked_in').length,
+                          ticketIds: group.map((m) => m.ticketId).sort((x, y) => x.localeCompare(y)),
+                          tierLabel: tiers.length === 1 ? `${tiers[0]} × ${group.length}` : `${group.length} tickets`,
+                        };
                       })()}
                     />
                   ))}
@@ -840,6 +909,7 @@ const Attendees: React.FC = () => {
       <EditAttendeeModal
         attendee={pendingEditAttendee}
         event={selectedEvent}
+        companyId={profile?.companyId}
         onSave={handleSaveEdit}
         onCancel={handleCancelEdit}
       />
@@ -859,11 +929,11 @@ const Attendees: React.FC = () => {
         existingAttendees={attendees}
         onSuccess={(count) => setScanFeedback({ type: 'success', message: `${count} attendee(s) imported.` })}
       />
-      {walkInTicket && selectedEvent && (
+      {walkInTickets && walkInTickets.length > 0 && selectedEvent && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <div className="relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-sm sm:rounded-sm bg-white dark:bg-slate-900 shadow-xl">
             <button
-              onClick={() => setWalkInTicket(null)}
+              onClick={() => setWalkInTickets(null)}
               className="absolute right-3 top-3 z-10 rounded-sm bg-black/5 p-1.5 text-slate-500 hover:bg-black/10 hover:text-slate-700 dark:bg-white/10 dark:text-slate-300"
               aria-label="Close"
             >
@@ -871,12 +941,14 @@ const Attendees: React.FC = () => {
             </button>
             <TicketConfirmation
               eventTitle={selectedEvent.title}
+              eventCategory={selectedEvent.category}
               eventDate={selectedEvent.startDate}
               eventVenue={selectedEvent.venue}
                eventTime={selectedEvent.time}
-              tickets={[{ ...walkInTicket, status: 'valid' }]}
-              onDone={() => setWalkInTicket(null)}
+              tickets={walkInTickets.map((t) => ({ ...t, status: 'valid' }))}
+              onDone={() => setWalkInTickets(null)}
               eventBannerDataUrl={pdfBannerDataUrl}
+              eventPosterUrl={selectedEvent.posterImage}
               eventConsentText={selectedEvent.consentText}
               eventGoodToKnowText={selectedEvent.goodToKnowText}
               eventIsOnline={selectedEvent.isOnline}

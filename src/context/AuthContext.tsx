@@ -162,6 +162,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      // `loading` only starts true for the very first resolution on page
+      // load. A LATER sign-in (the common case: land on /login unauthenticated
+      // — which resolves `loading` to false quickly — then actually log in)
+      // doesn't reset it. Without this, ProtectedRoute sees `user` already
+      // set and `loading` already false and renders the protected tree
+      // immediately, while `profile` is still null/stale from before this
+      // sign-in — PermissionRoute reads that as "no role matches" and
+      // flashes Access Denied until loadProfile finishes a moment later.
+      // Logging out doesn't need this: loadProfile resolves ~instantly for
+      // a null user, so there's nothing worth showing a spinner for.
+      if (firebaseUser) setLoading(true);
       await loadProfile(firebaseUser);
       setLoading(false);
     });

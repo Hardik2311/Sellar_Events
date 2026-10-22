@@ -20,6 +20,9 @@ export interface TicketDisplaySettings {
 // NEW
 export interface PaymentSettings {
   allowManualQR: boolean; // org-level toggle — shows/hides the option on Create/Edit Event
+  // Set when the owner saves a payout bank account (payoutAccounts/{companyId},
+  // owner-only). Lets team members' Create/Edit Event know the gateway can be used.
+  payoutAccountReady?: boolean;
 }
 
 // Storefront footer details and the organizer's own policies, edited in

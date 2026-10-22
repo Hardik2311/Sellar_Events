@@ -3,6 +3,9 @@ import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Attendee } from '../types/attendee.types';
 
+const toMs = (v: unknown): number | undefined =>
+  v instanceof Timestamp ? v.toMillis() : typeof v === 'number' ? v : undefined;
+
 export function useAttendees(companyId: string | undefined, eventId: string | undefined) {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +52,19 @@ export function useAttendees(companyId: string | undefined, eventId: string | un
             paymentMethod: data.paymentMethod ?? undefined,
             paymentMode: data.paymentMode ?? undefined,
             screenshotUrl: data.screenshotUrl ?? undefined,
-            source: data.source ?? 'ticket',
+            razorpayPaymentId: data.razorpayPaymentId ?? undefined,
+            source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
             bookingGroupId: data.bookingGroupId ?? null,
+            ticketEmail: data.ticketEmail
+              ? {
+                  status: data.ticketEmail.status,
+                  sentAt: toMs(data.ticketEmail.sentAt),
+                  failedAt: toMs(data.ticketEmail.failedAt),
+                  error: data.ticketEmail.error ?? undefined,
+                  manual: !!data.ticketEmail.manual,
+                  to: data.ticketEmail.to ?? undefined,
+                }
+              : null,
           } as Attendee;
         });
         setAttendees(list);

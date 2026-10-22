@@ -4,6 +4,9 @@ import { Calendar, Clock, Wallet, AlertTriangle } from 'lucide-react';
 import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
+import PaymentModeSelector from '../components/PaymentModeSelector';
+import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
+import { describeFee } from '../lib/platformFee';
 import { useEventCredits } from '../hooks/useEventCredits';
 import {
   FloatingLabelInput,
@@ -66,8 +69,8 @@ const INITIAL_STATE: EventFormState = {
   descriptionFontSize: 14,
   consentFontSize: 14,
   goodToKnowFontSize: 14,
-  // Payment gateway isn't wired up to a real processor yet — default new
-  // events to the one collection mode that actually works.
+  // Manual QR stays the default; organizers who've connected Razorpay
+  // (Settings → Event) can switch an event to the payment gateway.
   paymentCollectionMode: 'manual_qr',
   //qrImage: null,
   upiId: '',
@@ -99,6 +102,7 @@ const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { settings: companySettings } = useCompanySettings();
   const { user, profile } = useAuth();
+  const { config: feeConfig } = usePlatformFeeConfig(profile?.companyId);
   const { can } = usePermissions();
   const { credits, loading: creditsLoading } = useEventCredits();
   const [form, setForm] = useState<EventFormState>(INITIAL_STATE);
@@ -131,6 +135,16 @@ const CreateEvent: React.FC = () => {
       update('registrationMode', 'tickets');
     }
   }, [companySettings.rsvpEnabled]);
+  // Manual QR switched off in Settings → Event: new events use the gateway.
+  useEffect(() => {
+    if (
+      !companySettings.payments.allowManualQR &&
+      feeConfig.gatewayEnabled &&
+      form.paymentCollectionMode === 'manual_qr'
+    ) {
+      update('paymentCollectionMode', 'gateway');
+    }
+  }, [companySettings.payments.allowManualQR, feeConfig.gatewayEnabled, form.paymentCollectionMode]);
 
   // Load any saved draft once the organizer's company is known.
   useEffect(() => {
@@ -190,6 +204,15 @@ const CreateEvent: React.FC = () => {
     form.paymentCollectionMode !== 'manual_qr' ||
     isValidUpi(form.upiId);
 
+  // Gateway mode collects into the platform's account, so it needs the
+  // platform gateway switched on and the organizer's payout bank account.
+  const isGatewayEnabled = feeConfig.gatewayEnabled;
+  const isPayoutReady = !!companySettings.payments.payoutAccountReady;
+  const isGatewayReady =
+    form.registrationMode !== 'tickets' ||
+    form.paymentCollectionMode !== 'gateway' ||
+    (isGatewayEnabled && isPayoutReady);
+
   // Ordered top-to-bottom to match the form's visual layout, so "scroll to
   // the first problem" lands on whichever one the user would hit first.
   const publishChecks: { field: string; valid: boolean; message: string }[] = [
@@ -203,6 +226,7 @@ const CreateEvent: React.FC = () => {
     { field: 'venue', valid: form.isOnline || form.venue.trim().length > 0, message: 'Enter a venue before publishing.' },
     { field: 'rsvp-link', valid: form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink), message: 'Enter a valid RSVP link before publishing.' },
     { field: 'upi-id', valid: isManualQRReady, message: 'Enter a valid UPI ID before publishing.' },
+    { field: 'payment-mode', valid: isGatewayReady, message: isGatewayEnabled ? 'Add your payout bank account in Settings → Event before publishing with the payment gateway.' : "Online payments aren't available yet. Switch to UPI QR (manual)." },
   ];
 
   const isPublishable = publishChecks.every((c) => c.valid);
@@ -838,34 +862,18 @@ const CreateEvent: React.FC = () => {
 
                   {form.registrationMode === 'tickets' ? (
                     <>
-                      {companySettings.payments.allowManualQR && (
-                        <FormField label="Payment collection" htmlFor="payment-mode">
-                          <div className="flex rounded-sm border border-gray-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800">
-                            <button
-                              type="button"
-                              disabled
-                              title="Coming soon — no live payment gateway is connected yet"
-                              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-sm font-medium text-gray-400 dark:text-slate-600 opacity-50"
-                            >
-                              Payment gateway
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => update('paymentCollectionMode', 'manual_qr')}
-                              className={`flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors ${form.paymentCollectionMode === 'manual_qr'
-                                ? 'bg-orange-50 dark:bg-[#2DD4BF]/10 text-[#007A78] dark:text-[#2DD4BF]'
-                                : 'text-gray-500 dark:text-slate-400'
-                                }`}
-                            >
-                              UPI QR (manual)
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                            {form.paymentCollectionMode === 'manual_qr'
-                              ? 'Attendees scan your QR, pay directly, and upload a screenshot. They\u2019re added as attendees immediately — verify payment manually at check-in.'
-                              : 'Payment gateway isn’t live yet — switch to UPI QR (manual) to actually collect payment.'}
-                          </p>
-                        </FormField>
+                      {(companySettings.payments.allowManualQR || isGatewayEnabled) && (
+                        <div data-field-anchor="payment-mode">
+                          <PaymentModeSelector
+                            id="payment-mode"
+                            value={form.paymentCollectionMode}
+                            onChange={(mode) => update('paymentCollectionMode', mode)}
+                            allowManualQR={companySettings.payments.allowManualQR}
+                            gatewayEnabled={isGatewayEnabled}
+                            payoutReady={isPayoutReady}
+                            feeLabel={describeFee(feeConfig)}
+                          />
+                        </div>
                       )}
 
                       {form.paymentCollectionMode === 'manual_qr' && (

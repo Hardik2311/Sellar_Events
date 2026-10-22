@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Ticket, ArrowLeft, Smartphone, CreditCard, Landmark, AlertCircle } from 'lucide-react';
+import { Ticket, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
@@ -8,13 +8,16 @@ import { formatTime, type AccessCodeEntry } from '../data/events';
 import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
+import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
+import { computePlatformFee } from '../lib/platformFee';
 import { getSubdomain } from '../lib/subdomain';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
 import { stripHtmlTags } from '../lib/utils';
-import { assignBookingGroups, getEventInitials } from '../lib/ticketing';
-import { loadImageAsCoverBanner } from '../lib/imageBanner';
+import { assignBookingGroups, formatTicketId, getEventInitials, nextTicketNumbers } from '../lib/ticketing';
+import { checkoutErrorMessage, payWithRazorpay, PaymentCancelledError } from '../lib/razorpay';
+import { loadTicketPdfHero } from '../lib/ticketPdf';
 import BrandNavHeader from '../components/brand/BrandNavHeader';
 import SectionLabel from '../components/brand/SectionLabel';
 import TicketOrderSummary from '../components/brand/TicketOrderSummary';
@@ -33,15 +36,7 @@ import {
   brandPanelClass,
 } from '../components/brand/brandForm';
 
-type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'free';
-const PDF_BANNER_WIDTH = 760;
-const PDF_BANNER_HEIGHT = 220;
-const PAYMENT_MODE_LABELS: Record<PaymentMethod, 'UPI' | 'Card' | 'Netbanking' | 'Free'> = {
-  upi: 'UPI',
-  card: 'Card',
-  netbanking: 'Netbanking',
-  free: 'Free',
-};
+const RAZORPAY_THEME_COLOR = '#007a78'; // --brand-teal
 
 interface TaxSettings {
   enableTax?: boolean;
@@ -65,6 +60,7 @@ const CheckoutPage: React.FC = () => {
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
   const { settings } = useCompanySettings(resolvedCompanyId);
+  const { config: feeConfig } = usePlatformFeeConfig(resolvedCompanyId, id);
   const loading = domainLoading || eventLoading;
   const locationState = location.state as { quantities?: Record<string, number>; accessCode?: string } | null;
   const quantities: Record<string, number> = locationState?.quantities ?? {};
@@ -92,7 +88,6 @@ const CheckoutPage: React.FC = () => {
   const [sameForAll, setSameForAll] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
-  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -164,8 +159,15 @@ const CheckoutPage: React.FC = () => {
 
   const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
 
-  // Banner is wide (760x220), so prefer the desktop cover; fall back to the rest.
+  // On-screen ticket hero: the portrait (mobile) poster first.
   const bannerSrc =
+    event?.coverImageMobile ||
+    event?.coverImageDesktop ||
+    event?.coverImage ||
+    event?.images?.[0] ||
+    null;
+  // PDF hero is wide, so the desktop cover looks better there; portrait is the fallback.
+  const pdfHeroSrc =
     event?.coverImageDesktop ||
     event?.coverImageMobile ||
     event?.coverImage ||
@@ -175,12 +177,12 @@ const CheckoutPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setPdfBannerDataUrl(null);
-    if (!bannerSrc) return;
-    loadImageAsCoverBanner(bannerSrc, PDF_BANNER_WIDTH, PDF_BANNER_HEIGHT).then((dataUrl) => {
+    if (!pdfHeroSrc) return;
+    loadTicketPdfHero(pdfHeroSrc).then((dataUrl) => {
       if (!cancelled) setPdfBannerDataUrl(dataUrl);
     });
     return () => { cancelled = true; };
-  }, [bannerSrc]);
+  }, [pdfHeroSrc]);
 
   // "Book more tickets" link inside the ticket PDF — same URL organizer's
   // "Live view" opens (organizer's base URL + /e/<slug-id>) for THIS event only.
@@ -299,6 +301,24 @@ const CheckoutPage: React.FC = () => {
     : subtotal;
 
   const roundOffAmt = Number((total - subtotal).toFixed(2));
+
+  // Gateway events are paid into the platform's account: the buyer also pays
+  // the platform fee + GST on it (preview — the server computes the charge).
+  // Manual-QR money goes straight to the organizer, so no fee there.
+  const isGatewayEvent = event.paymentCollectionMode === 'gateway';
+  const { platformFee, platformFeeGst } = isGatewayEvent
+    ? computePlatformFee(
+        lineItems.map((li) => ({
+          unitTotal:
+            scheme === 'regular' && taxType === 'exclusive'
+              ? Number((li.tier.price * (1 + taxRate / 100)).toFixed(2))
+              : li.tier.price,
+          qty: li.qty,
+        })),
+        feeConfig
+      )
+    : { platformFee: 0, platformFeeGst: 0 };
+  const grandTotal = Number((total + platformFee + platformFeeGst).toFixed(2));
   const totalQty = lineItems.reduce((s, item) => s + item.qty, 0);
   const isValidPhone = (value: string) => /^[6-9]\d{9}$/.test(value.trim());
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -323,6 +343,9 @@ const CheckoutPage: React.FC = () => {
   );
   const detailsComplete = contactComplete && questionsComplete;
 
+  // Gateway events are priced, held and issued entirely by Cloud Functions
+  // (functions/payments/*) — the browser never writes their tickets.
+
   const initiatePayment = () => {
     if (!detailsComplete || lineItems.length === 0) return;
 
@@ -331,14 +354,57 @@ const CheckoutPage: React.FC = () => {
       return item.qty > remaining;
     });
     if (oversold) {
-      console.error(`Not enough tickets left for "${oversold.tier.name}".`);
+      setCheckoutError(`Not enough tickets left for "${oversold.tier.name}". Try a smaller quantity.`);
       return;
     }
 
-    handlePay(total === 0 ? 'free' : selectedMethod);
+    if (isGatewayEvent) {
+      handleGatewayPay();
+      return;
+    }
+    if (total > 0) {
+      // Nothing can take money for a non-gateway event on this page.
+      setCheckoutError("Online payment isn't set up for this event yet. Please contact the organizer.");
+      return;
+    }
+    handleFreeBooking();
   };
 
-  const handlePay = async (method: PaymentMethod = 'free') => {
+  const handleGatewayPay = async () => {
+    if (!event.companyId) return;
+    setStep('processing');
+    setCheckoutError(null);
+    try {
+      const tickets = await payWithRazorpay(
+        {
+          companyId: event.companyId,
+          eventId: event.id,
+          quantities: Object.fromEntries(lineItems.map((li) => [li.tier.id, li.qty])),
+          attendees: attendeeDetails.map((a) => ({
+            name: a.name.trim(),
+            email: a.email.trim(),
+            phone: a.phone.trim(),
+            customAnswers: a.customAnswers ?? {},
+          })),
+          accessCode,
+        },
+        {
+          organizationName: settings.organizationName,
+          eventTitle: stripHtmlTags(event.title),
+          themeColor: RAZORPAY_THEME_COLOR,
+        }
+      );
+      setPurchasedTickets(tickets);
+      setStep('success');
+    } catch (err) {
+      if (!(err instanceof PaymentCancelledError)) console.error('Razorpay checkout failed:', err);
+      setCheckoutError(checkoutErrorMessage(err));
+      setStep('details'); // let them retry
+    }
+  };
+
+  // ₹0 bookings on events that don't use the gateway.
+  const handleFreeBooking = async () => {
     if (!detailsComplete || lineItems.length === 0) return;
 
     const oversold = lineItems.find((item) => {
@@ -446,10 +512,7 @@ const CheckoutPage: React.FC = () => {
           return { ...tier, sold: currentSold + purchased };
         });
 
-        const totalAlreadySold = currentTiers.reduce(
-          (sum, tier) => sum + (Number.isFinite(tier.sold) ? tier.sold : 0),
-          0
-        );
+        const { numbers: ticketNumbers, ticketSeq } = nextTicketNumbers(eventSnap.data(), attendeeWrites.length);
 
         // Atomically enforce + consume the access code inside the same
         // transaction that sells the tickets, so two simultaneous checkouts
@@ -476,6 +539,7 @@ const CheckoutPage: React.FC = () => {
 
         transaction.update(eventRef, {
           tiers: updatedTiers,
+          ticketSeq,
           ...(updatedAccessCodes ? { accessCodes: updatedAccessCodes } : {}),
         });
 
@@ -496,8 +560,7 @@ const CheckoutPage: React.FC = () => {
             },
             index
           ) => {
-            const ticketNumber = totalAlreadySold + index + 1;
-            const ticketId = `${initials}-${String(ticketNumber).padStart(3, '0')}`;
+            const ticketId = formatTicketId(initials, ticketNumbers[index]);
 
             transaction.set(ref, {
               name: attendeeName,
@@ -517,7 +580,7 @@ const CheckoutPage: React.FC = () => {
               checkedInAt: null,
               createdAt: serverTimestamp(),
               purchasedAt: serverTimestamp(),
-              paymentMode: PAYMENT_MODE_LABELS[method],
+              paymentMode: 'Free',
               paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
               accessCode: accessCode || null,
               bookingGroupId: bookingGroupIds[index],
@@ -531,7 +594,7 @@ const CheckoutPage: React.FC = () => {
               attendeeEmail,
               attendeePhone,
               amountPaid: amountCollected,
-              paymentMode: PAYMENT_MODE_LABELS[method],
+              paymentMode: 'Free',
               purchasedAt: Date.now(), // approx — serverTimestamp() nahi resolve hua client pe abhi
               status: 'valid',
               bookingGroupId: bookingGroupIds[index],
@@ -562,6 +625,7 @@ const CheckoutPage: React.FC = () => {
         <BrandNavHeader organizationName={settings.organizationName} variant="minimal" rightSlot={<span />} />
         <TicketConfirmation
         eventTitle={event.title}
+        eventCategory={event.category}
         eventDate={event.date}
         eventTime={event.time}
         eventVenue={event.venue}
@@ -570,6 +634,7 @@ const CheckoutPage: React.FC = () => {
           navigate(getSubdomain() ? '/' : resolvedCompanyId ? `/public/${resolvedCompanyId}` : '/')
         }
         eventBannerDataUrl={pdfBannerDataUrl}
+        eventPosterUrl={bannerSrc}
         eventConsentText={event.consentText}
         eventGoodToKnowText={event.goodToKnowText}
         eventIsOnline={event.isOnline}
@@ -588,9 +653,9 @@ const CheckoutPage: React.FC = () => {
       ? 'Processing…'
       : total === 0
         ? 'Confirm registration'
-        : `Pay ${formatRupees(total, { zeroAsFree: false })}`;
+        : `Pay ${formatRupees(grandTotal, { zeroAsFree: false })}`;
   const payCtaDisabled = !detailsComplete || lineItems.length === 0 || step === 'processing';
-  const totalLabel = formatRupees(total);
+  const totalLabel = formatRupees(grandTotal);
   const showMobileBar = lineItems.length > 0;
 
   const steps = [
@@ -600,24 +665,54 @@ const CheckoutPage: React.FC = () => {
     { id: 'checkout-payment', label: 'Payment', complete: false },
   ];
 
+  const ticketRows = lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
+    id: tier.id,
+    label: `${qty} × ${tier.name}`,
+    amountLabel: formatRupees(tier.price === 0 ? 0 : itemTotalAmount),
+  }));
+  const taxRow =
+    totalTaxAmount > 0
+      ? { id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }
+      : null;
+  const roundOffRow =
+    roundOffAmt !== 0
+      ? { id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }
+      : null;
+
+  // With a booking charge (gateway events), collapse to two expandable rows —
+  // "Order amount" and "Booking charge (incl. of GST)". Otherwise the plain list.
+  const summaryLineItems =
+    platformFee > 0
+      ? [
+          {
+            id: 'order-amount',
+            label: 'Order amount',
+            amountLabel: formatRupees(total, { zeroAsFree: false }),
+            children: [
+              ...ticketRows,
+              ...(taxRow ? [{ ...taxRow, label: 'Includes tax' }] : []),
+              ...(roundOffRow ? [roundOffRow] : []),
+            ],
+          },
+          {
+            id: 'booking-charge',
+            label: 'Booking charge (incl. of GST)',
+            amountLabel: formatRupees(platformFee + platformFeeGst, { zeroAsFree: false }),
+            children: [
+              { id: 'platform-fee', label: 'Booking charge', amountLabel: formatRupees(platformFee, { zeroAsFree: false }) },
+              { id: 'platform-fee-gst', label: `GST (${feeConfig.feeGstRate}%)`, amountLabel: formatRupees(platformFeeGst, { zeroAsFree: false }) },
+            ],
+          },
+        ]
+      : [...ticketRows, ...(taxRow ? [taxRow] : []), ...(roundOffRow ? [roundOffRow] : [])];
+
   const orderSummary = (
     <TicketOrderSummary
       eventTitle={stripHtmlTags(event.title)}
       dateLabel={`${formatShortDateRange(event.date, event.endDate)}, ${formatTime(event.time)}`}
       venueLabel={event.isOnline ? 'Online' : event.venue}
-      lineItems={[
-        ...lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
-          id: tier.id,
-          label: `${qty} × ${tier.name}`,
-          amountLabel: formatRupees(tier.price === 0 ? 0 : itemTotalAmount),
-        })),
-        ...(totalTaxAmount > 0
-          ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }]
-          : []),
-        ...(roundOffAmt !== 0
-          ? [{ id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }]
-          : []),
-      ]}
+      lineItems={summaryLineItems}
+      totalTitle={platformFee > 0 ? 'To be paid' : 'Total'}
       totalLabel={totalLabel}
       ctaLabel={payCtaLabel}
       onCta={initiatePayment}
@@ -837,47 +932,29 @@ const CheckoutPage: React.FC = () => {
                 </section>
               )}
 
-              {/* Payment — payment-gateway method list */}
+              {/* Payment — Razorpay's own window handles method choice */}
               <section id="checkout-payment" className="scroll-mt-6">
                 <SectionLabel className="mb-4">Payment</SectionLabel>
-                <div className={`${brandPanelClass} flex flex-col gap-3`} role="radiogroup" aria-label="Payment method">
-                  {([
-                    { value: 'upi' as const, label: 'UPI', detail: 'GPay, PhonePe, Paytm or any UPI app', icon: Smartphone },
-                    { value: 'card' as const, label: 'Card', detail: 'Credit or debit card', icon: CreditCard },
-                    { value: 'netbanking' as const, label: 'Net banking', detail: 'All major Indian banks', icon: Landmark },
-                  ]).map((m) => {
-                    const active = selectedMethod === m.value;
-                    return (
-                      <label
-                        key={m.value}
-                        className={`flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3.5 transition-colors ${
-                          active
-                            ? 'border-[1.5px] border-[var(--brand-teal)] bg-[var(--brand-teal-soft)]'
-                            : 'border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] hover:bg-[var(--brand-cream)]'
-                        }`}
-                      >
-                        <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                            active ? 'bg-[var(--brand-teal)] text-[var(--brand-cream)]' : 'bg-[var(--brand-cream)] text-[var(--brand-black)]'
-                          }`}
-                        >
-                          <m.icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                <div className={`${brandPanelClass} flex items-start gap-3`}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-teal-soft)] text-[var(--brand-teal)]">
+                    <ShieldCheck size={20} strokeWidth={1.75} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    {total === 0 ? (
+                      <>
+                        <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">No payment needed</span>
+                        <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">Confirm to get your tickets right away.</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">Pay securely online</span>
+                        <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">
+                          UPI, cards, net banking or wallets. You choose how to pay in the next step. Your tickets are issued as soon as the payment goes through.
+                          {platformFee > 0 && ' The total includes a booking charge and GST on it.'}
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">{m.label}</span>
-                          <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">{m.detail}</span>
-                        </span>
-                        <input
-                          type="radio"
-                          name="payment_method"
-                          value={m.value}
-                          checked={active}
-                          onChange={() => setSelectedMethod(m.value)}
-                          className="h-5 w-5 shrink-0 accent-[var(--brand-teal)] [color-scheme:light]"
-                        />
-                      </label>
-                    );
-                  })}
+                      </>
+                    )}
+                  </span>
                 </div>
               </section>
 
