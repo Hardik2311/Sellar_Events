@@ -60,12 +60,32 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 // createdAt is the fallback for older records that predate that field.
 const getPurchaseTime = (a: Attendee): number => a.purchasedAt ?? a.createdAt ?? 0;
 
+const getAttendeeType = (a: Attendee): string => {
+  if (a.source === 'import') return 'Imported';
+  // paymentMode (Cash/UPI/Card...) is only set for organizer-added walk-ins,
+  // so it works as a fallback for walk-ins saved without `source`
+  if (a.source === 'walk_in' || (!a.paymentMethod && a.paymentMode)) return 'Walk-in';
+  if (a.paymentMethod === 'manual_qr') return 'QR Paid';
+  return 'Payment Gateway';
+};
+
+const getPaymentModeLabel = (a: Attendee): string => {
+  if (a.source === 'import') return '';
+  if (a.source === 'walk_in') return a.paymentMode ?? ''; // Cash / UPI / Card / ... as chosen by organizer
+  if (a.paymentMode && !a.paymentMethod) return a.paymentMode; // walk-in saved without `source`
+  if (a.paymentMethod === 'manual_qr') return 'QR';
+  return 'Gateway';
+};
+
 const EXPORT_COLUMNS: ExportColumn<Attendee>[] = [
   { header: 'Name', accessor: (a) => a.name },
   { header: 'Email', accessor: (a) => a.email },
   { header: 'Phone', accessor: (a) => a.phone },
   { header: 'Tier', accessor: (a) => a.tierName },
   { header: 'Ticket ID', accessor: (a) => a.ticketId },
+  { header: 'Attendee Type', accessor: (a) => getAttendeeType(a) },
+  { header: 'Payment Mode', accessor: (a) => getPaymentModeLabel(a) },
+  { header: 'Amount Paid', accessor: (a) => a.amountPaid ?? 0 },
   { header: 'Status', accessor: (a) => a.status },
   { header: 'Checked in at', accessor: (a) => (a.checkedInAt ? new Date(a.checkedInAt).toLocaleString('en-IN') : '') },
 ];
@@ -85,7 +105,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     category: data.category,
     status: data.status,
     startDate: data.date,
-     time: data.time ?? undefined,
+    time: data.time ?? undefined,
     venue: data.isOnline ? 'Online' : data.venue,
     ticketsSold: tiers.reduce((sum: number, t: any) => sum + t.sold, 0),
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
@@ -123,7 +143,8 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   paymentMethod: data.paymentMethod ?? undefined,
   screenshotUrl: data.screenshotUrl ?? undefined,
   razorpayPaymentId: data.razorpayPaymentId ?? undefined,
-  accessCode: data.accessCode ?? undefined,
+    accessCode: data.accessCode ?? undefined,
+  source: data.source ?? 'ticket',
   purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
   createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
   bookingGroupId: data.bookingGroupId ?? null,
@@ -762,7 +783,7 @@ const Attendees: React.FC = () => {
                     <UserPlus size={14} /> Add Walk-in
                   </button>
                 )}
-                {can(Permission.IMPORT_ATTENDEES) && selectedEvent.registrationMode === 'rsvp' && (
+                {can(Permission.IMPORT_ATTENDEES) && (
                   <button
                     onClick={() => {
                       if (selectedEvent.status !== 'published') {

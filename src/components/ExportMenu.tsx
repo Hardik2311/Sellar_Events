@@ -41,7 +41,7 @@ function ExportMenu<T>({ data, columns, fileNameBase, documentTitle, organizatio
   const safeFileName = (ext: string) => `${fileNameBase.replace(/\s+/g, '-').toLowerCase()}.${ext}`;
 
   const handleExportPdf = () => {
-    const doc = new jsPDF();
+        const doc = new jsPDF({ orientation: 'landscape' });
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const generatedOn = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
