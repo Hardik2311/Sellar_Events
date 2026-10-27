@@ -4,6 +4,7 @@ import type { EventSummary } from '../types/event.types';
 import SearchBar from './ui/SearchBar';
 import StatusBadge from './ui/StatusBadge';
 import { stripHtmlTags } from '../lib/utils';
+import { sortEventsForPicker } from '../lib/eventPicker';
 
 export const ALL_EVENTS_ID = 'all-events'; // export so other files can import same constant
 
@@ -41,26 +42,9 @@ export const EventListCard: React.FC<EventListCardProps> = ({
   );
 
     const filteredEvents = useMemo(() => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    // Deleted events live in their own "Deleted" tab — they must never show
-    // up in this selector. Filtering here (not just relying on the caller
-    // to pass a pre-filtered list) means this stays true no matter who's
-    // rendering this component.
-    const visibleEvents = events.filter((e) => e.status !== 'deleted');
-
-    // Show all events (past + upcoming). Sort so upcoming events come first
-    // (soonest first), then past events (most recent first) below them.
-    const sorted = [...visibleEvents].sort((a, b) => {
-      const aDate = new Date(a.startDate).setHours(0, 0, 0, 0);
-      const bDate = new Date(b.startDate).setHours(0, 0, 0, 0);
-      const aUpcoming = aDate >= startOfToday.getTime();
-      const bUpcoming = bDate >= startOfToday.getTime();
-
-      if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
-      return aUpcoming ? aDate - bDate : bDate - aDate;
-    });
+    // Filtering here (not just relying on the caller to pass a pre-filtered
+    // list) keeps deleted events out no matter who renders this component.
+    const sorted = sortEventsForPicker(events);
 
     if (!searchValue.trim()) return sorted;
     const q = searchValue.toLowerCase();

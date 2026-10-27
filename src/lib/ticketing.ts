@@ -223,6 +223,8 @@ export async function createWalkInAttendees(input: WalkInAttendeesInput): Promis
         isWalkIn: true, // reporting ke liye — open question #3 ka jawab
         ticketId: ticketIds[i],
         bookingGroupId: bookingGroupIds[i],
+        // Links the whole walk-in group (any names) for "booked together" check-in.
+        bookingId: attendeeRefs[0].id,
         status: effectiveMarkCheckedIn ? 'checked_in' : 'valid',
         checkedInAt: effectiveMarkCheckedIn ? serverTimestamp() : null,
         createdAt: serverTimestamp(),

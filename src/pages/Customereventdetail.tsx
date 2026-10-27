@@ -20,6 +20,7 @@ import {
   CATEGORY_GRADIENTS,
   getCategoryLabel,
   getAvailability,
+  isSalesClosed,
   formatTime,
   isTierExpired,
 } from '../data/events';
@@ -289,7 +290,10 @@ const CustomerEventDetail: React.FC = () => {
   // live snapshot, so this also flips right after a purchase on this page.
   const codeAlreadyUsed =
     !isOrganizerLivePreview && isAccessCodeUsed(event, sessionStorage.getItem(`eventAccessCode:${event.id}`));
-  const allSoldOut = everyTierSoldOut || codeAlreadyUsed;
+  // isSalesClosed also covers "event already started" and the organizer's
+  // manual Sold Out toggle — not just capacity (everyTierSoldOut already
+  // handles capacity on its own filtered tier list, so this is additive).
+  const allSoldOut = everyTierSoldOut || codeAlreadyUsed || isSalesClosed(event);
   const hasConsent = Boolean(event.consentText && event.consentText.trim().length > 0);
   const consentBlocking = hasConsent && !consentAcknowledged;
 
@@ -468,6 +472,17 @@ const CustomerEventDetail: React.FC = () => {
           event.coverImageMobile ? 'aspect-[4/5] max-h-[80vh]' : 'h-64'
         } ${event.coverImageDesktop ? 'sm:aspect-[8/3] sm:h-auto sm:max-h-[34rem]' : 'sm:aspect-auto sm:h-[26rem]'}`}
       >
+        {allSoldOut && (
+          <div className="absolute -right-12 top-7 z-20 w-48 rotate-45 shadow-lg" aria-hidden="true">
+            <div
+              className="h-1 w-full"
+              style={{ background: 'repeating-linear-gradient(135deg, #facc15 0 8px, #111827 8px 16px)' }}
+            />
+            <div className="bg-yellow-400 py-1.5 text-center text-xs font-extrabold uppercase tracking-wider text-black">
+              Sold Out
+            </div>
+          </div>
+        )}
         {(event.coverImageDesktop || event.coverImageMobile) ? (
           <CoverImageDisplay
             desktopSrc={event.coverImageDesktop}

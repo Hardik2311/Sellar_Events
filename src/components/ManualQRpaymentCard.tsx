@@ -18,6 +18,7 @@ import SectionLabel from './brand/SectionLabel';
 import TicketOrderSummary from './brand/TicketOrderSummary';
 import BrandCheckbox from './brand/BrandCheckbox';
 import MobileCheckoutBar from './brand/MobileCheckoutBar';
+import PaymentProcessingOverlay from './brand/PaymentProcessingOverlay';
 import MobileOrderSummary from './brand/MobileOrderSummary';
 import CheckoutStepPills from './brand/CheckoutStepPills';
 import BrandButton from './brand/BrandButton';
@@ -343,6 +344,13 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         const snap = await tx.get(eventRef);
         if (!snap.exists()) throw new Error('Event not found');
         const data = snap.data();
+
+        // Same fresh re-check as the gateway checkout transaction — don't
+        // trust stale client state for whether sales are still open.
+        if (data.manuallySoldOut) {
+          throw new Error('This event is marked sold out and is no longer accepting bookings.');
+        }
+
         const currentTiers = (data.tiers || []) as { id: string; name: string; quantity: number; sold: number }[];
 
         const updatedTiers = currentTiers.map((t) => {
@@ -427,6 +435,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               screenshotUrl,
               accessCode: accessCode || null,
               bookingGroupId: bookingGroupIds[index],
+              // Links every ticket in this purchase (any name) for "booked
+              // together" check-in on the Attendees page.
+              bookingId: attendeeDocs[0].id,
             });
             created.push({
               ticketId,
@@ -856,6 +867,15 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         ctaLabel={submitCtaLabel}
         onCta={handleSubmit}
         ctaDisabled={submitDisabled}
+      />
+
+      {/* Screenshot upload + booking — same smoke screen as gateway checkout */}
+      <PaymentProcessingOverlay
+        open={submitting}
+        eventTitle={stripHtmlTags(event.title)}
+        label="Payment submitted"
+        doneStep="UPI payment details received"
+        pendingStep="Booking your tickets…"
       />
     </div>
   );

@@ -10,6 +10,7 @@ interface EventCardProps {
   priceLabel: string;
   onOpen: () => void;
   className?: string;
+  soldOut?: boolean;
 }
 
 // District-style poster card for the Discover grid: 4:5 poster, then the date
@@ -23,6 +24,7 @@ const EventCard: React.FC<EventCardProps> = ({
   priceLabel,
   onOpen,
   className = '',
+  soldOut = false,
 }) => (
   <button
     type="button"
@@ -38,6 +40,21 @@ const EventCard: React.FC<EventCardProps> = ({
         <span className="brand-display absolute inset-x-4 bottom-4 line-clamp-3 text-2xl leading-[0.95] text-[var(--brand-black)]">
           {title}
         </span>
+      )}
+      {soldOut && (
+        <div className="absolute -right-10 top-6 w-40 rotate-45 shadow-md" aria-hidden="true">
+          <div
+            className="h-1 w-full"
+            style={{ background: 'repeating-linear-gradient(135deg, #facc15 0 7px, #111827 7px 14px)' }}
+          />
+          <div className="bg-yellow-400 py-1 text-center text-[11px] font-extrabold uppercase tracking-wider text-black">
+            Sold Out
+          </div>
+          <div
+            className="h-1 w-full"
+            style={{ background: 'repeating-linear-gradient(135deg, #facc15 0 7px, #111827 7px 14px)' }}
+          />
+        </div>
       )}
     </div>
 

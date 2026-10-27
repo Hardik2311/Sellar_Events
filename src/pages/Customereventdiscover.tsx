@@ -7,6 +7,7 @@ import {
     getCategoryLabel,
     getFeaturedEvent,
     buildEventSlugId,
+    isSalesClosed,
 } from '../data/events';
 import { formatShortDate, formatShortDateRange, formatShortTime, formatStartingPrice } from '../lib/storefrontFormat';
 import { usePublicEvents } from '../hooks/usePublicEvents';
@@ -388,6 +389,7 @@ const CustomerEventDiscover: React.FC = () => {
                                     venueLabel={event.isOnline ? 'Online' : event.venue}
                                     priceLabel={priceLabelFor(event)}
                                     onOpen={() => openEvent(event)}
+                                    soldOut={isSalesClosed(event)}
                                 />
                             ))}
                         </div>

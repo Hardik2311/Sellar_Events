@@ -167,6 +167,8 @@ interface CheckoutDisplay {
   organizationName: string;
   eventTitle: string;
   themeColor?: string;
+  /** Called once Razorpay reports success, before the server issues tickets. */
+  onPaid?: () => void;
 }
 
 /**
@@ -195,6 +197,7 @@ export async function payWithRazorpay(
     notes: { companyId: input.companyId, eventId: input.eventId, orderId: order.orderId },
     theme: display.themeColor ? { color: display.themeColor } : undefined,
   });
+  display.onPaid?.();
 
   const { data } = await verifyRazorpayPayment({
     ...success,

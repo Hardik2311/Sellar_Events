@@ -29,6 +29,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   isPrivate: d.isPrivate || false,
   accessCodes: d.accessCodes ?? [],
   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
+  manuallySoldOut: d.manuallySoldOut || false, // NEW
   everPublished: d.everPublished || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,

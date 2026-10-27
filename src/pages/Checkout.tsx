@@ -8,12 +8,11 @@ import { formatTime, type AccessCodeEntry } from '../data/events';
 import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
-import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
-import { computePlatformFee } from '../lib/platformFee';
 import { getSubdomain } from '../lib/subdomain';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
+import PaymentProcessingOverlay from '../components/brand/PaymentProcessingOverlay';
 import { stripHtmlTags } from '../lib/utils';
 import { assignBookingGroups, formatTicketId, getEventInitials, nextTicketNumbers } from '../lib/ticketing';
 import { checkoutErrorMessage, payWithRazorpay, PaymentCancelledError } from '../lib/razorpay';
@@ -60,7 +59,6 @@ const CheckoutPage: React.FC = () => {
   const { resolvedCompanyId, loading: domainLoading, error: domainError } = useDomainResolution(companyId);
   const { event, loading: eventLoading } = usePublicEvent(id, resolvedCompanyId);
   const { settings } = useCompanySettings(resolvedCompanyId);
-  const { config: feeConfig } = usePlatformFeeConfig(resolvedCompanyId, id);
   const loading = domainLoading || eventLoading;
   const locationState = location.state as { quantities?: Record<string, number>; accessCode?: string } | null;
   const quantities: Record<string, number> = locationState?.quantities ?? {};
@@ -88,6 +86,8 @@ const CheckoutPage: React.FC = () => {
   const [sameForAll, setSameForAll] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
+  // True between Razorpay's success callback and the tickets coming back.
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -302,23 +302,11 @@ const CheckoutPage: React.FC = () => {
 
   const roundOffAmt = Number((total - subtotal).toFixed(2));
 
-  // Gateway events are paid into the platform's account: the buyer also pays
-  // the platform fee + GST on it (preview — the server computes the charge).
-  // Manual-QR money goes straight to the organizer, so no fee there.
+  // The platform's fee is deducted from the organizer's payout (see
+  // functions/payments/pricing.js computeDeductions), not added on top of
+  // what the buyer pays — so the buyer's total is just the ticket price.
   const isGatewayEvent = event.paymentCollectionMode === 'gateway';
-  const { platformFee, platformFeeGst } = isGatewayEvent
-    ? computePlatformFee(
-        lineItems.map((li) => ({
-          unitTotal:
-            scheme === 'regular' && taxType === 'exclusive'
-              ? Number((li.tier.price * (1 + taxRate / 100)).toFixed(2))
-              : li.tier.price,
-          qty: li.qty,
-        })),
-        feeConfig
-      )
-    : { platformFee: 0, platformFeeGst: 0 };
-  const grandTotal = Number((total + platformFee + platformFeeGst).toFixed(2));
+  const grandTotal = total;
   const totalQty = lineItems.reduce((s, item) => s + item.qty, 0);
   const isValidPhone = (value: string) => /^[6-9]\d{9}$/.test(value.trim());
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -392,6 +380,7 @@ const CheckoutPage: React.FC = () => {
           organizationName: settings.organizationName,
           eventTitle: stripHtmlTags(event.title),
           themeColor: RAZORPAY_THEME_COLOR,
+          onPaid: () => setConfirmingPayment(true),
         }
       );
       setPurchasedTickets(tickets);
@@ -400,6 +389,8 @@ const CheckoutPage: React.FC = () => {
       if (!(err instanceof PaymentCancelledError)) console.error('Razorpay checkout failed:', err);
       setCheckoutError(checkoutErrorMessage(err));
       setStep('details'); // let them retry
+    } finally {
+      setConfirmingPayment(false);
     }
   };
 
@@ -485,12 +476,26 @@ const CheckoutPage: React.FC = () => {
         attendeeWrites.map((w) => w.attendeeName),
         attendeeWrites.map((w) => w.ref.id)
       );
+      // Ties this booking's tickets together so functions/email/autoSendTicketEmail.js
+      // emails them as one message (gateway orders use orderId instead).
+      const bookingId = attendeeWrites[0]?.ref.id ?? null;
       let created: PurchasedTicket[] = [];
 
       await runTransaction(db, async (transaction) => {
         created = []; // a retried transaction must not double-append
         const eventSnap = await transaction.get(eventRef);
         if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+
+        // Re-check sold-out state against the freshly-read doc, not stale
+        // client state — closes the gap for someone who had Checkout open
+        // (or bookmarked/cached) from before the organizer marked the event
+        // sold out. Same "best-effort, client-enforced" model the capacity
+        // check below already uses, not a hard server-side guarantee — see
+        // firestore.rules' own note on this.
+        const freshEventData = eventSnap.data();
+        if (freshEventData.manuallySoldOut) {
+          throw new Error('This event is marked sold out and is no longer accepting bookings.');
+        }
 
         const currentTiers = (eventSnap.data().tiers || []) as {
           id: string;
@@ -584,6 +589,7 @@ const CheckoutPage: React.FC = () => {
               paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
               accessCode: accessCode || null,
               bookingGroupId: bookingGroupIds[index],
+              bookingId,
             });
 
             created.push({
@@ -643,6 +649,9 @@ const CheckoutPage: React.FC = () => {
         eventAgeLimit={event.ageLimit}
         eventHelplineNumber={event.helplineNumber}
         bookMoreTicketsUrl={bookMoreTicketsUrl}
+        emailedTo={Array.from(
+          new Set(purchasedTickets.map((t) => t.attendeeEmail?.trim().toLowerCase()).filter((e): e is string => !!e))
+        )}
         />
       </div>
     );
@@ -679,32 +688,7 @@ const CheckoutPage: React.FC = () => {
       ? { id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }
       : null;
 
-  // With a booking charge (gateway events), collapse to two expandable rows —
-  // "Order amount" and "Booking charge (incl. of GST)". Otherwise the plain list.
-  const summaryLineItems =
-    platformFee > 0
-      ? [
-          {
-            id: 'order-amount',
-            label: 'Order amount',
-            amountLabel: formatRupees(total, { zeroAsFree: false }),
-            children: [
-              ...ticketRows,
-              ...(taxRow ? [{ ...taxRow, label: 'Includes tax' }] : []),
-              ...(roundOffRow ? [roundOffRow] : []),
-            ],
-          },
-          {
-            id: 'booking-charge',
-            label: 'Booking charge (incl. of GST)',
-            amountLabel: formatRupees(platformFee + platformFeeGst, { zeroAsFree: false }),
-            children: [
-              { id: 'platform-fee', label: 'Booking charge', amountLabel: formatRupees(platformFee, { zeroAsFree: false }) },
-              { id: 'platform-fee-gst', label: `GST (${feeConfig.feeGstRate}%)`, amountLabel: formatRupees(platformFeeGst, { zeroAsFree: false }) },
-            ],
-          },
-        ]
-      : [...ticketRows, ...(taxRow ? [taxRow] : []), ...(roundOffRow ? [roundOffRow] : [])];
+  const summaryLineItems = [...ticketRows, ...(taxRow ? [taxRow] : []), ...(roundOffRow ? [roundOffRow] : [])];
 
   const orderSummary = (
     <TicketOrderSummary
@@ -712,7 +696,7 @@ const CheckoutPage: React.FC = () => {
       dateLabel={`${formatShortDateRange(event.date, event.endDate)}, ${formatTime(event.time)}`}
       venueLabel={event.isOnline ? 'Online' : event.venue}
       lineItems={summaryLineItems}
-      totalTitle={platformFee > 0 ? 'To be paid' : 'Total'}
+      totalTitle="Total"
       totalLabel={totalLabel}
       ctaLabel={payCtaLabel}
       onCta={initiatePayment}
@@ -950,7 +934,6 @@ const CheckoutPage: React.FC = () => {
                         <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">Pay securely online</span>
                         <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">
                           UPI, cards, net banking or wallets. You choose how to pay in the next step. Your tickets are issued as soon as the payment goes through.
-                          {platformFee > 0 && ' The total includes a booking charge and GST on it.'}
                         </span>
                       </>
                     )}
@@ -984,6 +967,9 @@ const CheckoutPage: React.FC = () => {
           ctaDisabled={payCtaDisabled}
         />
       )}
+
+      {/* ── Paid → issuing tickets smoke screen ─────────────────────── */}
+      <PaymentProcessingOverlay open={confirmingPayment} eventTitle={stripHtmlTags(event.title)} />
     </div>
   );
 };

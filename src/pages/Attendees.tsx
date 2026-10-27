@@ -25,6 +25,7 @@ import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { stripHtmlTags } from '../lib/utils';
 import EventListCard from '../components/EventListCard';
+import { sortEventsForPicker } from '../lib/eventPicker';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
 import QRScanner from '../components/QrScannerModal';
@@ -127,9 +128,16 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
   createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
   bookingGroupId: data.bookingGroupId ?? null,
+  orderId: data.orderId ?? undefined,
+  bookingId: data.bookingId ?? null,
   // Walk-ins are saved with isWalkIn: true (lib/ticketing.ts), not a source field.
   source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
 });
+// Everything bought in ONE purchase, whatever the names: gateway orders
+// share orderId, free / manual-QR / walk-in bookings share bookingId. Older
+// tickets without either fall back to the same-name bookingGroupId.
+const purchaseKey = (a: Attendee) => a.orderId || a.bookingId || a.bookingGroupId || null;
+
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
   const { can } = usePermissions(); // MOVED — hooks must run inside the component, not at module scope
@@ -146,8 +154,8 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
-  // Group booking awaiting "how many arrived?" (one QR admits the whole group)
-  const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; initialArrived: number } | null>(null);
+  // Tickets bought together, awaiting "who is here?" (focusIds = what was scanned/tapped)
+  const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; focusIds: string[] } | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
   const [walkInTickets, setWalkInTickets] = useState<{
@@ -173,8 +181,10 @@ const Attendees: React.FC = () => {
       const list = snapshot.docs.map((d) => toEventSummary(d.id, d.data()));
       setEvents(list);
 
-      // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback
-      setSelectedEventId((prev) => (prev && list.some((e) => e.id === prev) ? prev : list[0]?.id ?? ''));
+      // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback —
+      // the top of the dropdown (next upcoming event, else the most recent past one).
+      const pickable = sortEventsForPicker(list);
+      setSelectedEventId((prev) => (prev && pickable.some((e) => e.id === prev) ? prev : pickable[0]?.id ?? ''));
     });
     return () => unsubscribe();
   }, [profile?.companyId]);
@@ -273,23 +283,55 @@ const Attendees: React.FC = () => {
     [bookingGroups]
   );
 
-  // Defaults to "everyone arrived" — the usual case when a group shows its QR
-  // at the gate; staff lower it if only some of them are here yet.
-  const openGroupCheckIn = useCallback((members: Attendee[]) => {
-    setPendingGroup({ members, initialArrived: members.length });
-  }, []);
+  // purchaseKey -> its non-cancelled tickets, same-name tickets kept together.
+  const purchases = useMemo(() => {
+    const map = new Map<string, Attendee[]>();
+    attendees.forEach((a) => {
+      const key = purchaseKey(a);
+      if (!key || a.status === 'cancelled') return;
+      map.set(key, [...(map.get(key) ?? []), a]);
+    });
+    map.forEach((members) =>
+      members.sort(
+        (x, y) =>
+          (x.bookingGroupId ?? x.id).localeCompare(y.bookingGroupId ?? y.id) || x.ticketId.localeCompare(y.ticketId)
+      )
+    );
+    return map;
+  }, [attendees]);
 
-  // Sets exactly `arrivedCount` tickets in the group to checked-in. Tickets
-  // already checked in keep their original check-in time.
+  // Other tickets bought together with this one, or null if it was bought alone.
+  const getPurchaseMembers = useCallback(
+    (attendee: Attendee): Attendee[] | null => {
+      const key = purchaseKey(attendee);
+      const members = key ? purchases.get(key) : undefined;
+      return members && members.length > 1 ? members : null;
+    },
+    [purchases]
+  );
+
+  // Opens the "who is here?" checklist. The scanned/tapped ticket (plus its
+  // same-name group, which that one QR admits) starts ticked; the rest of the
+  // booking is listed so staff can tick them too.
+  const openGroupCheckIn = useCallback(
+    (attendee: Attendee): boolean => {
+      const members = getPurchaseMembers(attendee);
+      if (!members) return false;
+      const sameName = getGroupMembers(attendee) ?? [attendee];
+      setPendingGroup({ members, focusIds: sameName.map((m) => m.id) });
+      return true;
+    },
+    [getPurchaseMembers, getGroupMembers]
+  );
+
+  // Sets exactly the ticked tickets to checked-in. Tickets already checked
+  // in keep their original check-in time.
   const handleGroupCheckIn = useCallback(
-    (arrivedCount: number) => {
+    (checkedInIds: Set<string>) => {
       const companyId = profile?.companyId;
       if (!pendingGroup || !companyId || !selectedEventId) return;
-      const ordered = [...pendingGroup.members].sort(
-        (a, b) => Number(b.status === 'checked_in') - Number(a.status === 'checked_in')
-      );
-      const changes = ordered
-        .map((a, i) => ({ attendee: a, shouldBeIn: i < arrivedCount }))
+      const changes = pendingGroup.members
+        .map((a) => ({ attendee: a, shouldBeIn: checkedInIds.has(a.id) }))
         .filter(({ attendee, shouldBeIn }) => (attendee.status === 'checked_in') !== shouldBeIn);
 
       const nowIso = new Date().toISOString();
@@ -314,9 +356,14 @@ const Attendees: React.FC = () => {
         setScanFeedback({ type: 'error', message: 'Group check-in failed, please retry.' });
       });
 
+      const arrivedNow = changes.filter((c) => c.shouldBeIn).map((c) => c.attendee.name);
+      const undone = changes.length - arrivedNow.length;
       setScanFeedback({
         type: 'success',
-        message: `${pendingGroup.members[0].name}'s group: ${arrivedCount} of ${pendingGroup.members.length} arrived.`,
+        message:
+          arrivedNow.length > 0
+            ? `Checked in ${arrivedNow.length === 1 ? arrivedNow[0] : `${arrivedNow.length} people`}. ${checkedInIds.size} of ${pendingGroup.members.length} in this booking arrived.`
+            : `${undone} check-in${undone === 1 ? '' : 's'} undone.`,
       });
       setPendingGroup(null);
     },
@@ -505,14 +552,10 @@ const Attendees: React.FC = () => {
         return;
       }
 
-      const group = getGroupMembers(match);
-      if (group) {
-        openGroupCheckIn(group);
-        return;
-      }
+      if (openGroupCheckIn(match)) return;
       setPendingAttendee(match);
     },
-    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
+    [attendees, selectedEvent, isEventDateInFuture, openGroupCheckIn]
   );
   const handleConfirmCancel = useCallback(() => {
     if (!pendingCancelAttendee) return;
@@ -649,14 +692,10 @@ const Attendees: React.FC = () => {
       }
       const target = attendees.find((a) => a.id === id);
       if (!target) return;
-      const group = getGroupMembers(target);
-      if (group) {
-        openGroupCheckIn(group);
-        return;
-      }
+      if (openGroupCheckIn(target)) return;
       setPendingAttendee(target);
     },
-    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
+    [attendees, selectedEvent, isEventDateInFuture, openGroupCheckIn]
   );
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -870,6 +909,20 @@ const Attendees: React.FC = () => {
                           tierLabel: tiers.length === 1 ? `${tiers[0]} × ${group.length}` : `${group.length} tickets`,
                         };
                       })()}
+                      bookedWith={(() => {
+                        if (attendee.status === 'cancelled') return undefined;
+                        const members = getPurchaseMembers(attendee);
+                        if (!members) return undefined;
+                        // This row already stands for its own same-name group.
+                        const ownIds = new Set((getGroupMembers(attendee) ?? [attendee]).map((m) => m.id));
+                        const others = members.filter((m) => !ownIds.has(m.id));
+                        if (others.length === 0) return undefined;
+                        return {
+                          others: others.map(({ id, name, status }) => ({ id, name, status })),
+                          size: members.length,
+                          arrived: members.filter((m) => m.status === 'checked_in').length,
+                        };
+                      })()}
                     />
                   ))}
                 </div>
@@ -902,7 +955,8 @@ const Attendees: React.FC = () => {
       />
       <GroupCheckInModal
         members={pendingGroup?.members ?? null}
-        initialArrived={pendingGroup?.initialArrived ?? 0}
+        focusIds={pendingGroup?.focusIds ?? []}
+        tierOrder={selectedEvent?.tiers.map((t) => t.name) ?? []}
         onConfirm={handleGroupCheckIn}
         onCancel={() => setPendingGroup(null)}
       />

@@ -8,6 +8,7 @@ const {
     nextTicketNumbers,
     formatTicketId,
     soldOf,
+    stripHtmlTags,
 } = require("./ticketing");
 
 const { FieldValue } = admin.firestore;
@@ -196,8 +197,9 @@ const fulfillOrder = async (orderRef, payment) => {
                 orderId: orderRef.id,
                 razorpayOrderId: order.razorpayOrderId || null,
                 razorpayPaymentId: payment ? payment.id : null,
-                // Buyer-paid platform fee for this ticket — NOT organizer revenue
-                // (amountPaid above stays the ticket amount only).
+                // Platform fee for this ticket, deducted from the organizer's
+                // payout (not charged to the buyer — amountPaid above is the
+                // ticket amount only).
                 platformFee: item.unitPlatformFee || 0,
                 platformFeeGst: item.unitPlatformFeeGst || 0,
             });
@@ -238,7 +240,7 @@ const fulfillOrder = async (orderRef, payment) => {
             tx.set(ledgerRef, { companyId: order.companyId, ...amounts }, { merge: true });
             tx.set(ledgerRef.collection("events").doc(order.eventId), {
                 eventId: order.eventId,
-                eventTitle: event.title || order.eventTitle || "",
+                eventTitle: stripHtmlTags(event.title || order.eventTitle || ""),
                 ...amounts,
             }, { merge: true });
         }

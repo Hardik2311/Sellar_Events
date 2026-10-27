@@ -87,15 +87,19 @@ const computePlatformFee = (lineItems, cfg) => {
 };
 
 /**
- * What the platform withholds from the organizer's payout as an e-commerce
- * operator: GST TCS (sec 52, only for GST-registered organizers) and
- * income-tax TDS (sec 194-O), both on the tickets' taxable value (excl. GST).
+ * What the platform withholds from the organizer's payout:
+ *  - the payment gateway fee + GST on it (the buyer no longer pays this —
+ *    it comes out of the organizer's ticket revenue instead)
+ *  - as an e-commerce operator: GST TCS (sec 52, only for GST-registered
+ *    organizers) and income-tax TDS (sec 194-O), both on the taxable value
+ *    (excl. GST) — these are statutory and apply regardless of the fee deal.
  */
-const computeDeductions = (lineItems, ticketsTotal, cfg, organizerHasGstin) => {
+const computeDeductions = (lineItems, ticketsTotal, cfg, organizerHasGstin, platformFee, platformFeeGst) => {
     const taxableValue = round2(lineItems.reduce((s, it) => s + it.unitBase * it.qty, 0));
     const tcs = organizerHasGstin ? round2(taxableValue * cfg.tcsPercent / 100) : 0;
     const tds = round2(taxableValue * cfg.tdsPercent / 100);
-    return { taxableValue, tcs, tds, organizerNet: round2(ticketsTotal - tcs - tds) };
+    const organizerNet = round2(ticketsTotal - platformFee - platformFeeGst - tcs - tds);
+    return { taxableValue, tcs, tds, organizerNet };
 };
 
 module.exports = { computeOrderPricing, computePlatformFee, computeDeductions, round2 };

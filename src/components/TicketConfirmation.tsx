@@ -6,6 +6,7 @@ import {
     ChevronRight,
     Download,
     FileDown,
+    Mail,
     MapPin,
     Phone,
     Share2,
@@ -71,6 +72,7 @@ interface TicketConfirmationProps {
     eventAgeLimit?: string | null;
     eventHelplineNumber?: string | null;
     bookMoreTicketsUrl?: string | null;
+    emailedTo?: string[];                 // buyer addresses the tickets are being emailed to (checkout only)
 }
 
 const LABEL_ON_INK = 'brand-label text-[#b9b2a6]';
@@ -94,6 +96,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     eventAgeLimit,
     eventHelplineNumber,
     bookMoreTicketsUrl,
+    emailedTo,
 }) => {
     const cleanEventTitle = stripHtmlTags(eventTitle) || 'Event';
     const passes = useMemo(() => toPasses(tickets), [tickets]);
@@ -249,6 +252,16 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                 className={`mx-auto grid w-full grid-cols-1 items-start gap-4 p-4 @4xl:grid-cols-[minmax(0,1fr)_340px] @4xl:gap-6 @4xl:py-8 ${pageWidth}`}
             >
                 <div className="@container/tickets flex min-w-0 flex-col gap-4">
+                    {emailedTo && emailedTo.length > 0 && (
+                        <div className="flex items-start gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
+                            <Mail size={18} strokeWidth={1.75} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--brand-teal)]" />
+                            <p className="min-w-0 text-[13px] text-[var(--brand-muted)]">
+                                We&rsquo;re emailing your {passes.length === 1 ? 'ticket' : 'tickets'} to{' '}
+                                <span className="break-all font-semibold text-[var(--brand-black)]">{emailedTo.join(', ')}</span>.
+                                It can take a few minutes, so check your spam folder too.
+                            </p>
+                        </div>
+                    )}
                     {multi && (
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
                             <div className="min-w-0">

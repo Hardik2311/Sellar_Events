@@ -105,10 +105,11 @@ exports.createRazorpayOrder = onCall(
             throw new HttpsError("failed-precondition", "PAYOUT_ACCOUNT_MISSING");
         }
 
-        // Buyer pays tickets + platform fee + GST on the fee.
+        // The platform fee + GST on it is deducted from the ORGANIZER's payout,
+        // not charged to the buyer — the buyer pays ticket price only.
         const { perTicketFee, platformFee, platformFeeGst } = computePlatformFee(pricing.lineItems, feeConfig);
         const ticketsTotal = pricing.total;
-        const buyerTotal = round2(ticketsTotal + platformFee + platformFeeGst);
+        const buyerTotal = ticketsTotal;
         const amountPaise = Math.round(buyerTotal * 100);
         if (needsPayment && amountPaise < 100) {
             throw new HttpsError("invalid-argument", "AMOUNT_TOO_SMALL"); // Razorpay minimum is ₹1
@@ -117,7 +118,7 @@ exports.createRazorpayOrder = onCall(
         // TCS (sec 52) only applies when the organizer is GST-registered.
         const organizerGstin = profileSnap.exists ? String(profileSnap.data().gstinNumber || "").trim() : "";
         const deductions = needsPayment ?
-            computeDeductions(pricing.lineItems, ticketsTotal, feeConfig, !!organizerGstin) :
+            computeDeductions(pricing.lineItems, ticketsTotal, feeConfig, !!organizerGstin, platformFee, platformFeeGst) :
             { taxableValue: 0, tcs: 0, tds: 0, organizerNet: 0 };
         const creds = needsPayment ? getPlatformCredentials() : null;
 

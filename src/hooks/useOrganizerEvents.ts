@@ -32,6 +32,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   deletedAt: d.deletedAt?.toDate ? d.deletedAt.toDate().toISOString() : (d.deletedAt ?? null),
   isPrivate: d.isPrivate || false,
   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
+  manuallySoldOut: d.manuallySoldOut || false, // NEW
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -166,6 +167,16 @@ export const useOrganizerEvents = () => {
     if (!profile?.companyId) return;
     const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
     await updateDoc(eventRef, { featured: !currentFeatured });
+  };
+
+  // NEW — organizer-controlled override: stops new bookings immediately,
+  // independent of actual tier capacity or the event's start time. Reuses
+  // the same permission as toggleLive since it's the same "control whether
+  // the public can buy right now" action.
+  const toggleManualSoldOut = async (id: string, currentValue: boolean) => {
+    if (!profile?.companyId) return;
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+    await updateDoc(eventRef, { manuallySoldOut: !currentValue });
   };
 
   /// NEW — generates a fresh access code for a private event and ADDS it to the
@@ -376,5 +387,5 @@ export const useOrganizerEvents = () => {
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode };
+  return { events, loading, toggleLive, toggleFeatured, toggleManualSoldOut, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode };
 };

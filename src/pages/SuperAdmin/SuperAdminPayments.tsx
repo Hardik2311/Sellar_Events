@@ -226,14 +226,17 @@ const SuperAdminPayments: React.FC = () => {
   const effective = resolveFeeConfig(draftConfig);
 
   // Cheap to compute, and `effective` is rebuilt every render anyway — no memo.
+  // The buyer pays the ticket price only; the platform fee + GST on it comes
+  // out of the organizer's payout instead (see computeDeductions in
+  // functions/payments/pricing.js).
   const preview = (() => {
     const price = parseNum(previewPrice) ?? 0;
     const { platformFee, platformFeeGst } = computePlatformFee([{ unitTotal: price, qty: 1 }], effective);
-    const buyerPays = round2(price + platformFee + platformFeeGst);
+    const buyerPays = price;
     const gatewayCost = round2(buyerPays * GATEWAY_COST_PERCENT / 100 * 1.18);
     const tcs = previewHasGstin ? round2(price * effective.tcsPercent / 100) : 0;
     const tds = round2(price * effective.tdsPercent / 100);
-    return { price, platformFee, platformFeeGst, buyerPays, gatewayCost, keep: round2(platformFee - gatewayCost), tcs, tds, organizerNet: round2(price - tcs - tds) };
+    return { price, platformFee, platformFeeGst, buyerPays, gatewayCost, keep: round2(platformFee - gatewayCost), tcs, tds, organizerNet: round2(price - platformFee - platformFeeGst - tcs - tds) };
   })();
 
   const saveConfig = async () => {
@@ -477,9 +480,9 @@ const SuperAdminPayments: React.FC = () => {
           {/* Fee + taxes */}
           <div className={`${cardClass} flex flex-col gap-4`}>
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">Platform fee (paid by the attendee)</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">Platform fee (deducted from the organizer&apos;s payout)</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Charged per paid ticket and added on top of the ticket price at checkout. Free tickets have no fee. Individual events can be given a custom fee below.
+                Charged per paid ticket and withheld from what the organizer is owed — the attendee pays the ticket price only, with no fee added at checkout. Free tickets have no fee. Individual events can be given a custom fee below.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -488,7 +491,7 @@ const SuperAdminPayments: React.FC = () => {
               {field('feeGstRate', 'GST on fee', '%', '18% applies to platform/convenience fees.')}
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">Withheld from organizer payouts</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">Also withheld from organizer payouts</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 As an e-commerce operator collecting on organizers&apos; behalf. Locked into each order when it is placed. Confirm the rates with your CA.
               </p>
@@ -530,14 +533,14 @@ const SuperAdminPayments: React.FC = () => {
             </div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-600 dark:text-slate-300 sm:max-w-md">
               <dt>Ticket</dt><dd className="text-right">{inr(preview.price)}</dd>
-              <dt>Platform fee</dt><dd className="text-right">{inr(preview.platformFee)}</dd>
-              <dt>GST on fee ({effective.feeGstRate}%)</dt><dd className="text-right">{inr(preview.platformFeeGst)}</dd>
               <dt className="font-bold text-slate-900 dark:text-white">Attendee pays</dt><dd className="text-right font-bold text-slate-900 dark:text-white">{inr(preview.buyerPays)}</dd>
+              <dt className="pt-2">Platform fee</dt><dd className="pt-2 text-right">− {inr(preview.platformFee)}</dd>
+              <dt>GST on fee ({effective.feeGstRate}%)</dt><dd className="text-right">− {inr(preview.platformFeeGst)}</dd>
+              <dt>TCS / TDS withheld</dt><dd className="text-right">− {inr(preview.tcs + preview.tds)}</dd>
+              <dt className="font-bold text-slate-900 dark:text-white">Organizer is paid out</dt><dd className="text-right font-bold text-slate-900 dark:text-white">{inr(preview.organizerNet)}</dd>
               <dt className="pt-2">Est. Razorpay charges ({GATEWAY_COST_PERCENT}% + GST)</dt><dd className="pt-2 text-right">− {inr(preview.gatewayCost)}</dd>
               <dt className="font-bold text-slate-900 dark:text-white">Platform keeps (excl. GST)</dt>
               <dd className={`text-right font-bold ${preview.keep < 0 ? 'text-red-500' : 'text-slate-900 dark:text-white'}`}>{inr(preview.keep)}</dd>
-              <dt className="pt-2">Organizer: TCS / TDS withheld</dt><dd className="pt-2 text-right">− {inr(preview.tcs + preview.tds)}</dd>
-              <dt className="font-bold text-slate-900 dark:text-white">Organizer is paid out</dt><dd className="text-right font-bold text-slate-900 dark:text-white">{inr(preview.organizerNet)}</dd>
             </dl>
             {preview.keep < 0 && (
               <p className="text-xs font-bold text-red-500">At this price the fee doesn&apos;t cover the gateway charges. Consider a higher fee.</p>

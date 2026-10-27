@@ -15,6 +15,7 @@ import {
   formatTime,
   getPriceLabel,
   getAvailability,
+  isSalesClosed,
   buildEventSlugId,
   isCreditExpired,
   formatCreditExpiry,
@@ -76,6 +77,7 @@ const OrganizerEventCard: React.FC<{
   onOpen: () => void;
   onToggleLive?: (id: string) => void;     // undefined => TOGGLE_EVENT_LIVE not permitted
   onToggleFeatured?: (id: string) => void; // undefined => TOGGLE_EVENT_FEATURED not permitted
+  onToggleSoldOut?: (id: string) => void;  // undefined => TOGGLE_EVENT_LIVE not permitted (reused)
   onDeleteRequest?: (event: PublicEvent) => void; // undefined => DELETE_EVENT not permitted
   onRestore?: (event: PublicEvent) => void;       // undefined => DELETE_EVENT not permitted (reused for restore)
   onEdit?: (event: PublicEvent) => void;          // undefined => EDIT_EVENT not permitted
@@ -84,9 +86,13 @@ const OrganizerEventCard: React.FC<{
   onLiveView: (event: PublicEvent) => void;
   onShare: (event: PublicEvent) => void;
   showFeaturedToggle: boolean;
-}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onDeleteRequest, onRestore, onEdit, onEditBlocked, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
+}> = ({ event, onOpen, onToggleLive, onToggleFeatured, onToggleSoldOut, onDeleteRequest, onRestore, onEdit, onEditBlocked, onDuplicate, onLiveView, onShare, showFeaturedToggle }) => {
   const label = getCategoryLabel(event);
-  const { pct, soldOut, sellingFast } = getAvailability(event.tiers);
+  const { pct, soldOut: capacitySoldOut, sellingFast } = getAvailability(event.tiers);
+  // Shown to the public / drives the "Sold out" badge: manual override OR
+  // capacity OR the event having already started — vs. capacitySoldOut
+  // above, which is capacity-only and still used for the progress bar math.
+  const soldOut = isSalesClosed(event);
   const gradient = CATEGORY_GRADIENTS[event.category] ?? CATEGORY_GRADIENTS.Other;
 
   const isLive = event.status === 'published';
@@ -190,9 +196,19 @@ const OrganizerEventCard: React.FC<{
             </button>
           )}
         {soldOut && (
-          <span className="absolute bottom-10 right-2 rounded-sm bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white">
-            Sold out
-          </span>
+          <div className="absolute -right-9 top-3 w-32 rotate-45 shadow-md" aria-hidden="true">
+            <div
+              className="h-1 w-full"
+              style={{ background: 'repeating-linear-gradient(135deg, #facc15 0 6px, #111827 6px 12px)' }}
+            />
+            <div className="bg-yellow-400 py-0.5 text-center text-[10px] font-extrabold uppercase tracking-wider text-black">
+              Sold Out
+            </div>
+            <div
+              className="h-1 w-full"
+              style={{ background: 'repeating-linear-gradient(135deg, #facc15 0 6px, #111827 6px 12px)' }}
+            />
+          </div>
         )}
         {!soldOut && sellingFast && (
           <span className="absolute bottom-10 right-2 rounded-sm bg-[#007A78] px-2 py-0.5 text-xs font-medium text-white">
@@ -302,6 +318,24 @@ const OrganizerEventCard: React.FC<{
               )}
             </div>
 
+            {onToggleSoldOut && (
+              <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700 pt-2">
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Ticket size={13} className={event.manuallySoldOut ? 'text-[#007A78]' : 'text-gray-300 dark:text-slate-600'} />
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Sold out</span>
+                    <ToggleSwitch
+                      checked={!!event.manuallySoldOut}
+                      onChange={() => onToggleSoldOut(event.id)}
+                    />
+                  </div>
+                  {!event.manuallySoldOut && capacitySoldOut && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">All tickets sold</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isLive && (
               <button
                 type="button"
@@ -328,7 +362,7 @@ const OrganizerEventDiscover: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { can, isOwner } = usePermissions();
-  const { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
+  const { events, loading, toggleLive, toggleFeatured, toggleManualSoldOut, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode } = useOrganizerEvents();
   const { settings } = useCompanySettings();
   const { credits, loading: creditsLoading } = useEventCredits();
 
@@ -666,6 +700,7 @@ const OrganizerEventDiscover: React.FC = () => {
                         : undefined
                     }
                     onToggleFeatured={can(Permission.TOGGLE_EVENT_FEATURED) ? (evId) => toggleFeatured(evId, !!event.featured) : undefined}
+                    onToggleSoldOut={can(Permission.TOGGLE_EVENT_LIVE) ? (evId) => toggleManualSoldOut(evId, !!event.manuallySoldOut) : undefined}
                     onDeleteRequest={can(Permission.DELETE_EVENT) ? setDeletingEvent : undefined}
                     onRestore={can(Permission.DELETE_EVENT) ? setRestoringEvent : undefined}
                     onEdit={can(Permission.EDIT_EVENT) ? setEditingEvent : undefined}

@@ -71,6 +71,9 @@ export interface PublicEvent {
   arriveByTime?: string | null;
   ageLimit?: string | null;
   helplineNumber?: string | null;
+  // NEW — organizer-set "Mark as Sold Out" toggle, independent of actual
+  // tier capacity. See isSalesClosed() below.
+  manuallySoldOut?: boolean;
 }
 // NEW — how long a single event credit keeps an event published for
 export const EVENT_CREDIT_VALIDITY_DAYS = 90; // ~3 months
@@ -152,6 +155,18 @@ export const getAvailability = (tiers: PublicTicketTier[]) => {
   const totalSold = tiers.reduce((sum, t) => sum + t.sold, 0);
   const pct = totalQty ? Math.round((totalSold / totalQty) * 100) : 0;
   return { pct, soldOut: totalQty > 0 && totalSold >= totalQty, sellingFast: pct >= 80 && totalSold < totalQty };
+};
+
+// True once new ticket bookings should stop being accepted — either the
+// organizer manually marked the event "Sold Out", or every tier is actually
+// out of stock. Used to show the "Sold Out" badge AND to actually block
+// Checkout/booking, not just the visual label.
+export const isSalesClosed = (
+  event: Pick<PublicEvent, 'tiers' | 'manuallySoldOut'>
+): boolean => {
+  if (event.manuallySoldOut) return true;
+  if (getAvailability(event.tiers).soldOut) return true;
+  return false;
 };
 
 // Picks the event to lead with on the discover page: an explicitly
