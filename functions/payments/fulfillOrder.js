@@ -8,6 +8,7 @@ const {
     nextTicketNumbers,
     formatTicketId,
     soldOf,
+    stripHtmlTags,
 } = require("./ticketing");
 
 const { FieldValue } = admin.firestore;
@@ -192,6 +193,9 @@ const fulfillOrder = async (orderRef, payment) => {
                 paymentMode,
                 paymentMethod: "gateway",
                 accessCode: order.accessCode || null,
+                referralCode: order.referralCode || null,
+                // null, not undefined — Firestore rejects undefined field values.
+                referralDiscountAmount: item.unitDiscount || null,
                 bookingGroupId: groups[i],
                 orderId: orderRef.id,
                 razorpayOrderId: order.razorpayOrderId || null,
@@ -206,6 +210,7 @@ const fulfillOrder = async (orderRef, payment) => {
                 tierName: item.tierName,
                 attendeeName: person.name,
                 accessCode: order.accessCode || undefined,
+                referralCode: order.referralCode || undefined,
                 attendeeEmail: person.email,
                 attendeePhone: person.phone,
                 amountPaid: item.unitTotal,
@@ -238,7 +243,7 @@ const fulfillOrder = async (orderRef, payment) => {
             tx.set(ledgerRef, { companyId: order.companyId, ...amounts }, { merge: true });
             tx.set(ledgerRef.collection("events").doc(order.eventId), {
                 eventId: order.eventId,
-                eventTitle: event.title || order.eventTitle || "",
+                eventTitle: stripHtmlTags(event.title || order.eventTitle || ""),
                 ...amounts,
             }, { merge: true });
         }

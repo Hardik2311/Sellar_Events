@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, XCircle, Eye, UserPlus, UploadCloud, Wallet, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
 import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
@@ -21,10 +21,11 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import type { Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
-import { buildEventSlugId } from '../data/events';
+import { buildEventSlugId, findReferralCodeEntry } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import { stripHtmlTags } from '../lib/utils';
 import EventListCard from '../components/EventListCard';
+import { sortEventsForPicker } from '../lib/eventPicker';
 import AttendeeCard from '../components/AttendeeCard';
 import { Card, CardContent } from '../components/ui/card';
 import QRScanner from '../components/QrScannerModal';
@@ -41,6 +42,9 @@ import ConfirmReviveModal from '../components/ConfirmReviveModal';
 import EditAttendeeModal from '../components/EditAttendeeModal';
 import { useEventCredits } from '../hooks/useEventCredits';
 import { loadTicketPdfHero } from '../lib/ticketPdf';
+import { useOrganizerEvents } from '../hooks/useOrganizerEvents';
+import { CONFIRMED_TICKET_STATUSES } from '../types/attendee.types';
+import type { ReferralDiscountType } from '../data/events';
 
 // Matches the PDF acknowledgement's banner box in AttendeeCard.tsx.
 
@@ -85,7 +89,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     category: data.category,
     status: data.status,
     startDate: data.date,
-     time: data.time ?? undefined,
+    time: data.time ?? undefined,
     venue: data.isOnline ? 'Online' : data.venue,
     ticketsSold: tiers.reduce((sum: number, t: any) => sum + t.sold, 0),
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
@@ -104,6 +108,17 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     helplineNumber: data.helplineNumber ?? null,
     upiId: data.upiId ?? undefined,
     payeeName: data.payeeName ?? undefined,
+    taxType: data.taxType ?? null,
+    referralCodesEnabled: data.referralCodesEnabled || false,
+    referralCodes: (data.referralCodes || []).map((c: any) => ({
+      code: c.code,
+      label: c.label,
+      discountType: c.discountType,
+      discountValue: c.discountValue,
+      previousCodes: c.previousCodes ?? [],
+    })),
+    referralDiscountType: data.referralDiscountType || 'percent',
+    referralDiscountValue: typeof data.referralDiscountValue === 'number' ? data.referralDiscountValue : 10,
   };
 };
 
@@ -124,17 +139,38 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   screenshotUrl: data.screenshotUrl ?? undefined,
   razorpayPaymentId: data.razorpayPaymentId ?? undefined,
   accessCode: data.accessCode ?? undefined,
+  referralCode: data.referralCode ?? undefined,
+  referralDiscountAmount: typeof data.referralDiscountAmount === 'number' ? data.referralDiscountAmount : undefined,
   purchasedAt: data.purchasedAt instanceof Timestamp ? data.purchasedAt.toMillis() : undefined,
   createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : undefined,
   bookingGroupId: data.bookingGroupId ?? null,
+  orderId: data.orderId ?? undefined,
+  bookingId: data.bookingId ?? null,
   // Walk-ins are saved with isWalkIn: true (lib/ticketing.ts), not a source field.
   source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
 });
+// Everything bought in ONE purchase, whatever the names: gateway orders
+// share orderId, free / manual-QR / walk-in bookings share bookingId. Older
+// tickets without either fall back to the same-name bookingGroupId.
+const purchaseKey = (a: Attendee) => a.orderId || a.bookingId || a.bookingGroupId || null;
+
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
   const { can } = usePermissions(); // MOVED — hooks must run inside the component, not at module scope
   const { credits, loading: creditsLoading } = useEventCredits();
+  const { createReferralCode, updateReferralCode, deleteReferralCode } = useOrganizerEvents();
   const [events, setEvents] = useState<EventSummary[]>([]);
+  const [isReferralSectionOpen, setIsReferralSectionOpen] = useState(false);
+  const [isAddingReferralCode, setIsAddingReferralCode] = useState(false);
+  // The code whose row is showing the edit form / the delete confirmation.
+  const [editingReferralCode, setEditingReferralCode] = useState<string | null>(null);
+  const [deletingReferralCode, setDeletingReferralCode] = useState<string | null>(null);
+  const [newReferralCode, setNewReferralCode] = useState('');
+  const [newReferralLabel, setNewReferralLabel] = useState('');
+  const [newReferralDiscountType, setNewReferralDiscountType] = useState<ReferralDiscountType>('percent');
+  const [newReferralDiscountValue, setNewReferralDiscountValue] = useState(10);
+  const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
+  const [isSavingReferralCode, setIsSavingReferralCode] = useState(false);
 
   const [selectedEventId, setSelectedEventId] = useState('');
   const [eventSearchValue, setEventSearchValue] = useState('');
@@ -146,8 +182,8 @@ const Attendees: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
-  // Group booking awaiting "how many arrived?" (one QR admits the whole group)
-  const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; initialArrived: number } | null>(null);
+  // Tickets bought together, awaiting "who is here?" (focusIds = what was scanned/tapped)
+  const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; focusIds: string[] } | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
   const [walkInTickets, setWalkInTickets] = useState<{
@@ -173,8 +209,10 @@ const Attendees: React.FC = () => {
       const list = snapshot.docs.map((d) => toEventSummary(d.id, d.data()));
       setEvents(list);
 
-      // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback
-      setSelectedEventId((prev) => (prev && list.some((e) => e.id === prev) ? prev : list[0]?.id ?? ''));
+      // Pehli baar load hone pe ya current event delete/miss ho jaaye to fallback —
+      // the top of the dropdown (next upcoming event, else the most recent past one).
+      const pickable = sortEventsForPicker(list);
+      setSelectedEventId((prev) => (prev && pickable.some((e) => e.id === prev) ? prev : pickable[0]?.id ?? ''));
     });
     return () => unsubscribe();
   }, [profile?.companyId]);
@@ -196,6 +234,190 @@ const Attendees: React.FC = () => {
   }, [profile?.companyId, selectedEventId]);
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
+
+  // Live per-code stats — never trust a stored counter, derive from the
+  // already-loaded confirmed attendee docs so refunds/cancellations are
+  // reflected automatically.
+  const referralCodeStats = (() => {
+    const byCode = new Map<string, { ticketsSold: number; totalDiscount: number }>();
+    attendees
+      .filter((a) => a.referralCode && CONFIRMED_TICKET_STATUSES.has(a.status))
+      .forEach((a) => {
+        // Keyed by the code's current name, so a rename keeps its sales.
+        const soldCode = (a.referralCode as string).trim().toUpperCase();
+        const code = findReferralCodeEntry(selectedEvent?.referralCodes, soldCode)?.code ?? soldCode;
+        const entry = byCode.get(code) ?? { ticketsSold: 0, totalDiscount: 0 };
+        entry.ticketsSold += 1;
+        entry.totalDiscount += a.referralDiscountAmount || 0;
+        byCode.set(code, entry);
+      });
+    return byCode;
+  })();
+
+  const closeReferralForm = () => {
+    setIsAddingReferralCode(false);
+    setEditingReferralCode(null);
+    setNewReferralCode('');
+    setNewReferralLabel('');
+    setReferralCodeError(null);
+  };
+
+  // A new code starts from the event's default discount.
+  const startAddReferralCode = () => {
+    closeReferralForm();
+    setDeletingReferralCode(null);
+    setNewReferralDiscountType(selectedEvent?.referralDiscountType || 'percent');
+    setNewReferralDiscountValue(selectedEvent?.referralDiscountValue ?? 10);
+    setIsAddingReferralCode(true);
+  };
+
+  const startEditReferralCode = (entry: NonNullable<EventSummary['referralCodes']>[number]) => {
+    closeReferralForm();
+    setDeletingReferralCode(null);
+    setEditingReferralCode(entry.code);
+    setNewReferralCode(entry.code);
+    setNewReferralLabel(entry.label);
+    setNewReferralDiscountType(entry.discountType);
+    setNewReferralDiscountValue(entry.discountValue);
+  };
+
+  const handleSaveReferralCode = async () => {
+    if (!selectedEvent) return;
+    setReferralCodeError(null);
+    setIsSavingReferralCode(true);
+    try {
+      if (editingReferralCode) {
+        await updateReferralCode(selectedEvent.id, editingReferralCode, newReferralCode, newReferralLabel, newReferralDiscountType, newReferralDiscountValue);
+      } else {
+        await createReferralCode(selectedEvent.id, newReferralCode, newReferralLabel, newReferralDiscountType, newReferralDiscountValue);
+      }
+      closeReferralForm();
+    } catch (err: any) {
+      setReferralCodeError(
+        err?.message === 'CODE_ALREADY_EXISTS'
+          ? 'That code already exists for this event.'
+          : err?.message === 'INVALID_DISCOUNT'
+            ? 'Enter a valid discount (1-100% or a positive ₹ amount).'
+            : err?.message === 'CODE_AND_LABEL_REQUIRED'
+              ? 'Enter both a code and a label.'
+              : err?.message === 'CODE_NOT_FOUND'
+                ? 'This code was deleted in the meantime.'
+                : 'Could not save the code — try again.'
+      );
+    } finally {
+      setIsSavingReferralCode(false);
+    }
+  };
+
+  const handleDeleteReferralCode = async (code: string) => {
+    if (!selectedEvent) return;
+    setReferralCodeError(null);
+    setIsSavingReferralCode(true);
+    try {
+      await deleteReferralCode(selectedEvent.id, code);
+      setDeletingReferralCode(null);
+    } catch {
+      setReferralCodeError('Could not delete the code — try again.');
+    } finally {
+      setIsSavingReferralCode(false);
+    }
+  };
+
+  // Shared by "+ Add code" and a row's Edit.
+  const isRenamingReferralCode =
+    !!editingReferralCode && !!newReferralCode.trim() && newReferralCode.trim() !== editingReferralCode;
+  const referralCodeForm = (
+    <div className="space-y-3 rounded-sm border border-gray-200 dark:border-slate-700 p-3">
+      <div className="flex gap-2">
+        <div className="w-32 shrink-0">
+          <label htmlFor="referral-code-input" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Code
+          </label>
+          <input
+            id="referral-code-input"
+            type="text"
+            placeholder="e.g. SARAH10"
+            value={newReferralCode}
+            onChange={(e) => setNewReferralCode(e.target.value.toUpperCase())}
+            className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 font-mono text-sm uppercase text-slate-700 dark:text-slate-200"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <label htmlFor="referral-label-input" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Label
+          </label>
+          <input
+            id="referral-label-input"
+            type="text"
+            placeholder="e.g. Sarah - Instagram"
+            value={newReferralLabel}
+            onChange={(e) => setNewReferralLabel(e.target.value)}
+            className="w-full rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-200"
+          />
+        </div>
+      </div>
+      <div>
+        <label htmlFor="referral-discount-input" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+          Discount
+        </label>
+        <div className="flex items-center gap-2">
+          <div role="group" aria-label="Discount type" className="flex overflow-hidden rounded-sm border border-gray-300 dark:border-slate-600">
+            <button
+              type="button"
+              aria-pressed={newReferralDiscountType === 'percent'}
+              onClick={() => setNewReferralDiscountType('percent')}
+              className={`px-3 py-1.5 text-xs font-medium ${newReferralDiscountType === 'percent' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            >
+              % off
+            </button>
+            <button
+              type="button"
+              aria-pressed={newReferralDiscountType === 'flat'}
+              onClick={() => setNewReferralDiscountType('flat')}
+              className={`px-3 py-1.5 text-xs font-medium ${newReferralDiscountType === 'flat' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            >
+              ₹ off
+            </button>
+          </div>
+          <input
+            id="referral-discount-input"
+            type="number"
+            min={0}
+            max={newReferralDiscountType === 'percent' ? 100 : undefined}
+            value={newReferralDiscountValue}
+            onChange={(e) => setNewReferralDiscountValue(Number(e.target.value))}
+            className="w-24 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-200"
+          />
+        </div>
+      </div>
+      {editingReferralCode && (
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          {isRenamingReferralCode
+            ? `${editingReferralCode} will stop working at checkout; buyers must use ${newReferralCode.trim()}. Its past sales stay counted here. `
+            : ''}
+          Changes apply to new bookings only. Tickets already sold keep their discount.
+        </p>
+      )}
+      {referralCodeError && <p className="text-xs text-red-500">{referralCodeError}</p>}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          disabled={isSavingReferralCode}
+          onClick={handleSaveReferralCode}
+          className="rounded-sm bg-[#007A78] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#006361] disabled:opacity-50"
+        >
+          {isSavingReferralCode ? 'Saving…' : editingReferralCode ? 'Save changes' : 'Save code'}
+        </button>
+        <button
+          type="button"
+          onClick={closeReferralForm}
+          className="rounded-sm px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 
   const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -249,6 +471,8 @@ const Attendees: React.FC = () => {
     setSelectedEventId(eventId);
     setSearchValue('');
     setExpandedId(null);
+    closeReferralForm();
+    setDeletingReferralCode(null);
   };
 
   // bookingGroupId -> its non-cancelled tickets (lead ticket first). Only
@@ -273,23 +497,55 @@ const Attendees: React.FC = () => {
     [bookingGroups]
   );
 
-  // Defaults to "everyone arrived" — the usual case when a group shows its QR
-  // at the gate; staff lower it if only some of them are here yet.
-  const openGroupCheckIn = useCallback((members: Attendee[]) => {
-    setPendingGroup({ members, initialArrived: members.length });
-  }, []);
+  // purchaseKey -> its non-cancelled tickets, same-name tickets kept together.
+  const purchases = useMemo(() => {
+    const map = new Map<string, Attendee[]>();
+    attendees.forEach((a) => {
+      const key = purchaseKey(a);
+      if (!key || a.status === 'cancelled') return;
+      map.set(key, [...(map.get(key) ?? []), a]);
+    });
+    map.forEach((members) =>
+      members.sort(
+        (x, y) =>
+          (x.bookingGroupId ?? x.id).localeCompare(y.bookingGroupId ?? y.id) || x.ticketId.localeCompare(y.ticketId)
+      )
+    );
+    return map;
+  }, [attendees]);
 
-  // Sets exactly `arrivedCount` tickets in the group to checked-in. Tickets
-  // already checked in keep their original check-in time.
+  // Other tickets bought together with this one, or null if it was bought alone.
+  const getPurchaseMembers = useCallback(
+    (attendee: Attendee): Attendee[] | null => {
+      const key = purchaseKey(attendee);
+      const members = key ? purchases.get(key) : undefined;
+      return members && members.length > 1 ? members : null;
+    },
+    [purchases]
+  );
+
+  // Opens the "who is here?" checklist. The scanned/tapped ticket (plus its
+  // same-name group, which that one QR admits) starts ticked; the rest of the
+  // booking is listed so staff can tick them too.
+  const openGroupCheckIn = useCallback(
+    (attendee: Attendee): boolean => {
+      const members = getPurchaseMembers(attendee);
+      if (!members) return false;
+      const sameName = getGroupMembers(attendee) ?? [attendee];
+      setPendingGroup({ members, focusIds: sameName.map((m) => m.id) });
+      return true;
+    },
+    [getPurchaseMembers, getGroupMembers]
+  );
+
+  // Sets exactly the ticked tickets to checked-in. Tickets already checked
+  // in keep their original check-in time.
   const handleGroupCheckIn = useCallback(
-    (arrivedCount: number) => {
+    (checkedInIds: Set<string>) => {
       const companyId = profile?.companyId;
       if (!pendingGroup || !companyId || !selectedEventId) return;
-      const ordered = [...pendingGroup.members].sort(
-        (a, b) => Number(b.status === 'checked_in') - Number(a.status === 'checked_in')
-      );
-      const changes = ordered
-        .map((a, i) => ({ attendee: a, shouldBeIn: i < arrivedCount }))
+      const changes = pendingGroup.members
+        .map((a) => ({ attendee: a, shouldBeIn: checkedInIds.has(a.id) }))
         .filter(({ attendee, shouldBeIn }) => (attendee.status === 'checked_in') !== shouldBeIn);
 
       const nowIso = new Date().toISOString();
@@ -314,9 +570,14 @@ const Attendees: React.FC = () => {
         setScanFeedback({ type: 'error', message: 'Group check-in failed, please retry.' });
       });
 
+      const arrivedNow = changes.filter((c) => c.shouldBeIn).map((c) => c.attendee.name);
+      const undone = changes.length - arrivedNow.length;
       setScanFeedback({
         type: 'success',
-        message: `${pendingGroup.members[0].name}'s group: ${arrivedCount} of ${pendingGroup.members.length} arrived.`,
+        message:
+          arrivedNow.length > 0
+            ? `Checked in ${arrivedNow.length === 1 ? arrivedNow[0] : `${arrivedNow.length} people`}. ${checkedInIds.size} of ${pendingGroup.members.length} in this booking arrived.`
+            : `Checked out ${undone === 1 ? '1 person' : `${undone} people`}.`,
       });
       setPendingGroup(null);
     },
@@ -426,8 +687,8 @@ const Attendees: React.FC = () => {
       // tier (older records predate ticketTierId and only have tierName).
       const previousTierId = pendingEditAttendee
         ? selectedEvent?.tiers.find(
-            (t) => t.id === pendingEditAttendee.ticketTierId || t.name === pendingEditAttendee.tierName
-          )?.id
+          (t) => t.id === pendingEditAttendee.ticketTierId || t.name === pendingEditAttendee.tierName
+        )?.id
         : undefined;
       const tierChanged = !!tierId && !!previousTierId && tierId !== previousTierId;
 
@@ -438,17 +699,17 @@ const Attendees: React.FC = () => {
       // overcount the old one forever after a plain updateDoc here.
       const savePromise = tierChanged
         ? runTransaction(db, async (transaction) => {
-            const eventSnap = await transaction.get(eventRef);
-            if (!eventSnap.exists()) throw new Error('Event no longer exists.');
-            const currentTiers = (eventSnap.data().tiers || []) as { id: string; sold?: number }[];
-            const updatedTiers = currentTiers.map((t) => {
-              if (t.id === previousTierId) return { ...t, sold: Math.max(0, (t.sold ?? 0) - 1) };
-              if (t.id === tierId) return { ...t, sold: (t.sold ?? 0) + 1 };
-              return t;
-            });
-            transaction.update(eventRef, { tiers: updatedTiers });
-            transaction.update(attendeeRef, writePayload);
-          })
+          const eventSnap = await transaction.get(eventRef);
+          if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+          const currentTiers = (eventSnap.data().tiers || []) as { id: string; sold?: number }[];
+          const updatedTiers = currentTiers.map((t) => {
+            if (t.id === previousTierId) return { ...t, sold: Math.max(0, (t.sold ?? 0) - 1) };
+            if (t.id === tierId) return { ...t, sold: (t.sold ?? 0) + 1 };
+            return t;
+          });
+          transaction.update(eventRef, { tiers: updatedTiers });
+          transaction.update(attendeeRef, writePayload);
+        })
         : updateDoc(attendeeRef, writePayload);
 
       savePromise
@@ -505,14 +766,10 @@ const Attendees: React.FC = () => {
         return;
       }
 
-      const group = getGroupMembers(match);
-      if (group) {
-        openGroupCheckIn(group);
-        return;
-      }
+      if (openGroupCheckIn(match)) return;
       setPendingAttendee(match);
     },
-    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
+    [attendees, selectedEvent, isEventDateInFuture, openGroupCheckIn]
   );
   const handleConfirmCancel = useCallback(() => {
     if (!pendingCancelAttendee) return;
@@ -649,14 +906,10 @@ const Attendees: React.FC = () => {
       }
       const target = attendees.find((a) => a.id === id);
       if (!target) return;
-      const group = getGroupMembers(target);
-      if (group) {
-        openGroupCheckIn(group);
-        return;
-      }
+      if (openGroupCheckIn(target)) return;
       setPendingAttendee(target);
     },
-    [attendees, selectedEvent, isEventDateInFuture, getGroupMembers, openGroupCheckIn]
+    [attendees, selectedEvent, isEventDateInFuture, openGroupCheckIn]
   );
   return (
     <div className="flex min-h-screen w-full flex-col bg-slate-100 dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] transition-colors duration-200 mb-16">
@@ -741,6 +994,146 @@ const Attendees: React.FC = () => {
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-300 break-words">
                       {Object.entries(stats.tierCounts).map(([tier, count]) => `${tier}: ${count}`).join(' · ')}
                     </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Referral codes — organizer-typed discount codes to attribute sales to promoters.
+                  Hidden entirely when the event's toggle is off, not just disabled-looking. */}
+              {selectedEvent.registrationMode !== 'rsvp' && selectedEvent.referralCodesEnabled && (
+                <Card className="shadow-sm border-gray-200 dark:border-slate-800 dark:bg-[#1E293B]">
+                  <CardContent className="py-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsReferralSectionOpen((open) => !open)}
+                      aria-expanded={isReferralSectionOpen}
+                      aria-controls="referral-codes-panel"
+                      className="flex w-full items-center justify-between gap-3 text-left"
+                    >
+                      <div className="min-w-0">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Referral codes</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {(() => {
+                            const codes = selectedEvent.referralCodes ?? [];
+                            const sold = codes.reduce((s, c) => s + (referralCodeStats.get(c.code)?.ticketsSold ?? 0), 0);
+                            return codes.length === 0
+                              ? 'No codes yet'
+                              : `${codes.length} ${codes.length === 1 ? 'code' : 'codes'} · ${sold} sold`;
+                          })()}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                          Enabled
+                        </span>
+                        <ChevronDown
+                          size={18}
+                          aria-hidden="true"
+                          className={`text-slate-400 transition-transform ${isReferralSectionOpen ? 'rotate-180' : ''}`}
+                        />
+                      </div>
+                    </button>
+
+                    {isReferralSectionOpen && (
+                      <div id="referral-codes-panel" className="mt-3">
+                        {selectedEvent.referralCodes && selectedEvent.referralCodes.length > 0 && (
+                          <div className="mb-3 flex flex-col divide-y divide-gray-100 dark:divide-slate-800">
+                            {selectedEvent.referralCodes.map((entry) => {
+                              const codeStats = referralCodeStats.get(entry.code) ?? { ticketsSold: 0, totalDiscount: 0 };
+                              if (editingReferralCode === entry.code) {
+                                return <div key={entry.code} className="py-2.5">{referralCodeForm}</div>;
+                              }
+                              if (deletingReferralCode === entry.code) {
+                                return (
+                                  <div key={entry.code} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                                    <div className="min-w-0">
+                                      <p className="text-sm text-slate-700 dark:text-slate-200">
+                                        Delete <span className="font-mono font-semibold">{entry.code}</span>?
+                                      </p>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        {codeStats.ticketsSold > 0
+                                          ? `The ${codeStats.ticketsSold} tickets sold keep their discount, but the code stops working and its stats are hidden.`
+                                          : 'The code will stop working at checkout.'}
+                                      </p>
+                                      {referralCodeError && <p className="text-xs text-red-500">{referralCodeError}</p>}
+                                    </div>
+                                    <div className="flex shrink-0 gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={isSavingReferralCode}
+                                        onClick={() => handleDeleteReferralCode(entry.code)}
+                                        className="rounded-sm bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                                      >
+                                        {isSavingReferralCode ? 'Deleting…' : 'Delete'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setDeletingReferralCode(null); setReferralCodeError(null); }}
+                                        className="rounded-sm px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={entry.code} className="flex items-center justify-between gap-3 py-2.5">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                      <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-100">{entry.code}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigator.clipboard?.writeText(entry.code)}
+                                        className="text-[10px] text-[#007A78] hover:underline"
+                                      >
+                                        Copy
+                                      </button>
+                                      {can(Permission.EDIT_EVENT) && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => startEditReferralCode(entry)}
+                                            className="text-[10px] text-[#007A78] hover:underline"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeReferralForm(); setDeletingReferralCode(entry.code); }}
+                                            className="text-[10px] text-red-600 hover:underline dark:text-red-400"
+                                          >
+                                            Delete
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                                      {entry.label} · {entry.discountType === 'percent' ? `${entry.discountValue}% off` : `₹${entry.discountValue} off`}
+                                    </p>
+                                  </div>
+                                  <p className="shrink-0 text-right text-xs font-medium text-slate-700 dark:text-slate-200">{codeStats.ticketsSold} sold</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {can(Permission.EDIT_EVENT) && (
+                          isAddingReferralCode ? (
+                            referralCodeForm
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={startAddReferralCode}
+                              className="rounded-sm border border-dashed border-gray-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-[#007A78] hover:bg-gray-50 dark:hover:bg-slate-800"
+                            >
+                              + Add code
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -870,6 +1263,20 @@ const Attendees: React.FC = () => {
                           tierLabel: tiers.length === 1 ? `${tiers[0]} × ${group.length}` : `${group.length} tickets`,
                         };
                       })()}
+                      bookedWith={(() => {
+                        if (attendee.status === 'cancelled') return undefined;
+                        const members = getPurchaseMembers(attendee);
+                        if (!members) return undefined;
+                        // This row already stands for its own same-name group.
+                        const ownIds = new Set((getGroupMembers(attendee) ?? [attendee]).map((m) => m.id));
+                        const others = members.filter((m) => !ownIds.has(m.id));
+                        if (others.length === 0) return undefined;
+                        return {
+                          others: others.map(({ id, name, status }) => ({ id, name, status })),
+                          size: members.length,
+                          arrived: members.filter((m) => m.status === 'checked_in').length,
+                        };
+                      })()}
                     />
                   ))}
                 </div>
@@ -902,7 +1309,8 @@ const Attendees: React.FC = () => {
       />
       <GroupCheckInModal
         members={pendingGroup?.members ?? null}
-        initialArrived={pendingGroup?.initialArrived ?? 0}
+        focusIds={pendingGroup?.focusIds ?? []}
+        tierOrder={selectedEvent?.tiers.map((t) => t.name) ?? []}
         onConfirm={handleGroupCheckIn}
         onCancel={() => setPendingGroup(null)}
       />
@@ -944,7 +1352,7 @@ const Attendees: React.FC = () => {
               eventCategory={selectedEvent.category}
               eventDate={selectedEvent.startDate}
               eventVenue={selectedEvent.venue}
-               eventTime={selectedEvent.time}
+              eventTime={selectedEvent.time}
               tickets={walkInTickets.map((t) => ({ ...t, status: 'valid' }))}
               onDone={() => setWalkInTickets(null)}
               eventBannerDataUrl={pdfBannerDataUrl}

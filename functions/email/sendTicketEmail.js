@@ -1,136 +1,30 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
 const { db, PAYMENTS_REGION } = require("../payments/razorpayClient");
 const { isSuperAdminUid } = require("../payments/platformConfig");
+const {
+    MAIL_SECRETS,
+    SENDER_NAME,
+    getTransport,
+    resetTransport,
+    senderAddress,
+    str,
+    normEmail,
+    isEmail,
+    isQuotaError,
+    buildEmail,
+} = require("./mailer");
 
 const { FieldValue } = admin.firestore;
 
-// Gmail account the ticket emails go out from. Set with:
-//   firebase functions:secrets:set GMAIL_USER
-//   firebase functions:secrets:set GMAIL_APP_PASSWORD   (Google App Password)
-// Swap the transport below for Brevo / Resend once there is a domain.
-const GMAIL_USER = defineSecret("GMAIL_USER");
-const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
-const MAIL_SECRETS = [GMAIL_USER, GMAIL_APP_PASSWORD];
-
-const SENDER_NAME = "OUTSOLD";
 const MAX_ATTENDEES = 50;
 const MAX_PDFS = 10;
 const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
-
-let transport = null;
-const getTransport = () => {
-    if (transport) return transport;
-    const user = (GMAIL_USER.value() || "").trim();
-    const pass = (GMAIL_APP_PASSWORD.value() || "").replace(/\s+/g, "");
-    if (!user || !pass) throw new HttpsError("failed-precondition", "EMAIL_NOT_CONFIGURED");
-    transport = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
-        auth: { user, pass },
-    });
-    return transport;
-};
 
 const requireSuperAdmin = (auth) => {
     if (!auth || !isSuperAdminUid(auth.uid)) {
         throw new HttpsError("permission-denied", "Only super admins can send ticket emails.");
     }
-};
-
-const str = (v) => String(v === undefined || v === null ? "" : v).trim();
-// Titles are saved from a rich-text editor, so they can carry tags and
-// entities like "&nbsp;" (mirrors stripHtmlTags in src/lib/utils.ts).
-const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", ndash: "–", mdash: "—" };
-const decodeEntities = (s) => s
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-    .replace(/&([a-z]+);/gi, (m, name) => {
-        const key = name.toLowerCase();
-        return Object.prototype.hasOwnProperty.call(ENTITIES, key) ? ENTITIES[key] : m;
-    });
-const stripHtml = (s) => {
-    let out = str(s);
-    // a few passes, so double-encoded text ("&amp;nbsp;") is cleaned too
-    for (let i = 0; i < 3; i++) {
-        const next = decodeEntities(out.replace(/<[^>]*>/g, " "));
-        if (next === out) break;
-        out = next;
-    }
-    return out.replace(/[\s ]+/g, " ").trim();
-};
-const escapeHtml = (s) => str(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-const normEmail = (e) => str(e).toLowerCase();
-const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-
-const formatDate = (raw) => {
-    const s = str(raw);
-    if (!s) return "";
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return s;
-    return d.toLocaleDateString("en-IN", {
-        weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata",
-    });
-};
-
-/** Gmail quota / rate-limit replies, so the client can stop its send loop. */
-const isQuotaError = (err) => {
-    const code = Number(err && err.responseCode);
-    const text = str(err && (err.response || err.message));
-    return /5\.4\.5|daily user sending|sending limit|rate limit/i.test(text) ||
-        code === 421 || code === 454;
-};
-
-const buildEmail = ({ name, event, ticketIds }) => {
-    const title = stripHtml(event.title) || "your event";
-    const date = formatDate(event.date);
-    const time = str(event.time);
-    const venue = event.isOnline ? "Online" : stripHtml(event.venue);
-    const helpline = str(event.helplineNumber);
-    const ids = ticketIds.join(", ");
-    const greetingName = str(name).split(/\s+/)[0] || "there";
-
-    const facts = [
-        ["Event", title],
-        ["Date", [date, time].filter(Boolean).join(", ")],
-        ["Venue", venue],
-        [ticketIds.length > 1 ? "Ticket numbers" : "Ticket number", ids],
-    ].filter((f) => f[1]);
-
-    const help = helpline ?
-        `If you have any questions, reply to this email or call/WhatsApp ${helpline}.` :
-        "If you have any questions, just reply to this email.";
-
-    const text = [
-        `Hi ${greetingName},`,
-        "",
-        `Thanks for booking ${title}. We're looking forward to seeing you there.`,
-        "",
-        ...facts.map((f) => `${f[0]}: ${f[1]}`),
-        "",
-        "Your entry pass is attached as a PDF. Keep it on your phone and show the QR code at the gate.",
-        "",
-        help,
-        "",
-        "See you soon,",
-        "Team OUTSOLD",
-    ].join("\n");
-
-    const html = `<p>Hi ${escapeHtml(greetingName)},</p>
-<p>Thanks for booking <b>${escapeHtml(title)}</b>. We're looking forward to seeing you there.</p>
-<p>${facts.map((f) => `<b>${escapeHtml(f[0])}:</b> ${escapeHtml(f[1])}`).join("<br>")}</p>
-<p>Your entry pass is attached as a PDF. Keep it on your phone and show the QR code at the gate.</p>
-<p>${escapeHtml(help)}</p>
-<p>See you soon,<br>Team OUTSOLD</p>`;
-
-    return { subject: `Your entry pass for ${title} – ${ids}`, text, html };
 };
 
 const decodePdfs = (pdfs) => {
@@ -197,7 +91,7 @@ exports.sendTicketEmail = onCall({
     }
 
     const mailer = getTransport();
-    const from = (GMAIL_USER.value() || "").trim();
+    const from = senderAddress();
     const to = test ? from : emails[0];
     const ticketIds = attendees.map((a) => str(a.ticketId)).filter(Boolean).sort();
     const { subject, text, html } = buildEmail({ name: attendees[0].name, event: eventSnap.data(), ticketIds });
@@ -225,7 +119,7 @@ exports.sendTicketEmail = onCall({
         }
         if (isQuotaError(err)) throw new HttpsError("resource-exhausted", "GMAIL_DAILY_LIMIT", { message });
         if (code === 535) {
-            transport = null;
+            resetTransport();
             throw new HttpsError("failed-precondition", "Gmail App Password is invalid.", { message });
         }
         throw new HttpsError("internal", message);

@@ -18,6 +18,7 @@ export interface PurchasedTicketResult {
   tierName: string;
   attendeeName: string;
   accessCode?: string;
+  referralCode?: string;
   attendeeEmail?: string;
   attendeePhone?: string;
   amountPaid?: number;
@@ -33,6 +34,7 @@ export interface CreateOrderInput {
   quantities: Record<string, number>;
   attendees: { name: string; email: string; phone: string; customAnswers: Record<string, string> }[];
   accessCode?: string;
+  referralCode?: string;
 }
 
 type CreateOrderResult =
@@ -167,6 +169,8 @@ interface CheckoutDisplay {
   organizationName: string;
   eventTitle: string;
   themeColor?: string;
+  /** Called once Razorpay reports success, before the server issues tickets. */
+  onPaid?: () => void;
 }
 
 /**
@@ -195,6 +199,7 @@ export async function payWithRazorpay(
     notes: { companyId: input.companyId, eventId: input.eventId, orderId: order.orderId },
     theme: display.themeColor ? { color: display.themeColor } : undefined,
   });
+  display.onPaid?.();
 
   const { data } = await verifyRazorpayPayment({
     ...success,

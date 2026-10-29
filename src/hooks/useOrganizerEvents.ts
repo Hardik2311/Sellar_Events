@@ -4,7 +4,7 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { uploadGalleryMedia } from '../lib/galleryUpload';
-import { generateAccessCode, isCreditExpired, isPastHardDeleteWindow, getNewCreditExpiry, type PublicEvent } from '../data/events';
+import { findReferralCodeEntry, generateAccessCode, isCreditExpired, isPastHardDeleteWindow, getNewCreditExpiry, type PublicEvent, type ReferralCodeEntry, type ReferralDiscountType } from '../data/events';
 import { DEFAULT_TEXT_STYLE, type EventFormState } from '../types/event.types';
 
 const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyId: string): PublicEvent => ({
@@ -32,6 +32,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   deletedAt: d.deletedAt?.toDate ? d.deletedAt.toDate().toISOString() : (d.deletedAt ?? null),
   isPrivate: d.isPrivate || false,
   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
+  manuallySoldOut: d.manuallySoldOut || false, // NEW
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
     name: t.name,
@@ -57,10 +58,15 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   // a missing/legacy field must fall back to manual_qr, the one mode that works,
   // not 'gateway', which silently routes attendees to the mock payment modal.
   paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
+  taxType: d.taxType ?? null,
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',
   accessCodes: d.accessCodes ?? [],
+  referralCodesEnabled: d.referralCodesEnabled || false, // NEW
+  referralCodes: d.referralCodes ?? [], // NEW
+  referralDiscountType: d.referralDiscountType || 'percent', // NEW
+  referralDiscountValue: typeof d.referralDiscountValue === 'number' ? d.referralDiscountValue : 10, // NEW
   maxTicketsPerOrder: typeof d.maxTicketsPerOrder === 'number' ? d.maxTicketsPerOrder : undefined,
   everPublished: d.everPublished || false, // NEW — true once event has been published at least once; drives free re-toggle logic
   arriveByTime: d.arriveByTime ?? null,
@@ -168,6 +174,16 @@ export const useOrganizerEvents = () => {
     await updateDoc(eventRef, { featured: !currentFeatured });
   };
 
+  // NEW — organizer-controlled override: stops new bookings immediately,
+  // independent of actual tier capacity or the event's start time. Reuses
+  // the same permission as toggleLive since it's the same "control whether
+  // the public can buy right now" action.
+  const toggleManualSoldOut = async (id: string, currentValue: boolean) => {
+    if (!profile?.companyId) return;
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+    await updateDoc(eventRef, { manuallySoldOut: !currentValue });
+  };
+
   /// NEW — generates a fresh access code for a private event and ADDS it to the
   // existing list (old codes stay valid too). Called every time the organizer
   // clicks "Share Link" for a private event.
@@ -189,6 +205,87 @@ export const useOrganizerEvents = () => {
     });
     return code;
   };
+
+  // NEW — organizer-typed, reusable discount code. Unlike access codes this
+  // is never consumed/single-use; usage stats are computed live from
+  // attendee docs (see Organizereventdetail.tsx), not stored here.
+  const createReferralCode = async (
+    id: string,
+    rawCode: string,
+    label: string,
+    discountType: ReferralDiscountType,
+    discountValue: number
+  ) => {
+    if (!profile?.companyId) throw new Error('No company context');
+    const code = rawCode.trim().toUpperCase();
+    const trimmedLabel = label.trim();
+    if (!code || !trimmedLabel) throw new Error('CODE_AND_LABEL_REQUIRED');
+    if (!(discountValue > 0) || (discountType === 'percent' && discountValue > 100)) {
+      throw new Error('INVALID_DISCOUNT');
+    }
+    const event = events.find((e) => e.id === id);
+    // Also blocks another code's old name, which its past sales still carry.
+    if (findReferralCodeEntry(event?.referralCodes, code)) throw new Error('CODE_ALREADY_EXISTS');
+    await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), {
+      referralCodes: arrayUnion({
+        code,
+        label: trimmedLabel,
+        discountType,
+        discountValue,
+        createdAt: new Date().toISOString(),
+      }),
+    });
+  };
+
+  // Renaming keeps the old name in previousCodes: sold tickets store the code
+  // they were bought with, and the stats follow it there. Only the new name
+  // works at checkout. Read-modify-write in a transaction so the entry's other
+  // fields (createdAt) survive and a concurrent add isn't lost.
+  const updateReferralCode = async (
+    id: string,
+    originalCode: string,
+    rawCode: string,
+    label: string,
+    discountType: ReferralDiscountType,
+    discountValue: number
+  ) => {
+    if (!profile?.companyId) throw new Error('No company context');
+    const code = rawCode.trim().toUpperCase();
+    const trimmedLabel = label.trim();
+    if (!code || !trimmedLabel) throw new Error('CODE_AND_LABEL_REQUIRED');
+    if (!(discountValue > 0) || (discountType === 'percent' && discountValue > 100)) {
+      throw new Error('INVALID_DISCOUNT');
+    }
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(eventRef);
+      const codes: ReferralCodeEntry[] = snap.data()?.referralCodes ?? [];
+      if (!codes.some((c) => c.code === originalCode)) throw new Error('CODE_NOT_FOUND');
+      const others = codes.filter((c) => c.code !== originalCode);
+      if (code !== originalCode && findReferralCodeEntry(others, code)) throw new Error('CODE_ALREADY_EXISTS');
+      tx.update(eventRef, {
+        referralCodes: codes.map((c) => {
+          if (c.code !== originalCode) return c;
+          const previousCodes = code === originalCode
+            ? c.previousCodes ?? []
+            : [...new Set([...(c.previousCodes ?? []), originalCode])].filter((p) => p !== code);
+          return { ...c, code, label: trimmedLabel, discountType, discountValue, previousCodes };
+        }),
+      });
+    });
+  };
+
+  // Tickets already sold with the code keep their discount; it just can't be used again.
+  const deleteReferralCode = async (id: string, code: string) => {
+    if (!profile?.companyId) throw new Error('No company context');
+    const eventRef = doc(db, 'companies', profile.companyId, 'events', id);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(eventRef);
+      const codes: { code: string }[] = snap.data()?.referralCodes ?? [];
+      tx.update(eventRef, { referralCodes: codes.filter((c) => c.code !== code) });
+    });
+  };
+
   const deleteEvent = async (id: string) => {
     if (!profile?.companyId) return;
     // Soft delete — doc stays in Firestore so it can be restored; a Cloud
@@ -252,6 +349,7 @@ export const useOrganizerEvents = () => {
         tierEndTime: t.tierEndTime ?? null,
       })),
       paymentCollectionMode: original.paymentCollectionMode ?? 'manual_qr',
+      taxType: original.taxType ?? null,
       //qrImageUrl: original.qrImageUrl ?? null,
       upiId: original.upiId ?? null,
       payeeName: original.payeeName ?? null,
@@ -315,6 +413,9 @@ export const useOrganizerEvents = () => {
       venue: form.venue,
       isOnline: form.isOnline,
       isPrivate: form.isPrivate,
+      referralCodesEnabled: form.referralCodesEnabled,
+      referralDiscountType: form.referralDiscountType,
+      referralDiscountValue: form.referralDiscountValue,
       coverImageUrls: form.images,
       coverImageUrl: form.images[0] || null,
       coverImageDesktop: coverImageDesktopUrl,
@@ -352,6 +453,7 @@ export const useOrganizerEvents = () => {
       // NEW — only meaningful for ticketed events; null-out otherwise so stale
       // QR/UPI data doesn't linger if the organizer switches back to RSVP or gateway
       paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
+      taxType: form.registrationMode === 'tickets' ? form.taxType : null,
       // qrImageUrl: form.registrationMode === 'tickets' && form.paymentCollectionMode === 'manual_qr'
       //   ? form.qrImage
       //   : null,
@@ -376,5 +478,5 @@ export const useOrganizerEvents = () => {
     await updateDoc(doc(db, 'companies', profile.companyId, 'events', id), payload);
   };
 
-  return { events, loading, toggleLive, toggleFeatured, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode };
+  return { events, loading, toggleLive, toggleFeatured, toggleManualSoldOut, deleteEvent, restoreEvent, duplicateEvent, updateEvent, regenerateAccessCode, createReferralCode, updateReferralCode, deleteReferralCode };
 };

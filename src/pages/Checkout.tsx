@@ -4,7 +4,7 @@ import { Ticket, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { collection, doc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { usePublicEvent } from '../hooks/usePublicEvents';
-import { formatTime, type AccessCodeEntry } from '../data/events';
+import { formatTime, applyReferralDiscount, GST_EXEMPTION_THRESHOLD, GST_RATE, resolveTicketTaxType, type AccessCodeEntry, type ReferralCodeEntry } from '../data/events';
 import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import { useDomainResolution } from '../hooks/useDomainResolution';
 import { useCompanySettings } from '../hooks/useSettings';
@@ -14,6 +14,7 @@ import { getSubdomain } from '../lib/subdomain';
 import { buildEventSlugId } from '../data/events';
 import { getShareBaseUrl } from '../lib/shareLinks';
 import TicketConfirmation from '../components/TicketConfirmation';
+import PaymentProcessingOverlay from '../components/brand/PaymentProcessingOverlay';
 import { stripHtmlTags } from '../lib/utils';
 import { assignBookingGroups, formatTicketId, getEventInitials, nextTicketNumbers } from '../lib/ticketing';
 import { checkoutErrorMessage, payWithRazorpay, PaymentCancelledError } from '../lib/razorpay';
@@ -39,10 +40,6 @@ import {
 const RAZORPAY_THEME_COLOR = '#007a78'; // --brand-teal
 
 interface TaxSettings {
-  enableTax?: boolean;
-  gstScheme?: 'regular' | 'composition' | 'none';
-  taxType?: 'inclusive' | 'exclusive';
-  defaultTaxRate?: number;
   enableRounding?: boolean;
   roundingInterval?: number;
 }
@@ -87,7 +84,10 @@ const CheckoutPage: React.FC = () => {
   const [attendeeDetails, setAttendeeDetails] = useState<AttendeeFormEntry[]>([]);
   const [sameForAll, setSameForAll] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [referralCodeInput, setReferralCodeInput] = useState('');
   const [step, setStep] = useState<'details' | 'processing' | 'success'>('details');
+  // True between Razorpay's success callback and the tickets coming back.
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   interface PurchasedTicket {
     ticketId: string;
     tierName: string;
@@ -262,19 +262,29 @@ const CheckoutPage: React.FC = () => {
     })
     .filter((item) => item.qty > 0);
 
-  const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
-  const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
-  const taxRate = taxSettings?.defaultTaxRate || 0;
+  const taxType = resolveTicketTaxType(event.taxType);
+  const taxRate = GST_RATE;
+
+  // Referral code — optional, tracking-only unless matched, in which case it
+  // discounts every tier's price before tax/rounding run (see applyReferralDiscount).
+  const matchedReferralEntry: ReferralCodeEntry | undefined =
+    event.referralCodesEnabled && referralCodeInput.trim()
+      ? event.referralCodes?.find((e) => e.code.trim().toUpperCase() === referralCodeInput.trim().toUpperCase())
+      : undefined;
+  const referralCodeInvalid = !!(event.referralCodesEnabled && referralCodeInput.trim() && !matchedReferralEntry);
 
   const lineItemsWithTax = lineItems.map((item) => {
     const qty = item.qty;
-    const price = item.tier.price;
+    const price = matchedReferralEntry ? applyReferralDiscount(item.tier.price, matchedReferralEntry) : item.tier.price;
 
     let itemBaseAmount = 0;
     let itemTaxAmount = 0;
     let itemTotalAmount = 0;
 
-    if (scheme === 'regular') {
+    // GST exemption is based on the ORIGINAL tier price, not a
+    // referral-discounted one — a ₹600 ticket discounted to ₹400 still owes
+    // tax on its discounted amount, it doesn't become exempt.
+    if (item.tier.price >= GST_EXEMPTION_THRESHOLD) {
       if (taxType === 'exclusive') {
         itemBaseAmount = price * qty;
         itemTaxAmount = itemBaseAmount * (taxRate / 100);
@@ -290,7 +300,11 @@ const CheckoutPage: React.FC = () => {
       itemTotalAmount = itemBaseAmount;
     }
 
-    return { ...item, itemBaseAmount, itemTaxAmount, itemTotalAmount };
+    const itemDiscountAmount = matchedReferralEntry
+      ? Number(((item.tier.price - price) * qty).toFixed(2))
+      : 0;
+
+    return { ...item, itemBaseAmount, itemTaxAmount, itemTotalAmount, itemDiscountAmount };
   });
 
   const totalTaxAmount = lineItemsWithTax.reduce((s, it) => s + it.itemTaxAmount, 0);
@@ -304,16 +318,15 @@ const CheckoutPage: React.FC = () => {
 
   // Gateway events are paid into the platform's account: the buyer also pays
   // the platform fee + GST on it (preview — the server computes the charge).
-  // Manual-QR money goes straight to the organizer, so no fee there.
+  // Manual-QR money goes straight to the organizer, so no fee there. Based on
+  // the discounted per-ticket price before GST (itemBaseAmount), so a referral
+  // discount lowers the fee too, and the ticket's GST is never charged a fee.
   const isGatewayEvent = event.paymentCollectionMode === 'gateway';
   const { platformFee, platformFeeGst } = isGatewayEvent
     ? computePlatformFee(
-        lineItems.map((li) => ({
-          unitTotal:
-            scheme === 'regular' && taxType === 'exclusive'
-              ? Number((li.tier.price * (1 + taxRate / 100)).toFixed(2))
-              : li.tier.price,
-          qty: li.qty,
+        lineItemsWithTax.map((it) => ({
+          unitBase: it.qty > 0 ? Number((it.itemBaseAmount / it.qty).toFixed(2)) : 0,
+          qty: it.qty,
         })),
         feeConfig
       )
@@ -347,7 +360,7 @@ const CheckoutPage: React.FC = () => {
   // (functions/payments/*) — the browser never writes their tickets.
 
   const initiatePayment = () => {
-    if (!detailsComplete || lineItems.length === 0) return;
+    if (!detailsComplete || lineItems.length === 0 || referralCodeInvalid) return;
 
     const oversold = lineItems.find((item) => {
       const remaining = item.tier.quantity - (item.tier.sold ?? 0);
@@ -387,11 +400,13 @@ const CheckoutPage: React.FC = () => {
             customAnswers: a.customAnswers ?? {},
           })),
           accessCode,
+          referralCode: matchedReferralEntry?.code,
         },
         {
           organizationName: settings.organizationName,
           eventTitle: stripHtmlTags(event.title),
           themeColor: RAZORPAY_THEME_COLOR,
+          onPaid: () => setConfirmingPayment(true),
         }
       );
       setPurchasedTickets(tickets);
@@ -400,6 +415,8 @@ const CheckoutPage: React.FC = () => {
       if (!(err instanceof PaymentCancelledError)) console.error('Razorpay checkout failed:', err);
       setCheckoutError(checkoutErrorMessage(err));
       setStep('details'); // let them retry
+    } finally {
+      setConfirmingPayment(false);
     }
   };
 
@@ -439,15 +456,19 @@ const CheckoutPage: React.FC = () => {
         attendeeEmail: string;
         attendeePhone: string;
         customFieldAnswers: Record<string, string>;
+        referralDiscountAmount: number;
       }[] = [];
 
       let slotIndex = 0;
       for (const item of lineItems) {
-        const unitPrice = item.tier.price;
+        const unitPrice = matchedReferralEntry ? applyReferralDiscount(item.tier.price, matchedReferralEntry) : item.tier.price;
+        const referralDiscountAmount = Number((item.tier.price - unitPrice).toFixed(2));
         let unitBase = unitPrice;
         let unitTax = 0;
 
-        if (scheme === 'regular') {
+        // Exemption is checked against the original tier price, not the
+        // referral-discounted unitPrice — see GST_EXEMPTION_THRESHOLD's docs.
+        if (item.tier.price >= GST_EXEMPTION_THRESHOLD) {
           if (taxType === 'exclusive') {
             unitTax = unitPrice * (taxRate / 100);
           } else {
@@ -475,6 +496,7 @@ const CheckoutPage: React.FC = () => {
             attendeeEmail: attendee.email,
             attendeePhone: attendee.phone,
             customFieldAnswers: attendee.customAnswers ?? {},
+            referralDiscountAmount,
           });
           slotIndex += 1;
         }
@@ -485,12 +507,44 @@ const CheckoutPage: React.FC = () => {
         attendeeWrites.map((w) => w.attendeeName),
         attendeeWrites.map((w) => w.ref.id)
       );
+      // Ties this booking's tickets together so functions/email/autoSendTicketEmail.js
+      // emails them as one message (gateway orders use orderId instead).
+      const bookingId = attendeeWrites[0]?.ref.id ?? null;
       let created: PurchasedTicket[] = [];
 
       await runTransaction(db, async (transaction) => {
         created = []; // a retried transaction must not double-append
         const eventSnap = await transaction.get(eventRef);
         if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+
+        // Re-check sold-out state against the freshly-read doc, not stale
+        // client state — closes the gap for someone who had Checkout open
+        // (or bookmarked/cached) from before the organizer marked the event
+        // sold out. Same "best-effort, client-enforced" model the capacity
+        // check below already uses, not a hard server-side guarantee — see
+        // firestore.rules' own note on this.
+        const freshEventData = eventSnap.data();
+        if (freshEventData.manuallySoldOut) {
+          throw new Error('This event is marked sold out and is no longer accepting bookings.');
+        }
+
+        // The discount in amountCollected/baseAmount/taxAmount above was
+        // computed against the live `event` prop before this transaction —
+        // re-confirm against the freshly-read doc that the code still exists
+        // with the same terms, so a code edited/removed mid-checkout can't
+        // leave a stale discount charged.
+        if (matchedReferralEntry) {
+          const freshReferralCodes = (freshEventData.referralCodes || []) as ReferralCodeEntry[];
+          const stillValid =
+            freshEventData.referralCodesEnabled &&
+            freshReferralCodes.some(
+              (e) =>
+                e.code.trim().toUpperCase() === matchedReferralEntry.code.trim().toUpperCase() &&
+                e.discountType === matchedReferralEntry.discountType &&
+                e.discountValue === matchedReferralEntry.discountValue
+            );
+          if (!stillValid) throw new Error('REFERRAL_CODE_CHANGED');
+        }
 
         const currentTiers = (eventSnap.data().tiers || []) as {
           id: string;
@@ -557,6 +611,7 @@ const CheckoutPage: React.FC = () => {
               attendeeEmail,
               attendeePhone,
               customFieldAnswers,
+              referralDiscountAmount,
             },
             index
           ) => {
@@ -574,7 +629,7 @@ const CheckoutPage: React.FC = () => {
               baseAmount,
               taxAmount,
               taxRate,
-              taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
+              taxType: taxType === 'exclusive' ? 'Exclusive' : 'Inclusive',
               ticketId,
               status: 'valid',
               checkedInAt: null,
@@ -583,7 +638,11 @@ const CheckoutPage: React.FC = () => {
               paymentMode: 'Free',
               paymentMethod: 'gateway', // distinguishes from manual_qr / walk-in flows
               accessCode: accessCode || null,
+              referralCode: matchedReferralEntry?.code || null,
+              // null, not undefined — Firestore rejects undefined field values.
+              referralDiscountAmount: referralDiscountAmount || null,
               bookingGroupId: bookingGroupIds[index],
+              bookingId,
             });
 
             created.push({
@@ -613,7 +672,9 @@ const CheckoutPage: React.FC = () => {
           ? 'This access code has already been used to book tickets and can\'t be used again.'
           : code === 'CODE_LIMIT_REACHED'
             ? 'This access code allows fewer tickets than you selected. Try a smaller quantity.'
-            : 'Something went wrong while booking your tickets. Please try again.'
+            : code === 'REFERRAL_CODE_CHANGED'
+              ? 'That referral code just changed. Please re-enter it and try again.'
+              : 'Something went wrong while booking your tickets. Please try again.'
       );
       setStep('details'); // let them retry
     }
@@ -643,6 +704,10 @@ const CheckoutPage: React.FC = () => {
         eventAgeLimit={event.ageLimit}
         eventHelplineNumber={event.helplineNumber}
         bookMoreTicketsUrl={bookMoreTicketsUrl}
+        emailedTo={Array.from(
+          new Set(purchasedTickets.map((t) => t.attendeeEmail?.trim().toLowerCase()).filter((e): e is string => !!e))
+        )}
+        autoDownload
         />
       </div>
     );
@@ -654,7 +719,7 @@ const CheckoutPage: React.FC = () => {
       : total === 0
         ? 'Confirm registration'
         : `Pay ${formatRupees(grandTotal, { zeroAsFree: false })}`;
-  const payCtaDisabled = !detailsComplete || lineItems.length === 0 || step === 'processing';
+  const payCtaDisabled = !detailsComplete || lineItems.length === 0 || step === 'processing' || referralCodeInvalid;
   const totalLabel = formatRupees(grandTotal);
   const showMobileBar = lineItems.length > 0;
 
@@ -665,46 +730,81 @@ const CheckoutPage: React.FC = () => {
     { id: 'checkout-payment', label: 'Payment', complete: false },
   ];
 
-  const ticketRows = lineItemsWithTax.map(({ tier, qty, itemTotalAmount }) => ({
+  // The listed ticket price — original, pre-discount, pre-tax — so the
+  // breakdown reads as a plain sum: price − discount + tax = order amount.
+  const ticketRows = lineItemsWithTax.map(({ tier, qty }) => ({
     id: tier.id,
     label: `${qty} × ${tier.name}`,
-    amountLabel: formatRupees(tier.price === 0 ? 0 : itemTotalAmount),
+    amountLabel: formatRupees(tier.price * qty),
   }));
   const taxRow =
     totalTaxAmount > 0
-      ? { id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }
+      ? { id: 'tax', label: taxType === 'inclusive' ? `GST (${taxRate}%, included in price)` : `GST (${taxRate}%)`, amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }
       : null;
   const roundOffRow =
     roundOffAmt !== 0
       ? { id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }
       : null;
+  const totalDiscountAmount = lineItemsWithTax.reduce((s, it) => s + it.itemDiscountAmount, 0);
+  const discountRow =
+    totalDiscountAmount > 0
+      ? {
+          id: 'referral-discount',
+          label: `Referral discount (${matchedReferralEntry?.code})`,
+          amountLabel: `−${formatRupees(totalDiscountAmount, { zeroAsFree: false })}`,
+          muted: true,
+        }
+      : null;
 
-  // With a booking charge (gateway events), collapse to two expandable rows —
-  // "Order amount" and "Booking charge (incl. of GST)". Otherwise the plain list.
+  // With a platform fee (gateway events), collapse to two expandable rows —
+  // "Order amount" and "Other charges (incl. of GST)". Otherwise the plain list.
   const summaryLineItems =
     platformFee > 0
       ? [
           {
             id: 'order-amount',
-            label: 'Order amount',
+            label: taxRow ? 'Order amount (incl. of GST)' : 'Order amount',
             amountLabel: formatRupees(total, { zeroAsFree: false }),
             children: [
               ...ticketRows,
-              ...(taxRow ? [{ ...taxRow, label: 'Includes tax' }] : []),
+              ...(discountRow ? [discountRow] : []),
+              ...(taxRow ? [taxRow] : []),
               ...(roundOffRow ? [roundOffRow] : []),
             ],
           },
           {
-            id: 'booking-charge',
-            label: 'Booking charge (incl. of GST)',
+            id: 'other-charges',
+            label: 'Other charges (incl. of GST)',
             amountLabel: formatRupees(platformFee + platformFeeGst, { zeroAsFree: false }),
             children: [
-              { id: 'platform-fee', label: 'Booking charge', amountLabel: formatRupees(platformFee, { zeroAsFree: false }) },
+              { id: 'platform-fee', label: 'Platform fee', amountLabel: formatRupees(platformFee, { zeroAsFree: false }) },
               { id: 'platform-fee-gst', label: `GST (${feeConfig.feeGstRate}%)`, amountLabel: formatRupees(platformFeeGst, { zeroAsFree: false }) },
             ],
           },
         ]
-      : [...ticketRows, ...(taxRow ? [taxRow] : []), ...(roundOffRow ? [roundOffRow] : [])];
+      : [...ticketRows, ...(discountRow ? [discountRow] : []), ...(taxRow ? [taxRow] : []), ...(roundOffRow ? [roundOffRow] : [])];
+
+  const referralCodeField = event.referralCodesEnabled && (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="referral-code" className="text-[13px] font-medium text-[var(--brand-black)]">
+        Referral code (optional)
+      </label>
+      <input
+        id="referral-code"
+        value={referralCodeInput}
+        onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+        placeholder="Enter code"
+        spellCheck={false}
+        className={`${brandInputClass()} ${brandFieldHeight} uppercase`}
+      />
+      {referralCodeInvalid && <p className={brandErrorClass}>Referral code not recognized.</p>}
+      {matchedReferralEntry && (
+        <p className="text-[13px] font-medium text-[var(--brand-teal)]">
+          {matchedReferralEntry.code} applied — {matchedReferralEntry.discountType === 'percent' ? `${matchedReferralEntry.discountValue}% off` : `₹${matchedReferralEntry.discountValue} off`} each ticket
+        </p>
+      )}
+    </div>
+  );
 
   const orderSummary = (
     <TicketOrderSummary
@@ -717,6 +817,7 @@ const CheckoutPage: React.FC = () => {
       ctaLabel={payCtaLabel}
       onCta={initiatePayment}
       ctaDisabled={payCtaDisabled}
+      extraContent={referralCodeField}
     />
   );
   const orderItemsLabel = lineItems.length === 1 ? `${lineItems[0].qty} × ${lineItems[0].tier.name}` : `${totalQty} tickets`;
@@ -950,7 +1051,7 @@ const CheckoutPage: React.FC = () => {
                         <span className="block text-[15px] font-semibold leading-[22px] text-[var(--brand-black)]">Pay securely online</span>
                         <span className="block text-[13px] leading-[18px] text-[var(--brand-muted)]">
                           UPI, cards, net banking or wallets. You choose how to pay in the next step. Your tickets are issued as soon as the payment goes through.
-                          {platformFee > 0 && ' The total includes a booking charge and GST on it.'}
+                          {platformFee > 0 && ' The total includes a platform fee and GST on it.'}
                         </span>
                       </>
                     )}
@@ -984,6 +1085,9 @@ const CheckoutPage: React.FC = () => {
           ctaDisabled={payCtaDisabled}
         />
       )}
+
+      {/* ── Paid → issuing tickets smoke screen ─────────────────────── */}
+      <PaymentProcessingOverlay open={confirmingPayment} eventTitle={stripHtmlTags(event.title)} />
     </div>
   );
 };

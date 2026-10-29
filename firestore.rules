@@ -331,6 +331,13 @@ service cloud.firestore {
           allow write: if false;
         }
 
+        // Automatic post-checkout ticket email runs, one per order/booking —
+        // written only by functions/email/autoSendTicketEmail.js.
+        match /ticketEmails/{bookingKey} {
+          allow read: if isCompanyMember(companyId);
+          allow write: if false;
+        }
+
         // Expenses (Event budgeting/expenses) — CHANGED
         match /expenses/{expenseId} {
           allow read: if isCompanyMember(companyId);

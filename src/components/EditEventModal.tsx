@@ -3,6 +3,7 @@ import { X, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import FormField from './ui/FormField';
 import PaymentModeSelector from './PaymentModeSelector';
+import TaxTypeSelector from './TaxTypeSelector';
 import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
 import { describeFee } from '../lib/platformFee';
 import {
@@ -86,6 +87,11 @@ const toFormState = (event: EventItem): EventFormState => ({
   //qrImage: event.qrImageUrl ?? null,
   upiId: event.upiId ?? '',
   payeeName: event.payeeName ?? '',
+  // Older events have no taxType — they're priced as exclusive (see resolveTicketTaxType), so show that.
+  taxType: event.taxType ?? 'exclusive',
+  referralCodesEnabled: event.referralCodesEnabled ?? false,
+  referralDiscountType: event.referralDiscountType ?? 'percent',
+  referralDiscountValue: event.referralDiscountValue ?? 10,
 });
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim();
 const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave }) => {
@@ -161,6 +167,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
   if (!isGatewayReady) missingReasons.push(
     isGatewayEnabled ? 'Your payout bank account must be set up before using online payments.' : 'Online payments are not enabled for your account yet.'
   );
+  const isTaxTypeMissing = form.registrationMode === 'tickets' && !form.taxType;
+  if (isTaxTypeMissing) missingReasons.push('Choose whether your ticket price includes GST.');
 
   const isSavable = missingReasons.length === 0;
 
@@ -326,6 +334,61 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                           }`}
                       />
                     </button>
+                  </div>
+                </FormField>
+
+                <FormField label="Referral codes" htmlFor="edit-referral-codes-enabled">
+                  <div className="rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <div className="flex items-center justify-between p-3">
+                      <div className="pr-3">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Enable referral codes</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                          Let promoters sell with a discount code you create.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={form.referralCodesEnabled}
+                        onClick={() => update('referralCodesEnabled', !form.referralCodesEnabled)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.referralCodesEnabled ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                          }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.referralCodesEnabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                    {form.referralCodesEnabled && (
+                      <div className="flex items-center gap-2 border-t border-gray-200 dark:border-slate-700 p-3">
+                        <div className="flex overflow-hidden rounded-sm border border-gray-300 dark:border-slate-600">
+                          <button
+                            type="button"
+                            onClick={() => update('referralDiscountType', 'percent')}
+                            className={`px-3 py-1.5 text-xs font-medium ${form.referralDiscountType === 'percent' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                          >
+                            % off
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => update('referralDiscountType', 'flat')}
+                            className={`px-3 py-1.5 text-xs font-medium ${form.referralDiscountType === 'flat' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                          >
+                            ₹ off
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          max={form.referralDiscountType === 'percent' ? 100 : undefined}
+                          value={form.referralDiscountValue}
+                          onChange={(e) => update('referralDiscountValue', Number(e.target.value))}
+                          className="w-24 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-200"
+                        />
+                        <span className="text-xs text-gray-500 dark:text-slate-500">default for new codes</span>
+                      </div>
+                    )}
                   </div>
                 </FormField>
 
@@ -584,6 +647,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ event, onClose, onSave 
                         </p>
                       </div>
                     )}
+
+                    <TaxTypeSelector
+                      id="edit-tax-type"
+                      value={form.taxType}
+                      onChange={(taxType) => update('taxType', taxType)}
+                      showError={isTaxTypeMissing}
+                    />
 
                     <TicketTierEditor
                       tiers={form.tiers}

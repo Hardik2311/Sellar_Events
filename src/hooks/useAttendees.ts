@@ -55,6 +55,10 @@ export function useAttendees(companyId: string | undefined, eventId: string | un
             razorpayPaymentId: data.razorpayPaymentId ?? undefined,
             source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
             bookingGroupId: data.bookingGroupId ?? null,
+            bookingId: data.bookingId ?? null,
+            accessCode: data.accessCode ?? undefined,
+            referralCode: data.referralCode ?? undefined,
+            referralDiscountAmount: typeof data.referralDiscountAmount === 'number' ? data.referralDiscountAmount : undefined,
             ticketEmail: data.ticketEmail
               ? {
                   status: data.ticketEmail.status,

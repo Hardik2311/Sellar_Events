@@ -72,10 +72,16 @@ const EditAttendeeModal: React.FC<EditAttendeeModalProps> = ({ attendee, event, 
     }
   }, [attendee, event]);
 
+  // Set once the ticket actually exists — a real online payment already
+  // happened, via either the gateway or the online manual-QR checkout. The
+  // "scan to collect" QR only makes sense for a walk-in-recorded payment
+  // that hasn't happened yet, never for a ticket that's already paid for.
+  const isOnlinePayment = !!(attendee as any)?.paymentMethod;
+
   // UPI QR for this amount — same upi:// deep link format as the online
   // manual-QR checkout and the walk-in modal.
   useEffect(() => {
-    if (paymentMode !== 'UPI' || !payoutAccount?.upiId || amountPaid <= 0) {
+    if (paymentMode !== 'UPI' || isOnlinePayment || !payoutAccount?.upiId || amountPaid <= 0) {
       setQrDataUrl(null);
       return;
     }
@@ -86,7 +92,7 @@ const EditAttendeeModal: React.FC<EditAttendeeModalProps> = ({ attendee, event, 
       .then((url) => { if (!cancelled) setQrDataUrl(url); })
       .catch(() => { if (!cancelled) setQrDataUrl(null); });
     return () => { cancelled = true; };
-  }, [paymentMode, payoutAccount?.upiId, payoutAccount?.accountHolderName, event?.title, amountPaid]);
+  }, [paymentMode, isOnlinePayment, payoutAccount?.upiId, payoutAccount?.accountHolderName, event?.title, amountPaid]);
 
   const MAX_SCREENSHOT_BYTES = 1 * 1024 * 1024; // 1 MB hard cap
   const handleScreenshotFile = async (file: File) => {
@@ -251,7 +257,23 @@ const EditAttendeeModal: React.FC<EditAttendeeModalProps> = ({ attendee, event, 
             </div>
           </div>
 
-          {paymentMode === 'UPI' && (
+          {paymentMode === 'UPI' && isOnlinePayment && (
+            // This ticket already came through a real online payment — the
+            // gateway, or the online manual-QR checkout — so there's nothing
+            // left to collect. Show what happened instead of a "scan to pay"
+            // QR, which would be nonsensical for a payment that's done.
+            <div className="rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+              <p>
+                Paid via UPI in {(attendee as any).paymentMethod === 'gateway' ? 'payment gateway' : 'online UPI QR'}
+                {' '}— ₹{amountPaid.toFixed(2)}
+              </p>
+              {screenshot && (
+                <img src={screenshot} alt="Payment screenshot" className="mt-2 h-16 w-16 rounded-sm border border-slate-200 dark:border-slate-700 object-cover" />
+              )}
+            </div>
+          )}
+
+          {paymentMode === 'UPI' && !isOnlinePayment && (
             payoutAccount?.upiId ? (
               <>
                 {/* A "scan to pay" QR only makes sense while payment is still

@@ -68,15 +68,16 @@ export const round2 = (n: number) => Number(n.toFixed(2));
 
 /**
  * Buyer-paid platform fee for an order. Per paid ticket:
- * unitTotal × percent% + fixed; free tickets carry no fee. GST on the total fee.
+ * unitBase × percent% + fixed, where unitBase is the ticket price before GST;
+ * free tickets carry no fee. GST on the total fee.
  */
 export const computePlatformFee = (
-  items: { unitTotal: number; qty: number }[],
+  items: { unitBase: number; qty: number }[],
   cfg: Pick<EffectiveFeeConfig, 'percent' | 'fixedPerTicket' | 'feeGstRate'>
 ): { platformFee: number; platformFeeGst: number } => {
   let fee = 0;
-  items.forEach(({ unitTotal, qty }) => {
-    if (unitTotal > 0) fee += round2(unitTotal * cfg.percent / 100 + cfg.fixedPerTicket) * qty;
+  items.forEach(({ unitBase, qty }) => {
+    if (unitBase > 0) fee += round2(unitBase * cfg.percent / 100 + cfg.fixedPerTicket) * qty;
   });
   const platformFee = round2(fee);
   return { platformFee, platformFeeGst: round2(platformFee * cfg.feeGstRate / 100) };

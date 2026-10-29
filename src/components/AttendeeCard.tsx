@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Phone, Mail, ChevronDown, Pencil, FileText, X, Download } from 'lucide-react';
+import { Phone, Mail, ChevronDown, Pencil, FileText, X, Download, Users } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 //import { jsPDF } from 'jspdf';
 import type { Attendee } from '../types/attendee.types';
@@ -34,7 +34,17 @@ interface AttendeeCardProps {
    * The list shows the whole group as this one row.
    */
   groupInfo?: { size: number; arrived: number; ticketIds?: string[]; tierLabel?: string };
+  /**
+   * Set when other people (different names, own rows) were booked in the
+   * same purchase. `others` excludes this row's own ticket(s); size/arrived
+   * count the whole purchase.
+   */
+  bookedWith?: { others: Pick<Attendee, 'id' | 'name' | 'status'>[]; size: number; arrived: number };
 }
+
+// "Riya, Aman +2"
+const formatNames = (names: string[], max = 2) =>
+  names.length > max ? `${names.slice(0, max).join(', ')} +${names.length - max}` : names.join(', ');
 
 // "NUS-023 – NUS-027" for a group; a single ID otherwise.
 const formatTicketIds = (ids: string[]) =>
@@ -85,6 +95,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
   bookMoreTicketsUrl,
   customFields = [],
   groupInfo,
+  bookedWith,
 }) => {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
@@ -103,6 +114,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ticketId: attendee.ticketId,
     tierName: attendee.tierName,
     admits: groupInfo?.size,
+    ticketIds: groupInfo?.ticketIds,
     attendeeName: attendee.name,
     attendeeEmail: attendee.email,
     attendeePhone: attendee.phone,
@@ -199,7 +211,15 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                 Access code: <span className="font-mono text-slate-500 dark:text-slate-400">{attendee.accessCode}</span>
               </p>
             )}
-            {groupInfo && (
+            {bookedWith ? (
+              <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-sm bg-[#007A78]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#007A78] dark:bg-[#2DD4BF]/10 dark:text-[#2DD4BF]">
+                <Users size={11} className="shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  With {formatNames(Array.from(new Set(bookedWith.others.map((o) => o.name))))}
+                </span>
+                <span className="shrink-0 tabular-nums">· {bookedWith.arrived}/{bookedWith.size} in</span>
+              </p>
+            ) : groupInfo && (
               <p className="mt-1 inline-flex items-center gap-1 rounded-sm bg-[#007A78]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#007A78] dark:bg-[#2DD4BF]/10 dark:text-[#2DD4BF]">
                 Group of {groupInfo.size} · {groupInfo.arrived}/{groupInfo.size} arrived
               </p>
@@ -309,6 +329,37 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {bookedWith && attendee.status !== 'cancelled' && (
+            <div className="rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Booked together <span className="font-medium tabular-nums text-slate-500 dark:text-slate-400">· {bookedWith.arrived}/{bookedWith.size} checked in</span>
+                </p>
+                {onCheckIn && (
+                  <button
+                    type="button"
+                    onClick={() => onCheckIn(attendee.id)}
+                    className="shrink-0 rounded-sm bg-[#007A78] px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-[#006361] dark:bg-[#2DD4BF] dark:text-slate-950 dark:hover:bg-[#22b8a5] cursor-pointer"
+                  >
+                    Check in together
+                  </button>
+                )}
+              </div>
+              <ul className="mt-2 space-y-1">
+                {bookedWith.others.map((o) => (
+                  <li key={o.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-slate-700 dark:text-slate-200">{o.name}</span>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-sm ${STATUS_STYLES[o.status]}`}
+                    >
+                      {STATUS_LABEL[o.status]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

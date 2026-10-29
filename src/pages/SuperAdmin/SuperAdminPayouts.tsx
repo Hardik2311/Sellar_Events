@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, query, where, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, FileText, Search } from 'lucide-react';
 import { db, paymentFunctions } from '../../lib/firebase';
 import { round2 } from '../../lib/platformFee';
+import { stripHtmlTags } from '../../lib/utils';
 import { useSuperAdmin, type PayoutAccount, type PayoutLedger } from '../../hooks/usePlatformPayments';
+import SettlementStatementModal, { type SettlementTarget } from './SettlementStatementModal';
 
 const inputClass =
   'w-full rounded-sm border border-slate-200 dark:border-slate-700 bg-[#F9FAFB] dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#007A78]';
@@ -15,7 +17,15 @@ const primaryBtn =
   'rounded-sm bg-[#007A78] dark:bg-[#2DD4BF] px-3 py-2 text-xs font-bold text-white dark:text-slate-950 hover:bg-[#006361] disabled:opacity-50';
 
 const inr = (n?: number) => `₹${round2(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const balanceOf = (l: PayoutLedger) => round2((l.netPayable ?? 0) - (l.paidOut ?? 0));
+// Recomputed from the independently-tracked components rather than trusting
+// the stored netPayable field — that field was written with the platform
+// fee NOT subtracted for orders placed before the fee moved from "charged to
+// the buyer" to "deducted from the organizer." The components themselves
+// (ticketsGross/tcs/tds/platformFee/platformFeeGst) were always tracked
+// correctly, so this self-corrects old ledger rows without a data migration.
+const netPayableOf = (l: PayoutLedger) =>
+  round2((l.ticketsGross ?? 0) - (l.tcs ?? 0) - (l.tds ?? 0) - (l.platformFee ?? 0) - (l.platformFeeGst ?? 0));
+const balanceOf = (l: PayoutLedger) => round2(netPayableOf(l) - (l.paidOut ?? 0));
 
 const recordPayout = httpsCallable<
   { companyId: string; amount: number; method: string; reference: string; note: string; paidAt: string; eventId?: string | null },
@@ -59,6 +69,7 @@ const SuperAdminPayouts: React.FC = () => {
   const [form, setForm] = useState({ amount: '', method: 'bank_transfer', reference: '', paidAt: today(), note: '' });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [statementTarget, setStatementTarget] = useState<SettlementTarget | null>(null);
 
   const fetchLedgers = async (): Promise<LedgerRow[]> => {
     const [ledgerSnap, companiesSnap] = await Promise.all([
@@ -227,7 +238,7 @@ const SuperAdminPayouts: React.FC = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4 text-xs sm:text-right">
-                    <div><p className="text-slate-500">Net payable</p><p className="font-semibold">{inr(row.netPayable)}</p></div>
+                    <div><p className="text-slate-500">Net payable</p><p className="font-semibold">{inr(netPayableOf(row))}</p></div>
                     <div><p className="text-slate-500">Paid out</p><p className="font-semibold">{inr(row.paidOut)}</p></div>
                     <div>
                       <p className="text-slate-500">Balance due</p>
@@ -241,10 +252,10 @@ const SuperAdminPayouts: React.FC = () => {
                     {/* Breakdown */}
                     <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-slate-600 dark:text-slate-300 sm:max-w-md">
                       <dt>Ticket sales collected</dt><dd className="text-right">{inr(row.ticketsGross)}</dd>
+                      <dt>Platform fee + GST</dt><dd className="text-right">− {inr((row.platformFee ?? 0) + (row.platformFeeGst ?? 0))}</dd>
                       <dt>TCS withheld</dt><dd className="text-right">− {inr(row.tcs)}</dd>
                       <dt>TDS withheld</dt><dd className="text-right">− {inr(row.tds)}</dd>
-                      <dt className="font-bold text-slate-900 dark:text-white">Net payable</dt><dd className="text-right font-bold text-slate-900 dark:text-white">{inr(row.netPayable)}</dd>
-                      <dt className="pt-1">Platform fee + GST (kept by platform)</dt><dd className="pt-1 text-right">{inr((row.platformFee ?? 0) + (row.platformFeeGst ?? 0))}</dd>
+                      <dt className="font-bold text-slate-900 dark:text-white">Net payable</dt><dd className="text-right font-bold text-slate-900 dark:text-white">{inr(netPayableOf(row))}</dd>
                     </dl>
 
                     {!detail && <p className="text-slate-500">Loading details…</p>}
@@ -270,9 +281,28 @@ const SuperAdminPayouts: React.FC = () => {
                             <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">By event</p>
                             <div className="divide-y divide-slate-100 dark:divide-slate-800">
                               {detail.events.map((e) => (
-                                <div key={e.eventId} className="flex justify-between gap-3 py-1.5">
-                                  <span className="truncate">{e.eventTitle || e.eventId} <span className="text-slate-500">({e.tickets ?? 0} tickets)</span></span>
-                                  <span className="shrink-0">sales {inr(e.ticketsGross)} · net {inr(e.netPayable)}</span>
+                                <div key={e.eventId} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                                  <span className="truncate">{stripHtmlTags(e.eventTitle) || e.eventId} <span className="text-slate-500">({e.tickets ?? 0} tickets)</span></span>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <span>sales {inr(e.ticketsGross)} · net {inr(netPayableOf(e))}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setStatementTarget({
+                                          companyId: row.companyId,
+                                          companyName: row.name,
+                                          eventId: e.eventId,
+                                          eventTitle: e.eventTitle || e.eventId,
+                                          ticketsGross: e.ticketsGross ?? 0,
+                                          tickets: e.tickets ?? 0,
+                                          payoutAccountName: detail.account?.accountHolderName,
+                                        })
+                                      }
+                                      className="flex items-center gap-1 rounded-sm border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    >
+                                      <FileText size={11} /> Statement
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -340,6 +370,16 @@ const SuperAdminPayouts: React.FC = () => {
           })}
         </div>
       </main>
+
+      <SettlementStatementModal
+        target={statementTarget}
+        onClose={() => setStatementTarget(null)}
+        onApplyAmount={(amount) => {
+          setForm((f) => ({ ...f, amount: String(amount) }));
+          setFormError(null);
+          setStatementTarget(null);
+        }}
+      />
     </div>
   );
 };

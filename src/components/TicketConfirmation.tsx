@@ -6,6 +6,7 @@ import {
     ChevronRight,
     Download,
     FileDown,
+    Mail,
     MapPin,
     Phone,
     Share2,
@@ -71,7 +72,14 @@ interface TicketConfirmationProps {
     eventAgeLimit?: string | null;
     eventHelplineNumber?: string | null;
     bookMoreTicketsUrl?: string | null;
+    emailedTo?: string[];                 // buyer addresses the tickets are being emailed to (checkout only)
+    autoDownload?: boolean;               // save the ticket PDF(s) once, right after purchase (checkout only)
 }
+
+// How long auto-download waits for the PDF hero image before saving without it.
+const AUTO_DOWNLOAD_BANNER_WAIT_MS = 3000;
+// sharingId while the whole order is being shared (ticketIds never collide with it).
+const SHARE_ALL_KEY = '__all__';
 
 const LABEL_ON_INK = 'brand-label text-[#b9b2a6]';
 const LABEL = 'brand-label text-[var(--brand-muted)]';
@@ -94,6 +102,8 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
     eventAgeLimit,
     eventHelplineNumber,
     bookMoreTicketsUrl,
+    emailedTo,
+    autoDownload,
 }) => {
     const cleanEventTitle = stripHtmlTags(eventTitle) || 'Event';
     const passes = useMemo(() => toPasses(tickets), [tickets]);
@@ -130,6 +140,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         ticketId: t.ticketId,
         tierName: t.tierName,
         admits: t.admits,
+        ticketIds: t.memberIds,
         attendeeName: t.attendeeName,
         attendeeEmail: t.attendeeEmail,
         attendeePhone: t.attendeePhone,
@@ -148,29 +159,55 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
 
     const [sharingId, setSharingId] = useState<string | null>(null);
 
-    const handleShare = async (t: TicketPass) => {
-        if (sharingId === t.ticketId) return; // prevent double-tap re-entry
-        setSharingId(t.ticketId);
+    // Opens the share sheet with the passes' PDFs; saves them instead where the
+    // browser can't share files. `key` is the ticketId, or SHARE_ALL_KEY.
+    const sharePasses = async (list: TicketPass[], key: string) => {
+        if (sharingId === key) return; // prevent double-tap re-entry
+        setSharingId(key);
         try {
-            const canvas = canvasRefs.current[t.ticketId] ?? null;
-            const doc = await buildAcknowledgementPdf(buildTicketDataForPdf(t), buildEventDataForPdf(), canvas);
-            const file = new File([doc.output('blob')], `${t.ticketId}-receipt.pdf`, { type: 'application/pdf' });
-            if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+            const docs = await Promise.all(list.map((t) =>
+                buildAcknowledgementPdf(buildTicketDataForPdf(t), buildEventDataForPdf(), canvasRefs.current[t.ticketId] ?? null)
+            ));
+            const files = docs.map((doc, i) =>
+                new File([doc.output('blob')], `${list[i].ticketId}-receipt.pdf`, { type: 'application/pdf' })
+            );
+            if (typeof navigator.share === 'function' && navigator.canShare?.({ files })) {
                 try {
-                    await navigator.share({ files: [file] });
+                    await navigator.share({ files });
                     return;
                 } catch (err) {
                     if ((err as Error)?.name === 'AbortError') return; // user backed out of the share sheet themselves
                 }
             }
-            doc.save(file.name);
+            docs.forEach((doc, i) => doc.save(files[i].name));
         } finally {
             setSharingId(null);
         }
     };
+    const handleShare = (t: TicketPass) => sharePasses([t], t.ticketId);
     const handleDownloadAllPdf = async () => {
         await Promise.all(passes.map((t) => handleDownload(t)));
     };
+
+    // Save the PDF(s) once, as soon as the page shows. Runs after render so the
+    // QR canvases exist; waits briefly for the hero image so the PDF isn't
+    // missing it, then saves anyway.
+    const autoDownloadedRef = useRef(false);
+    useEffect(() => {
+        if (!autoDownload || autoDownloadedRef.current || passes.length === 0) return;
+        const run = () => {
+            if (autoDownloadedRef.current) return;
+            autoDownloadedRef.current = true;
+            handleDownloadAllPdf().catch((err) => console.warn('Ticket auto-download failed:', err));
+        };
+        if (eventBannerDataUrl) {
+            run();
+            return;
+        }
+        const timer = setTimeout(run, AUTO_DOWNLOAD_BANNER_WAIT_MS);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoDownload, eventBannerDataUrl, passes]);
 
     // ── Event facts shared by every pass ──
     const dateObj = parseIsoDate(eventDate);
@@ -249,6 +286,46 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                 className={`mx-auto grid w-full grid-cols-1 items-start gap-4 p-4 @4xl:grid-cols-[minmax(0,1fr)_340px] @4xl:gap-6 @4xl:py-8 ${pageWidth}`}
             >
                 <div className="@container/tickets flex min-w-0 flex-col gap-4">
+                    {emailedTo && emailedTo.length > 0 && (
+                        <div className="flex items-start gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
+                            <Mail size={18} strokeWidth={1.75} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--brand-teal)]" />
+                            <p className="min-w-0 text-[13px] text-[var(--brand-muted)]">
+                                We&rsquo;re emailing your {passes.length === 1 ? 'ticket' : 'tickets'} to{' '}
+                                <span className="break-all font-semibold text-[var(--brand-black)]">{emailedTo.join(', ')}</span>.
+                                It can take a few minutes, so check your spam folder too.
+                            </p>
+                        </div>
+                    )}
+                    {autoDownload && (
+                        <div className="flex items-start gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
+                            <FileDown size={18} strokeWidth={1.75} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--brand-teal)]" />
+                            <div className="min-w-0">
+                                <p className="text-[13px] text-[var(--brand-muted)]">
+                                    Your {passes.length === 1 ? 'ticket is' : 'tickets are'} downloading to this device as PDF.
+                                    If nothing downloaded, tap below.
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadAllPdf}
+                                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] px-4 text-sm font-semibold hover:bg-[var(--brand-cream)]"
+                                    >
+                                        <FileDown size={18} strokeWidth={1.75} aria-hidden="true" />
+                                        Download {passes.length === 1 ? 'ticket' : 'tickets'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => sharePasses(passes, SHARE_ALL_KEY)}
+                                        disabled={sharingId === SHARE_ALL_KEY}
+                                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--brand-line-strong)] bg-[var(--brand-surface)] px-4 text-sm font-semibold hover:bg-[var(--brand-cream)] disabled:text-[var(--brand-muted)]"
+                                    >
+                                        <Share2 size={18} strokeWidth={1.75} aria-hidden="true" />
+                                        {sharingId === SHARE_ALL_KEY ? 'Sharing…' : 'Share'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {multi && (
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)] px-4 py-3">
                             <div className="min-w-0">

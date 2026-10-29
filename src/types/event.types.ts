@@ -45,6 +45,13 @@ export interface EventSummary {
   // when collecting a walk-in payment in person
   upiId?: string;
   payeeName?: string;
+  taxType?: TicketTaxTypeOption | null; // walk-in total uses the same GST rule as checkout
+  // NEW — referral codes feature; full entries (not just labels) so Sales
+  // Report can show discount type/value per code without a second fetch.
+  referralCodesEnabled?: boolean;
+  referralCodes?: { code: string; label: string; discountType: ReferralDiscountTypeOption; discountValue: number; previousCodes?: string[] }[];
+  referralDiscountType?: ReferralDiscountTypeOption;
+  referralDiscountValue?: number;
 }
 
 export interface SalesTrendPoint {
@@ -92,6 +99,14 @@ export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
 export const PAYMENT_COLLECTION_MODES = ['gateway', 'manual_qr'] as const;
 export type PaymentCollectionMode = (typeof PAYMENT_COLLECTION_MODES)[number];
 
+// NEW — referral codes feature. Duplicated (not imported) from
+// ReferralDiscountType in data/events.ts to avoid a circular import, since
+// events.ts already imports from this file.
+export type ReferralDiscountTypeOption = 'percent' | 'flat';
+
+// Same reason — mirrors TicketTaxType in data/events.ts.
+export type TicketTaxTypeOption = 'inclusive' | 'exclusive';
+
 export interface GalleryMediaItem {
   /** Storage URL once saved; a data: or blob: preview URL while the form is open. */
   url: string;
@@ -137,4 +152,11 @@ export interface EventFormState {
   //qrImage: string | null;   // base64 preview until uploaded, then https URL after save
   upiId: string;            // e.g. "9870577689@pthdfc"
   payeeName: string;        // optional label shown above QR, e.g. "Phase 1 Registrations"
+  // Required for ticketed events; new events start as 'exclusive'.
+  // GST itself (18% on tickets ≥ ₹500) isn't optional; only how it's shown is.
+  taxType: TicketTaxTypeOption | null;
+  // NEW — per-event toggle + default discount that pre-fills new referral codes
+  referralCodesEnabled: boolean;
+  referralDiscountType: ReferralDiscountTypeOption;
+  referralDiscountValue: number;
 }

@@ -83,8 +83,19 @@ exports.createRazorpayOrder = onCall(
             throw new HttpsError("failed-precondition", "GATEWAY_NOT_ENABLED");
         }
 
+        // Re-derive the referral discount from the fresh event doc — never
+        // trust a client-sent discount amount. A code that no longer exists
+        // or that the organizer disabled is silently ignored, not an error,
+        // since this is non-critical (unlike access codes gating entry).
+        const referralCodeRaw = data.referralCode ? clip(data.referralCode, 64) : null;
+        const referralEntry = referralCodeRaw && event.referralCodesEnabled ?
+            (event.referralCodes || []).find(
+                (e) => String(e.code).trim().toUpperCase() === referralCodeRaw.trim().toUpperCase()
+            ) :
+            null;
+
         const quantities = data.quantities && typeof data.quantities === "object" ? data.quantities : {};
-        const pricing = computeOrderPricing(event.tiers, quantities, settings);
+        const pricing = computeOrderPricing(event.tiers, quantities, settings, referralEntry, event.taxType);
         if (pricing.totalQty === 0) throw new HttpsError("invalid-argument", "NO_TICKETS");
 
         const maxPerOrder = typeof event.maxTicketsPerOrder === "number" ?
@@ -170,6 +181,7 @@ exports.createRazorpayOrder = onCall(
                 taxTypeLabel: pricing.taxTypeLabel,
                 accessCode: codes ? accessCode : null,
                 accessCodeUsedAt: codes ? usedAtIso : null,
+                referralCode: referralEntry ? referralEntry.code : null,
                 razorpayOrderId: null,
                 createdAt: FieldValue.serverTimestamp(),
                 expiresAt: Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60 * 1000),

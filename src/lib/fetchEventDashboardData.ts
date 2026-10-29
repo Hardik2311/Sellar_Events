@@ -153,6 +153,17 @@ export async function fetchEventDashboardData(
                 revenue,
                 tiers,
                 salesTrend,
+                taxType: e.taxType ?? null,
+                referralCodesEnabled: e.referralCodesEnabled || false,
+                referralCodes: (e.referralCodes || []).map((c: any) => ({
+                    code: c.code,
+                    label: c.label,
+                    discountType: c.discountType,
+                    discountValue: c.discountValue,
+                    previousCodes: c.previousCodes ?? [],
+                })),
+                referralDiscountType: e.referralDiscountType || 'percent',
+                referralDiscountValue: typeof e.referralDiscountValue === 'number' ? e.referralDiscountValue : 10,
             };
         })
     );

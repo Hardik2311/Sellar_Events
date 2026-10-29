@@ -31,6 +31,7 @@ const SalesReportPageInner: React.FC = () => {
         searchQuery, setSearchQuery,
         sortConfig, handleSort,
         filtered, summary,
+        referralBreakdown,
     } = useSalesReport(profile?.companyId, eventId);
 
     const [showSearch, setShowSearch] = useState(false);
@@ -66,21 +67,22 @@ const SalesReportPageInner: React.FC = () => {
 
             autoTable(doc, {
                 startY: 44,
-                head: [['DATE', 'BUYER', 'TIER', 'AMOUNT (Rs)']],
+                head: [['DATE', 'BUYER', 'TIER', 'AMOUNT (Rs)', 'REFERRAL']],
                 body: filtered.map(a => [
                     formatDate(a.purchasedAt!),
                     a.name || 'N/A',
                     a.tierName || 'N/A',
                     (a.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                    a.referralCode || '—',
                 ]),
-                foot: [['TOTAL', `${summary.ticketsSold} tickets`, '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })]],
+                foot: [['TOTAL', `${summary.ticketsSold} tickets`, '', summary.total.toLocaleString('en-IN', { minimumFractionDigits: 2 }), '']],
                 showFoot: 'lastPage',
                 theme: 'plain',
                 styles: { font: 'helvetica', cellPadding: 7, fontSize: 10, textColor: [55, 65, 81] },
                 headStyles: { fillColor: [240, 253, 250], textColor: [0, 90, 88], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [204, 251, 241] },
                 footStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: 'bold', lineWidth: { top: 1, bottom: 1 }, lineColor: [17, 24, 39] },
                 alternateRowStyles: { fillColor: [250, 250, 250] },
-                columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 40 }, 3: { halign: 'right', cellWidth: 42 } },
+                columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 40 }, 3: { halign: 'right', cellWidth: 42 }, 4: { cellWidth: 30 } },
                 didDrawPage: () => {
                     doc.setFontSize(9); doc.setTextColor(156, 163, 175);
                     doc.text(`Page ${doc.getNumberOfPages()}`, pw - 14, ph - 10, { align: 'right' });
@@ -107,7 +109,7 @@ const SalesReportPageInner: React.FC = () => {
             const allBorders = { top: { style: 'thin', color: { rgb: 'CBD5E1' } }, bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
             const bblr = { bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }, left: { style: 'thin', color: { rgb: 'CBD5E1' } }, right: { style: 'thin', color: { rgb: 'CBD5E1' } } };
 
-            const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Buyer', width: 22 }, { header: 'Tier', width: 18 }, { header: 'Amount (₹)', width: 18 }];
+            const COLS = [{ header: '#', width: 6 }, { header: 'Date', width: 16 }, { header: 'Buyer', width: 22 }, { header: 'Tier', width: 18 }, { header: 'Amount (₹)', width: 18 }, { header: 'Referral', width: 16 }];
             const colCount = COLS.length;
             const dataStartRow = 8;
             const totalRows = dataStartRow + filtered.length + 1;
@@ -123,10 +125,10 @@ const SalesReportPageInner: React.FC = () => {
             COLS.forEach((c, i) => { aoa[7][i] = c.header; });
             filtered.forEach((a, idx) => {
                 const r = dataStartRow + idx;
-                aoa[r] = [idx + 1, formatDate(a.purchasedAt!), a.name || 'N/A', a.tierName || 'N/A', a.amountPaid || 0];
+                aoa[r] = [idx + 1, formatDate(a.purchasedAt!), a.name || 'N/A', a.tierName || 'N/A', a.amountPaid || 0, a.referralCode || '—'];
             });
             const footerRow = dataStartRow + filtered.length;
-            aoa[footerRow] = ['TOTAL', `${summary.ticketsSold} tickets`, '', '', summary.total];
+            aoa[footerRow] = ['TOTAL', `${summary.ticketsSold} tickets`, '', '', summary.total, ''];
 
             const ws: any = XLSX.utils.aoa_to_sheet(aoa);
             ws['!cols'] = COLS.map(c => ({ wch: c.width }));
@@ -259,6 +261,36 @@ const SalesReportPageInner: React.FC = () => {
                         </div>
                     </div>
 
+                    {referralBreakdown.length > 0 && (
+                        <div className="bg-white dark:bg-[#1E293B] rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                                <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">Referral codes</h2>
+                            </div>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Code</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Label</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tickets</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Revenue</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Discount given</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {referralBreakdown.map((r, i) => (
+                                        <tr key={r.code} className={i % 2 === 0 ? 'bg-white dark:bg-[#1E293B]' : 'bg-slate-50 dark:bg-[#182234]'}>
+                                            <td className="px-4 py-2 font-mono font-semibold text-slate-800 dark:text-slate-100">{r.code}</td>
+                                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{r.label}</td>
+                                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{r.ticketsSold}</td>
+                                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">₹{r.revenue.toLocaleString('en-IN')}</td>
+                                            <td className="px-4 py-2 text-slate-700 dark:text-slate-300">₹{r.totalDiscount.toLocaleString('en-IN')}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-[#1E293B] p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                         <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200 text-center sm:text-left">Report Details</h2>
                         <div className="flex gap-2">
@@ -341,24 +373,25 @@ const SalesReportPageInner: React.FC = () => {
                                                 </th>
                                             );
                                         })}
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">referral</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {!selectedEventId ? (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 Select an event above to view its ticket sales.
                                             </td>
                                         </tr>
                                     ) : loading ? (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 Loading sales...
                                             </td>
                                         </tr>
                                     ) : filtered.length === 0 ? (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                            <td colSpan={5} className="text-center py-10 text-slate-400 dark:text-slate-500">
                                                 No sales found for selected period.
                                             </td>
                                         </tr>
@@ -368,6 +401,7 @@ const SalesReportPageInner: React.FC = () => {
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{a.name || 'N/A'}</td>
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{a.tierName || 'N/A'}</td>
                                             <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">₹{(a.amountPaid || 0).toLocaleString('en-IN')}</td>
+                                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{a.referralCode || '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>

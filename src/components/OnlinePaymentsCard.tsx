@@ -92,7 +92,14 @@ const OnlinePaymentsCard: React.FC<Props> = ({ companyId, canManage, payoutAccou
     }
   };
 
-  const balanceDue = round2((ledger?.netPayable ?? 0) - (ledger?.paidOut ?? 0));
+  // Recomputed from the independently-tracked components rather than
+  // trusting the stored netPayable field — see the matching comment in
+  // SuperAdminPayouts.tsx for why (older orders' netPayable doesn't
+  // subtract the platform fee, which only the raw components still do).
+  const netPayable = round2(
+    (ledger?.ticketsGross ?? 0) - (ledger?.tcs ?? 0) - (ledger?.tds ?? 0) - (ledger?.platformFee ?? 0) - (ledger?.platformFeeGst ?? 0)
+  );
+  const balanceDue = round2(netPayable - (ledger?.paidOut ?? 0));
 
   return (
     <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
@@ -122,7 +129,7 @@ const OnlinePaymentsCard: React.FC<Props> = ({ companyId, canManage, payoutAccou
         <div className="rounded-sm border border-slate-200 dark:border-slate-700 p-3 flex flex-col gap-1.5">
           <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">Fees &amp; payouts</p>
           <p className="text-xs text-slate-600 dark:text-slate-300">
-            A small convenience fee is added on top of the ticket price and paid by the attendee at checkout. Standard payment gateway charges are deducted from your payout, and for some events a custom fee may apply as agreed with you.
+            Attendees pay the ticket price only — no extra fee is added at checkout. A small payment gateway fee (plus GST on it) is deducted from your payout instead, and for some events a custom fee may apply as agreed with you.
           </p>
           <p className="text-xs text-slate-600 dark:text-slate-300">
             As required by Indian tax law, applicable TDS (Section 194-O) and, if you&apos;re GST-registered, TCS (GST Section 52) are deducted from your ticket sales. Both can be claimed back in full when you file your tax returns.
@@ -223,6 +230,7 @@ const OnlinePaymentsCard: React.FC<Props> = ({ companyId, canManage, payoutAccou
             <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mb-2">Payout summary</p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
               <dt>Ticket sales collected online</dt><dd className="text-right">{inr(ledger.ticketsGross)}</dd>
+              <dt>Platform fee + GST</dt><dd className="text-right">− {inr((ledger.platformFee ?? 0) + (ledger.platformFeeGst ?? 0))}</dd>
               <dt>TCS withheld</dt><dd className="text-right">− {inr(ledger.tcs)}</dd>
               <dt>TDS withheld</dt><dd className="text-right">− {inr(ledger.tds)}</dd>
               <dt>Paid out to you</dt><dd className="text-right">− {inr(ledger.paidOut)}</dd>
