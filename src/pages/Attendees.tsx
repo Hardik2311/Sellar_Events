@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet, X } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, UserPlus, UploadCloud, Wallet, X, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AddWalkInAttendeeModal from '../components/AddWalkInAttendeeModal';
 import ImportAttendeesModal from '../components/ImportAttendeesModal'; // NEW
+import InviteSpecialGuestModal from '../components/InviteSpecialGuestModal';
+import SpecialGuestAddedModal, { type AddedGuest } from '../components/SpecialGuestAddedModal';
 import TicketConfirmation from '../components/TicketConfirmation';
 import BackButton from '../components/ui/BackButton';
 import {
@@ -60,12 +62,34 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 // createdAt is the fallback for older records that predate that field.
 const getPurchaseTime = (a: Attendee): number => a.purchasedAt ?? a.createdAt ?? 0;
 
+const getAttendeeType = (a: Attendee): string => {
+  if (a.source === 'import') return 'Imported';
+  if (a.source === 'special_guest') return 'Special Guest';
+  // paymentMode (Cash/UPI/Card...) is only set for organizer-added walk-ins,
+  // so it works as a fallback for walk-ins saved without `source`
+  if (a.source === 'walk_in' || (!a.paymentMethod && a.paymentMode)) return 'Walk-in';
+  if (a.paymentMethod === 'manual_qr') return 'QR Paid';
+  return 'Payment Gateway';
+};
+
+const getPaymentModeLabel = (a: Attendee): string => {
+  if (a.source === 'import' || a.source === 'special_guest') return '';
+  if (a.source === 'walk_in') return a.paymentMode ?? ''; // Cash / UPI / Card / ... as chosen by organizer
+  if (a.paymentMode && !a.paymentMethod) return a.paymentMode; // walk-in saved without `source`
+  if (a.paymentMethod === 'manual_qr') return 'QR';
+  return 'Gateway';
+};
+
 const EXPORT_COLUMNS: ExportColumn<Attendee>[] = [
   { header: 'Name', accessor: (a) => a.name },
   { header: 'Email', accessor: (a) => a.email },
   { header: 'Phone', accessor: (a) => a.phone },
   { header: 'Tier', accessor: (a) => a.tierName },
   { header: 'Ticket ID', accessor: (a) => a.ticketId },
+  { header: 'Attendee Type', accessor: (a) => getAttendeeType(a) },
+  { header: 'Guest Category', accessor: (a) => a.guestCategory ?? '' },
+  { header: 'Payment Mode', accessor: (a) => getPaymentModeLabel(a) },
+  { header: 'Amount Paid', accessor: (a) => a.amountPaid ?? 0 },
   { header: 'Status', accessor: (a) => a.status },
   { header: 'Checked in at', accessor: (a) => (a.checkedInAt ? new Date(a.checkedInAt).toLocaleString('en-IN') : '') },
 ];
@@ -75,6 +99,7 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     name: t.name,
     price: t.price,
     sold: Number.isFinite(t.sold) ? t.sold : 0,
+    guestSold: Number.isFinite(t.guestSold) ? t.guestSold : 0,
     total: t.quantity,
   }));
   return {
@@ -85,11 +110,11 @@ const toEventSummary = (id: string, data: any): EventSummary => {
     category: data.category,
     status: data.status,
     startDate: data.date,
-     time: data.time ?? undefined,
+    time: data.time ?? undefined,
     venue: data.isOnline ? 'Online' : data.venue,
     ticketsSold: tiers.reduce((sum: number, t: any) => sum + t.sold, 0),
     ticketsTotal: tiers.reduce((sum: number, t: any) => sum + t.total, 0),
-    revenue: tiers.reduce((sum: number, t: any) => sum + t.sold * (t.price || 0), 0),
+    revenue: tiers.reduce((sum: number, t: any) => sum + (t.sold - t.guestSold) * (t.price || 0), 0),
     description: data.description,
     tiers,
     customFields: data.customFields ?? [],
@@ -114,6 +139,7 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   email: data.email,
   phone: data.phone,
   tierName: data.tierName,
+  ticketTierId: data.ticketTierId ?? undefined,
   ticketId: data.ticketId,
   status: data.status,
   checkedInAt: data.checkedInAt instanceof Timestamp ? data.checkedInAt.toDate().toISOString() : null,
@@ -129,6 +155,7 @@ const toAttendee = (id: string, eventId: string, data: any): Attendee => ({
   bookingGroupId: data.bookingGroupId ?? null,
   // Walk-ins are saved with isWalkIn: true (lib/ticketing.ts), not a source field.
   source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
+  guestCategory: data.guestCategory ?? undefined,
 });
 const Attendees: React.FC = () => {
   const { profile } = useAuth();
@@ -150,6 +177,9 @@ const Attendees: React.FC = () => {
   const [pendingGroup, setPendingGroup] = useState<{ members: Attendee[]; initialArrived: number } | null>(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false); // NEW
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [guestAdded, setGuestAdded] = useState<AddedGuest | null>(null);
+  const [guestFilter, setGuestFilter] = useState<'all' | 'regular' | 'guests'>('all');
   const [walkInTickets, setWalkInTickets] = useState<{
     ticketId: string;
     tierName: string;
@@ -159,6 +189,7 @@ const Attendees: React.FC = () => {
     amountPaid?: number;
     paymentMode?: string;
     purchasedAt?: number;
+    isComplimentary?: boolean;
   }[] | null>(null);
   const [pendingCancelAttendee, setPendingCancelAttendee] = useState<Attendee | null>(null);
   const [pendingReviveAttendee, setPendingReviveAttendee] = useState<Attendee | null>(null);
@@ -426,8 +457,8 @@ const Attendees: React.FC = () => {
       // tier (older records predate ticketTierId and only have tierName).
       const previousTierId = pendingEditAttendee
         ? selectedEvent?.tiers.find(
-            (t) => t.id === pendingEditAttendee.ticketTierId || t.name === pendingEditAttendee.tierName
-          )?.id
+          (t) => t.id === pendingEditAttendee.ticketTierId || t.name === pendingEditAttendee.tierName
+        )?.id
         : undefined;
       const tierChanged = !!tierId && !!previousTierId && tierId !== previousTierId;
 
@@ -438,17 +469,17 @@ const Attendees: React.FC = () => {
       // overcount the old one forever after a plain updateDoc here.
       const savePromise = tierChanged
         ? runTransaction(db, async (transaction) => {
-            const eventSnap = await transaction.get(eventRef);
-            if (!eventSnap.exists()) throw new Error('Event no longer exists.');
-            const currentTiers = (eventSnap.data().tiers || []) as { id: string; sold?: number }[];
-            const updatedTiers = currentTiers.map((t) => {
-              if (t.id === previousTierId) return { ...t, sold: Math.max(0, (t.sold ?? 0) - 1) };
-              if (t.id === tierId) return { ...t, sold: (t.sold ?? 0) + 1 };
-              return t;
-            });
-            transaction.update(eventRef, { tiers: updatedTiers });
-            transaction.update(attendeeRef, writePayload);
-          })
+          const eventSnap = await transaction.get(eventRef);
+          if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+          const currentTiers = (eventSnap.data().tiers || []) as { id: string; sold?: number }[];
+          const updatedTiers = currentTiers.map((t) => {
+            if (t.id === previousTierId) return { ...t, sold: Math.max(0, (t.sold ?? 0) - 1) };
+            if (t.id === tierId) return { ...t, sold: (t.sold ?? 0) + 1 };
+            return t;
+          });
+          transaction.update(eventRef, { tiers: updatedTiers });
+          transaction.update(attendeeRef, writePayload);
+        })
         : updateDoc(attendeeRef, writePayload);
 
       savePromise
@@ -574,7 +605,13 @@ const Attendees: React.FC = () => {
     },
     []
   );
-
+  const handleGuestAdded = useCallback(
+    (g: { name: string; email: string; phone: string; ticketId: string; tierName: string; guestCategory: string }) => {
+      setScanFeedback({ type: 'success', message: `${g.name} added as ${g.guestCategory} (${g.ticketId}).` });
+      setGuestAdded(g);
+    },
+    []
+  );
   // Auto-clear the scan feedback banner after a few seconds
   useEffect(() => {
     if (!scanFeedback) return;
@@ -582,17 +619,23 @@ const Attendees: React.FC = () => {
     return () => clearTimeout(timer);
   }, [scanFeedback]);
 
+  const scopedAttendees = useMemo(() => {
+    if (guestFilter === 'guests') return attendees.filter((a) => a.source === 'special_guest');
+    if (guestFilter === 'regular') return attendees.filter((a) => a.source !== 'special_guest');
+    return attendees;
+  }, [attendees, guestFilter]);
+
   const searchedAttendees = useMemo(() => {
-    if (!searchValue.trim()) return attendees;
+    if (!searchValue.trim()) return scopedAttendees;
     const q = searchValue.toLowerCase().trim();
-    return attendees.filter(
+    return scopedAttendees.filter(
       (a) =>
         a.name.toLowerCase().includes(q) ||
         a.email.toLowerCase().includes(q) ||
         a.phone.includes(q) ||
         a.ticketId.toLowerCase().includes(q)
     );
-  }, [attendees, searchValue]);
+  }, [scopedAttendees, searchValue]);
 
   const sortedAttendees = useMemo(() => {
     switch (sortOption) {
@@ -636,7 +679,8 @@ const Attendees: React.FC = () => {
     attendees.forEach((a) => {
       if (a.status !== 'cancelled') tierCounts[a.tierName] = (tierCounts[a.tierName] || 0) + 1;
     });
-    return { total: attendees.length, checkedIn, pending, cancelled, tierCounts };
+    const guests = attendees.filter((a) => a.source === 'special_guest' && a.status !== 'cancelled').length;
+    return { total: attendees.length, checkedIn, pending, cancelled, tierCounts, guests };
   }, [attendees]);
   const requestCheckIn = useCallback(
     (id: string) => {
@@ -762,7 +806,7 @@ const Attendees: React.FC = () => {
                     <UserPlus size={14} /> Add Walk-in
                   </button>
                 )}
-                {can(Permission.IMPORT_ATTENDEES) && selectedEvent.registrationMode === 'rsvp' && (
+                {can(Permission.IMPORT_ATTENDEES) && (
                   <button
                     onClick={() => {
                       if (selectedEvent.status !== 'published') {
@@ -778,6 +822,38 @@ const Attendees: React.FC = () => {
                     <UploadCloud size={14} /> Import Excel
                   </button>
                 )}
+                {can(Permission.ADD_WALK_IN_ATTENDEE) && (
+                  <button
+                    onClick={() => {
+                      if (selectedEvent.status !== 'published') {
+                        setScanFeedback({ type: 'error', message: 'Publish the event before inviting special guests.' });
+                        return;
+                      }
+                      setIsGuestModalOpen(true);
+                    }}
+                    disabled={selectedEvent.status !== 'published'}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-amber-400 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-700 hover:bg-amber-100 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed dark:bg-amber-500/10 dark:text-amber-300"
+                  >
+                    <Star size={14} /> Special Guest
+                  </button>
+                )}
+              </div>
+
+              {/* Filter toggle */}
+              <div className="flex w-full gap-1 rounded-sm border border-slate-200 bg-white p-1 shadow-xs dark:border-slate-700 dark:bg-slate-800 sm:w-fit">
+                {([['all', 'All'], ['regular', 'Regular'], ['guests', `Guests (${stats.guests})`]] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setGuestFilter(val)}
+                    className={`flex-1 whitespace-nowrap rounded-sm px-4 py-2 text-xs font-bold transition-colors cursor-pointer sm:flex-none sm:px-5 ${guestFilter === val
+                      ? 'bg-[#007A78] text-white dark:bg-[#2DD4BF] dark:text-slate-950'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
               {/* 4b. Sorter + Live page + Export — back on one row, like before */}
@@ -829,7 +905,11 @@ const Attendees: React.FC = () => {
                 <div className="text-center py-10 text-sm text-gray-500">Loading attendees…</div>
               ) : listedAttendees.length === 0 ? (
                 <div className="text-center py-10 text-sm text-gray-500">
-                  {attendees.length === 0 ? 'No tickets sold for this event yet' : 'No attendees match your search'}
+                  {attendees.length === 0
+                    ? 'No tickets sold for this event yet'
+                    : guestFilter === 'guests' && !searchValue.trim()
+                      ? 'No special guests invited yet'
+                      : 'No attendees match your search'}
                 </div>
               ) : (
                 <div>
@@ -929,6 +1009,20 @@ const Attendees: React.FC = () => {
         existingAttendees={attendees}
         onSuccess={(count) => setScanFeedback({ type: 'success', message: `${count} attendee(s) imported.` })}
       />
+      <InviteSpecialGuestModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+        event={selectedEvent}
+        companyId={profile?.companyId}
+        onSuccess={handleGuestAdded}
+      />
+      <SpecialGuestAddedModal
+        guest={guestAdded}
+        event={selectedEvent}
+        eventBannerDataUrl={pdfBannerDataUrl}
+        bookMoreTicketsUrl={bookMoreTicketsUrl}
+        onClose={() => setGuestAdded(null)}
+      />
       {walkInTickets && walkInTickets.length > 0 && selectedEvent && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <div className="relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-sm sm:rounded-sm bg-white dark:bg-slate-900 shadow-xl">
@@ -944,7 +1038,7 @@ const Attendees: React.FC = () => {
               eventCategory={selectedEvent.category}
               eventDate={selectedEvent.startDate}
               eventVenue={selectedEvent.venue}
-               eventTime={selectedEvent.time}
+              eventTime={selectedEvent.time}
               tickets={walkInTickets.map((t) => ({ ...t, status: 'valid' }))}
               onDone={() => setWalkInTickets(null)}
               eventBannerDataUrl={pdfBannerDataUrl}

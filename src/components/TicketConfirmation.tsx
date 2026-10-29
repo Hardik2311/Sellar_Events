@@ -48,6 +48,7 @@ interface PurchasedTicket {
     createdAt?: number;       // fallback when purchasedAt is missing
     status?: 'valid' | 'checked_in' | 'cancelled'; // Confirmed/Cancelled pill
     bookingGroupId?: string | null; // same-name tickets in one order share one pass
+    isComplimentary?: boolean; // special-guest invite: show "Complimentary invite" instead of the amount
 }
 
 // One QR "pass" per holder (see lib/ticketPasses).
@@ -138,6 +139,7 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
         purchasedAt: t.purchasedAt,
         createdAt: t.createdAt,
         isCancelled: t.status === 'cancelled',
+        isComplimentary: t.isComplimentary,
     });
 
     const handleDownload = async (t: TicketPass) => {
@@ -218,9 +220,8 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
             <div aria-hidden="true" className="absolute right-11 top-11 h-16 w-16 rounded-full bg-[var(--brand-teal)]" />
             {category && <p className="brand-label relative">{category}</p>}
             <p
-                className={`brand-display relative mt-1.5 line-clamp-2 break-words pr-12 ${
-                    cleanEventTitle.length > 22 ? 'text-[38px] leading-[38px]' : 'text-[52px] leading-[50px]'
-                }`}
+                className={`brand-display relative mt-1.5 line-clamp-2 break-words pr-12 ${cleanEventTitle.length > 22 ? 'text-[38px] leading-[38px]' : 'text-[52px] leading-[50px]'
+                    }`}
             >
                 {cleanEventTitle}
             </p>
@@ -410,7 +411,9 @@ const TicketConfirmation: React.FC<TicketConfirmationProps> = ({
                                             <dl className="mt-1 grid w-full grid-cols-2 border-t border-[var(--brand-line)] pt-3.5 text-left">
                                                 <div>
                                                     <dt className={LABEL}>{t.paymentMode ? `Paid via ${t.paymentMode}` : 'Amount paid'}</dt>
-                                                    <dd className="mt-1 font-bold tabular-nums">{formatAmount(t.amountPaid, '₹')}</dd>
+                                                    <dd className="mt-1 font-bold tabular-nums">
+                                                        {t.isComplimentary ? 'Complimentary invite' : formatAmount(t.amountPaid, '₹')}
+                                                    </dd>
                                                 </div>
                                                 <div>
                                                     <dt className={LABEL}>Booked on</dt>

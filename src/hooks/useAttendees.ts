@@ -53,7 +53,8 @@ export function useAttendees(companyId: string | undefined, eventId: string | un
             paymentMode: data.paymentMode ?? undefined,
             screenshotUrl: data.screenshotUrl ?? undefined,
             razorpayPaymentId: data.razorpayPaymentId ?? undefined,
-            source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
+                        source: data.source ?? (data.isWalkIn ? 'walk_in' : 'ticket'),
+            guestCategory: data.guestCategory ?? undefined,
             bookingGroupId: data.bookingGroupId ?? null,
             ticketEmail: data.ticketEmail
               ? {

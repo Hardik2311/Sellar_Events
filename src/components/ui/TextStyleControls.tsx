@@ -146,13 +146,28 @@ const updateActiveFormats = () => {
     syncChange();
   };
 
-  // Color ke liye — selected text ko <span style="color:...">  mein wrap karta hai
-  const applyColor = (color: string) => {
+    const applyColor = (color: string) => {
     editorRef.current?.focus();
     const range = restoreSelection();
     if (!range || range.collapsed) return;
 
+    // Same text pe dobara color pick hua (picker khula hai, user drag/change kar raha hai)?
+    // To naya span nest mat karo, sirf pehle wale span ka color update karo.
+    const common = range.commonAncestorContainer;
+    if (
+      common instanceof HTMLElement &&
+      common.dataset.colorSpan === 'true' &&
+      editorRef.current?.contains(common) &&
+      range.startOffset === 0 &&
+      range.endOffset === common.childNodes.length
+    ) {
+      common.style.color = color;
+      syncChange();
+      return;
+    }
+
     const wrapper = document.createElement('span');
+    wrapper.dataset.colorSpan = 'true';
     wrapper.style.color = color;
     try {
       range.surroundContents(wrapper);
@@ -161,6 +176,18 @@ const updateActiveFormats = () => {
       wrapper.appendChild(contents);
       range.insertNode(wrapper);
     }
+
+    // Wrap ke baad selection + savedRange ko naye span par re-set karo,
+    // taaki agla color change isi text par apply ho (toggleTag jaisa)
+    const sel = window.getSelection();
+    if (sel) {
+      const newRange = document.createRange();
+      newRange.selectNodeContents(wrapper);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      savedRange.current = newRange.cloneRange();
+    }
+
     syncChange();
   };
 

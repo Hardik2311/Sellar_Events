@@ -243,3 +243,88 @@ export async function createWalkInAttendee(input: WalkInAttendeeInput): Promise<
   });
   return ticketId;
 }
+
+export interface SpecialGuestInput {
+  companyId: string;
+  eventId: string;
+  eventTitle: string;
+  tierId: string;
+  name: string;
+  email: string;
+  phone: string;
+  guestCategory: string; // Singer / Chief Guest / Speaker / Sponsor / VIP / Other
+  allowOverbook?: boolean; // organizer explicitly ticked "Add anyway"
+}
+
+/**
+ * Invites ONE special guest: a free ticket (amountPaid 0) that still takes a
+ * seat. In one transaction it bumps tiers[].sold (capacity / public checkout
+ * availability stay correct) AND tiers[].guestSold (so revenue can exclude
+ * guests: (sold - guestSold) * price). Ticket ID comes from the same
+ * ticketSeq counter as walk-ins. Event credits are NOT touched.
+ */
+export async function createSpecialGuest(
+  input: SpecialGuestInput
+): Promise<{ ticketId: string; tierName: string }> {
+  const {
+    companyId, eventId, eventTitle, tierId,
+    name, email, phone, guestCategory, allowOverbook = false,
+  } = input;
+
+  const eventRef = doc(db, 'companies', companyId, 'events', eventId);
+  const attendeeRef = doc(collection(db, 'companies', companyId, 'events', eventId, 'attendees'));
+  const initials = getEventInitials(eventTitle);
+
+  let result = { ticketId: '', tierName: '' };
+
+  await runTransaction(db, async (transaction) => {
+    const eventSnap = await transaction.get(eventRef);
+    if (!eventSnap.exists()) throw new Error('Event no longer exists.');
+
+    const eventData = eventSnap.data();
+    const currentTiers = (eventData.tiers || []) as {
+      id: string; name: string; price: number; quantity: number; sold: number; guestSold?: number;
+    }[];
+
+    const tier = currentTiers.find((t) => t.id === tierId);
+    if (!tier) throw new Error('Selected ticket tier no longer exists.');
+
+    const currentSold = Number.isFinite(tier.sold) ? tier.sold : 0;
+    if (tier.quantity - currentSold <= 0 && !allowOverbook) {
+      throw new Error(`"${tier.name}" has no tickets remaining.`);
+    }
+
+    const updatedTiers = currentTiers.map((t) =>
+      t.id === tierId
+        ? { ...t, sold: currentSold + 1, guestSold: (Number.isFinite(t.guestSold) ? (t.guestSold as number) : 0) + 1 }
+        : t
+    );
+
+    const { numbers, ticketSeq } = nextTicketNumbers(eventData, 1);
+    const ticketId = formatTicketId(initials, numbers[0]);
+
+    transaction.update(eventRef, { tiers: updatedTiers, ticketSeq });
+
+    transaction.set(attendeeRef, {
+      name,
+      email,
+      phone,
+      tierName: tier.name,
+      ticketTierId: tier.id,
+      customFieldAnswers: {},
+      amountPaid: 0,
+      source: 'special_guest',
+      guestCategory,
+      ticketId,
+      bookingGroupId: null,
+      status: 'valid',
+      checkedInAt: null,
+      createdAt: serverTimestamp(),
+      purchasedAt: serverTimestamp(),
+    });
+
+    result = { ticketId, tierName: tier.name };
+  });
+
+  return result;
+}

@@ -34,6 +34,7 @@ export interface AcknowledgementTicketData {
   purchasedAt?: number; // ms epoch
   createdAt?: number;   // ms epoch — fallback when purchasedAt is missing
   isCancelled?: boolean;
+  isComplimentary?: boolean; // special-guest invite: show "Complimentary invite" instead of the amount
 }
 
 export interface AcknowledgementEventData {
@@ -606,7 +607,10 @@ export const buildAcknowledgementPdf = async (
     ];
     const booking: Fact[] = [
       { label: 'Tickets', value: tierName.includes('×') ? tierName : `${admits} × ${tierName}` },
-      { label: paymentMode ? `Paid via ${paymentMode}` : 'Amount paid', value: formatAmount(ticket.amountPaid, rupee) },
+      {
+        label: paymentMode ? `Paid via ${paymentMode}` : 'Amount paid',
+        value: ticket.isComplimentary ? 'Complimentary invite' : formatAmount(ticket.amountPaid, rupee),
+      },
       { label: 'Booked on', value: bookedOn },
       { label: 'Contact', value: contact },
     ];

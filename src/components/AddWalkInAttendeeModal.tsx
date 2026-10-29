@@ -23,6 +23,14 @@ const roundToInterval = (value: number, interval: number) => {
   return Math.round(value / interval) * interval;
 };
 
+// Event titles can be saved with rich-text markup (e.g. <span style="color:...">).
+// Strip tags so they show as plain text in this modal.
+const stripHtml = (html: string | undefined | null): string => {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
 interface WalkInAttendeeFormEntry {
   name: string;
   email: string;
@@ -189,7 +197,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
       setQrDataUrl(null);
       return;
     }
-    const payeeName = payoutAccount.accountHolderName || event?.title || 'Payment';
+    const payeeName = payoutAccount.accountHolderName || stripHtml(event?.title) || 'Payment';
     const upiString = `upi://pay?pa=${payoutAccount.upiId}&pn=${encodeURIComponent(payeeName)}&am=${amountPaid.toFixed(2)}&cu=INR`;
     let cancelled = false;
     QRCode.toDataURL(upiString, { width: 200, margin: 1, errorCorrectionLevel: 'L' })
@@ -462,7 +470,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
               </h2>
               <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                 {isUpi ? `Step ${step === 'payment' ? 2 : 1} of 2 · ` : ''}
-                {event.title}
+                {stripHtml(event.title)}
               </p>
             </div>
             <button
