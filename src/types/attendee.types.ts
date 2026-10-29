@@ -23,8 +23,10 @@ export interface Attendee {
   // verified online payment (functions/payments/fulfillOrder.js).
   razorpayPaymentId?: string;
   orderId?: string;
-  paymentMode?: 'Cash' | 'UPI' | 'Card' | 'Netbanking' | 'Other';
-  source?: 'ticket' | 'walk_in' | 'import';
+    paymentMode?: 'Cash' | 'UPI' | 'Card' | 'Netbanking' | 'Other';
+  source?: 'ticket' | 'walk_in' | 'import' | 'special_guest';
+  // Only set when source === 'special_guest' (Singer / Chief Guest / Sponsor / VIP...)
+  guestCategory?: string;
   // NEW — the private-event access code this ticket was booked with, if any
   accessCode?: string | null;
   // NEW — shared by tickets booked in one order under the same name; the

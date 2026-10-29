@@ -15,7 +15,7 @@ interface AttendeeCardProps {
   eventTitle?: string;
   eventCategory?: string;
   eventDate?: string;
-   eventTime?: string;
+  eventTime?: string;
   eventVenue?: string;
   eventBannerDataUrl?: string | null; // pre-fetched cover image for the PDF acknowledgement banner
   eventConsentText?: string; // organizer's "Important information & consent" text, appended to the PDF
@@ -107,10 +107,11 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     attendeeEmail: attendee.email,
     attendeePhone: attendee.phone,
     amountPaid: attendee.amountPaid,
-    paymentMode: displayPaymentMode,
+        paymentMode: displayPaymentMode,
     purchasedAt: attendee.purchasedAt,
     createdAt: attendee.createdAt,
     isCancelled: attendee.status === 'cancelled',
+    isComplimentary: attendee.source === 'special_guest',
   });
 
   const buildEventDataForPdf = (): AcknowledgementEventData => ({
@@ -130,12 +131,12 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     bookMoreTicketsUrl,
   });
 
-    const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async () => {
     const doc = await buildAcknowledgementPdf(buildTicketDataForPdf(), buildEventDataForPdf(), qrCanvasRef.current);
     doc.save(`${attendee.ticketId}-receipt.pdf`);
   };
 
-    const handleSharePdf = async () => {
+  const handleSharePdf = async () => {
     if (sharing) return;
     setSharing(true);
     try {
@@ -158,11 +159,18 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
 
   // A group row's status pill reflects the whole group, not just this ticket.
   const groupStatus: Attendee['status'] = groupInfo
-    ? groupInfo.arrived >= groupInfo.size ? 'checked_in' : 'valid'
+        ? groupInfo.arrived >= groupInfo.size ? 'checked_in' : 'valid'
     : attendee.status;
 
+  const isSpecialGuest = attendee.source === 'special_guest';
+
   return (
-    <div className="bg-[#F9FAFB] dark:bg-[#1E293B] rounded-sm shadow-xs border border-slate-200 dark:border-slate-800 mb-2.5 overflow-hidden transition-all duration-200">
+        <div
+      className={`rounded-sm shadow-xs border mb-2.5 overflow-hidden transition-all duration-200 ${isSpecialGuest
+        ? 'bg-yellow-50/70 dark:bg-yellow-400/5 border-yellow-300 dark:border-yellow-500/30 border-l-4 border-l-yellow-400'
+        : 'bg-[#F9FAFB] dark:bg-[#1E293B] border-slate-200 dark:border-slate-800'
+        }`}
+    >
       <div style={{ display: 'none' }}>
         <QRCodeCanvas value={attendee.ticketId} size={200} includeMargin ref={qrCanvasRef} />
       </div>
@@ -185,6 +193,14 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
                   title="Added at the venue (walk-in)"
                 >
                   WALK IN
+                </span>
+              )}
+              {attendee.source === 'special_guest' && (
+                <span
+                  className="shrink-0 rounded-sm border border-yellow-300 bg-yellow-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-yellow-700 dark:border-yellow-500/30 dark:bg-yellow-400/10 dark:text-yellow-300"
+                  title="Special guest (complimentary ticket)"
+                >
+                  {attendee.guestCategory || 'Special Guest'}
                 </span>
               )}
             </p>
@@ -263,54 +279,66 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
             </div>
           )}
 
-          {/* Payment mode + amount + QR indicator + screenshot link — merged into single row */}
-          {(displayPaymentMode || typeof attendee.amountPaid === 'number' || attendee.screenshotUrl) && (
-            <div className="flex items-center justify-between gap-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Paid via: {displayPaymentMode ?? '—'}
-                {typeof attendee.amountPaid === 'number' && (
-                  <span className="text-slate-800 dark:text-slate-100 font-extrabold">
-                    {' '}₹{attendee.amountPaid.toLocaleString('en-IN')}
-                  </span>
-                )}
+          {attendee.source === 'special_guest' && (
+            <div className="flex items-center justify-between gap-2 rounded-sm border border-yellow-200 bg-yellow-50 px-3 py-2 dark:border-yellow-500/30 dark:bg-yellow-400/10">
+              <span className="text-xs font-semibold text-yellow-800 dark:text-yellow-200">
+                Complimentary invite
               </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {attendee.razorpayPaymentId && (
-                  <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    title={`Paid online — payment ID ${attendee.razorpayPaymentId}`}
-                  >
-                    ONLINE
-                  </span>
-                )}
-                {attendee.paymentMethod === 'manual_qr' && (
-                  <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"
-                    title="Paid via UPI QR — verify screenshot at check-in"
-                  >
-                    QR
-                  </span>
-                )}
-                {displayPaymentMode && (
-                  <span
-                    className={`text-[9px] font-extrabold tracking-wide px-2 py-0.5 rounded-sm border ${PAYMENT_MODE_BADGE_STYLES[displayPaymentMode] ?? 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}
-                  >
-                    {displayPaymentMode.toUpperCase()}
-                  </span>
-                )}
-                {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setScreenshotModalOpen(true)}
-                    className="text-[10px] font-bold text-amber-700 underline underline-offset-2 hover:text-amber-800 cursor-pointer"
-                  >
-                    View screenshot
-                  </button>
-                )}
-              </div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-yellow-700 dark:text-yellow-300">
+                {attendee.guestCategory || 'Special Guest'}
+              </span>
             </div>
           )}
+
+          {/* Payment mode + amount + QR indicator + screenshot link — merged into single row */}
+          {attendee.source !== 'special_guest' &&
+            (displayPaymentMode || typeof attendee.amountPaid === 'number' || attendee.screenshotUrl) && (
+              <div className="flex items-center justify-between gap-2 rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  Paid via: {displayPaymentMode ?? '—'}
+                  {typeof attendee.amountPaid === 'number' && (
+                    <span className="text-slate-800 dark:text-slate-100 font-extrabold">
+                      {' '}₹{attendee.amountPaid.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {attendee.razorpayPaymentId && (
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      title={`Paid online — payment ID ${attendee.razorpayPaymentId}`}
+                    >
+                      ONLINE
+                    </span>
+                  )}
+                  {attendee.paymentMethod === 'manual_qr' && (
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-50 text-amber-700 border border-amber-200"
+                      title="Paid via UPI QR — verify screenshot at check-in"
+                    >
+                      QR
+                    </span>
+                  )}
+                  {displayPaymentMode && (
+                    <span
+                      className={`text-[9px] font-extrabold tracking-wide px-2 py-0.5 rounded-sm border ${PAYMENT_MODE_BADGE_STYLES[displayPaymentMode] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                    >
+                      {displayPaymentMode.toUpperCase()}
+                    </span>
+                  )}
+                  {attendee.paymentMethod === 'manual_qr' && attendee.screenshotUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setScreenshotModalOpen(true)}
+                      className="text-[10px] font-bold text-amber-700 underline underline-offset-2 hover:text-amber-800 cursor-pointer"
+                    >
+                      View screenshot
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
           <div className="flex rounded-sm overflow-hidden mt-3 gap-1.5">
             {attendee.status !== 'cancelled' && onCheckIn && (

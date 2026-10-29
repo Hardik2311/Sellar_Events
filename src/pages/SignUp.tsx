@@ -316,11 +316,11 @@ const Signup: React.FC = () => {
       // Refresh token so the client receives the new 'companyId' custom claim set by the cloud function
       await authUser.getIdToken(true);
 
-      // getIdToken(true) alone does NOT re-trigger onAuthStateChanged, so
-      // AuthContext's profile would still show blank organizationName until
-      // a manual page refresh. Force it to re-read now that the company
-      // docs exist.
       await refreshProfile();
+
+      // Fresh signup marker: permission doc abhi create ho raha hoga,
+      // PermissionRoute isse dekh ke Access Denied ki jagah smoke screen dikhayega
+      sessionStorage.setItem('justSignedUp', String(Date.now()));
 
       setSubmitSuccess(true);
       setTimeout(() => {
