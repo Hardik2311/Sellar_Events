@@ -18,6 +18,7 @@ export interface PurchasedTicketResult {
   tierName: string;
   attendeeName: string;
   accessCode?: string;
+  referralCode?: string;
   attendeeEmail?: string;
   attendeePhone?: string;
   amountPaid?: number;
@@ -33,6 +34,7 @@ export interface CreateOrderInput {
   quantities: Record<string, number>;
   attendees: { name: string; email: string; phone: string; customAnswers: Record<string, string> }[];
   accessCode?: string;
+  referralCode?: string;
 }
 
 type CreateOrderResult =

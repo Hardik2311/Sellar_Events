@@ -24,6 +24,64 @@ export interface AccessCodeEntry {
   usedCount?: number; // total tickets booked with this code so far
   usedAt?: string | null; // ISO timestamp of the successful purchase that consumed this code — once set, the code is single-use and dead for any further purchase
 }
+export type ReferralDiscountType = 'percent' | 'flat';
+
+// NEW — organizer-typed, reusable discount codes (not single-use, unlike
+// AccessCodeEntry). Usage stats are computed live from attendee docs, never
+// stored here — see useAttendees-based grouping on the event detail page and
+// in useSalesReport.ts.
+export interface ReferralCodeEntry {
+  code: string;
+  label: string;
+  discountType: ReferralDiscountType;
+  discountValue: number; // percent (0-100) or flat rupees
+  createdAt: string;
+  // Names this code had before being renamed. Sold tickets keep the code they
+  // were bought with, so stats follow these; checkout only accepts `code`.
+  previousCodes?: string[];
+}
+
+/** The code entry a sold ticket's referralCode belongs to, following renames. */
+export const findReferralCodeEntry = <T extends { code: string; previousCodes?: string[] }>(
+  entries: T[] | undefined,
+  soldCode: string
+): T | undefined => {
+  const code = soldCode.trim().toUpperCase();
+  return entries?.find((e) => e.code.trim().toUpperCase() === code || !!e.previousCodes?.includes(code));
+};
+
+const round2 = (n: number): number => Number(n.toFixed(2));
+
+// GST rule for event tickets: a ticket priced below ₹500 is exempt; ₹500
+// and above always carries GST at GST_RATE — this is the law, not an
+// organizer setting. Based on the ORIGINAL tier price, not a
+// referral-discounted one. Mirrored in functions/payments/pricing.js —
+// keep both in sync.
+export const GST_EXEMPTION_THRESHOLD = 500;
+export const GST_RATE = 18;
+
+// The one tax choice the organizer makes, per event: whether the ticket
+// price already includes GST or GST is added on top at checkout.
+export type TicketTaxType = 'inclusive' | 'exclusive';
+
+// Exclusive is the default — including for events created before taxType
+// was a per-event field. Only an explicit 'inclusive' choice is inclusive.
+export const resolveTicketTaxType = (eventTaxType?: string | null): TicketTaxType =>
+  String(eventTaxType || '').toLowerCase() === 'inclusive' ? 'inclusive' : 'exclusive';
+
+// Shared so the client (Checkout.tsx) and server (functions/payments/pricing.js)
+// apply referral discounts identically — keep both in sync.
+export const applyReferralDiscount = (
+  unitPrice: number,
+  entry: Pick<ReferralCodeEntry, 'discountType' | 'discountValue'>
+): number => {
+  const raw =
+    entry.discountType === 'percent'
+      ? unitPrice * (1 - entry.discountValue / 100)
+      : unitPrice - entry.discountValue;
+  return Math.max(0, round2(raw));
+};
+
 export interface PublicEvent {
   id: string;
   companyId: string;
@@ -60,6 +118,7 @@ export interface PublicEvent {
   goodToKnowText?: string;        // NEW
   goodToKnowStyle?: TextStyleConfig; // NEW
   paymentCollectionMode?: 'gateway' | 'manual_qr';
+  taxType?: TicketTaxType | null; // null on events created before it was per-event; priced as exclusive — see resolveTicketTaxType()
   //qrImageUrl?: string | null;
   upiId?: string;
   payeeName?: string;
@@ -74,6 +133,13 @@ export interface PublicEvent {
   // NEW — organizer-set "Mark as Sold Out" toggle, independent of actual
   // tier capacity. See isSalesClosed() below.
   manuallySoldOut?: boolean;
+  // NEW — referral codes feature. referralDiscount* are the event-level
+  // defaults used only to pre-fill a new code's form; each code stores its
+  // own resolved discountType/discountValue.
+  referralCodesEnabled?: boolean;
+  referralCodes?: ReferralCodeEntry[];
+  referralDiscountType?: ReferralDiscountType;
+  referralDiscountValue?: number;
 }
 // NEW — how long a single event credit keeps an event published for
 export const EVENT_CREDIT_VALIDITY_DAYS = 90; // ~3 months

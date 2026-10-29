@@ -83,8 +83,19 @@ exports.createRazorpayOrder = onCall(
             throw new HttpsError("failed-precondition", "GATEWAY_NOT_ENABLED");
         }
 
+        // Re-derive the referral discount from the fresh event doc — never
+        // trust a client-sent discount amount. A code that no longer exists
+        // or that the organizer disabled is silently ignored, not an error,
+        // since this is non-critical (unlike access codes gating entry).
+        const referralCodeRaw = data.referralCode ? clip(data.referralCode, 64) : null;
+        const referralEntry = referralCodeRaw && event.referralCodesEnabled ?
+            (event.referralCodes || []).find(
+                (e) => String(e.code).trim().toUpperCase() === referralCodeRaw.trim().toUpperCase()
+            ) :
+            null;
+
         const quantities = data.quantities && typeof data.quantities === "object" ? data.quantities : {};
-        const pricing = computeOrderPricing(event.tiers, quantities, settings);
+        const pricing = computeOrderPricing(event.tiers, quantities, settings, referralEntry, event.taxType);
         if (pricing.totalQty === 0) throw new HttpsError("invalid-argument", "NO_TICKETS");
 
         const maxPerOrder = typeof event.maxTicketsPerOrder === "number" ?
@@ -105,11 +116,10 @@ exports.createRazorpayOrder = onCall(
             throw new HttpsError("failed-precondition", "PAYOUT_ACCOUNT_MISSING");
         }
 
-        // The platform fee + GST on it is deducted from the ORGANIZER's payout,
-        // not charged to the buyer — the buyer pays ticket price only.
+        // Buyer pays tickets + platform fee + GST on the fee.
         const { perTicketFee, platformFee, platformFeeGst } = computePlatformFee(pricing.lineItems, feeConfig);
         const ticketsTotal = pricing.total;
-        const buyerTotal = ticketsTotal;
+        const buyerTotal = round2(ticketsTotal + platformFee + platformFeeGst);
         const amountPaise = Math.round(buyerTotal * 100);
         if (needsPayment && amountPaise < 100) {
             throw new HttpsError("invalid-argument", "AMOUNT_TOO_SMALL"); // Razorpay minimum is ₹1
@@ -118,7 +128,7 @@ exports.createRazorpayOrder = onCall(
         // TCS (sec 52) only applies when the organizer is GST-registered.
         const organizerGstin = profileSnap.exists ? String(profileSnap.data().gstinNumber || "").trim() : "";
         const deductions = needsPayment ?
-            computeDeductions(pricing.lineItems, ticketsTotal, feeConfig, !!organizerGstin, platformFee, platformFeeGst) :
+            computeDeductions(pricing.lineItems, ticketsTotal, feeConfig, !!organizerGstin) :
             { taxableValue: 0, tcs: 0, tds: 0, organizerNet: 0 };
         const creds = needsPayment ? getPlatformCredentials() : null;
 
@@ -171,6 +181,7 @@ exports.createRazorpayOrder = onCall(
                 taxTypeLabel: pricing.taxTypeLabel,
                 accessCode: codes ? accessCode : null,
                 accessCodeUsedAt: codes ? usedAtIso : null,
+                referralCode: referralEntry ? referralEntry.code : null,
                 razorpayOrderId: null,
                 createdAt: FieldValue.serverTimestamp(),
                 expiresAt: Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60 * 1000),

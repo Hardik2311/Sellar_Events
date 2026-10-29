@@ -8,12 +8,9 @@ import type { EventSummary } from '../types/event.types';
 import { createWalkInAttendees } from '../lib/ticketing';
 import { usePayoutAccount } from '../hooks/usePlatformPayments';
 import { compressImageToTargetSize } from '../lib/imageCompression';
+import { GST_EXEMPTION_THRESHOLD, GST_RATE, resolveTicketTaxType } from '../data/events';
 
 interface TaxSettings {
-  enableTax?: boolean;
-  gstScheme?: 'regular' | 'composition' | 'none';
-  taxType?: 'inclusive' | 'exclusive';
-  defaultTaxRate?: number;
   enableRounding?: boolean;
   roundingInterval?: number;
 }
@@ -167,14 +164,16 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
 
   const totalWithTax = useMemo(() => {
     if (quantity === 0) return 0;
-    const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
-    const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
-    const taxRate = taxSettings?.defaultTaxRate || 0;
+    const taxType = resolveTicketTaxType(event?.taxType);
     // 'inclusive' tax is already baked into the tier price — only
-    // 'exclusive' needs tax added on top to match the online total.
-    const total = scheme === 'regular' && taxType === 'exclusive' ? subtotal * (1 + taxRate / 100) : subtotal;
+    // 'exclusive' needs tax added on top, and only on tickets ≥ ₹500.
+    const total = ticketTiers.reduce(
+      (sum, t) =>
+        sum + (taxType === 'exclusive' && t.price >= GST_EXEMPTION_THRESHOLD ? t.price * (1 + GST_RATE / 100) : t.price),
+      0
+    );
     return taxSettings?.enableRounding ? roundToInterval(total, taxSettings.roundingInterval || 1) : total;
-  }, [subtotal, quantity, taxSettings]);
+  }, [ticketTiers, quantity, taxSettings, event?.taxType]);
 
   // Auto-fill the total whenever the tickets change — same
   // "smart default, still editable" behavior the tier picker already had.
@@ -903,7 +902,7 @@ const AddWalkInAttendeeModal: React.FC<AddWalkInAttendeeModalProps> = ({
                   {quantity > 0 && (
                     <p id={`${uid}-amount-help`} className="mt-1 text-xs tabular-nums text-slate-500 dark:text-slate-400">
                       Total for {quantity} ticket{quantity === 1 ? '' : 's'}
-                      {taxSettings?.gstScheme === 'regular' ? ', incl. GST' : ''}
+                      {ticketTiers.some((t) => t.price >= GST_EXEMPTION_THRESHOLD) ? ', incl. GST' : ''}
                       {selectedTiers.length > 1 ? '. Split across tickets by price' : ''}
                       {amountEdited ? ' (edited)' : ''}
                     </p>

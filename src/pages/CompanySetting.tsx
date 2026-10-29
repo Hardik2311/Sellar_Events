@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { db } from '../lib/firebase';
 import EventSubdomainModal from '../components/SubDomainModal';
+import { GST_EXEMPTION_THRESHOLD, GST_RATE } from '../data/events';
 
 const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean }> = ({
   checked,
@@ -31,8 +32,6 @@ const SettingToggle: React.FC<{ checked: boolean; onChange: () => void; disabled
   </button>
 );
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-
 const Settings: React.FC = () => {
   const { profile } = useAuth();
   const { isOwner } = usePermissions();
@@ -40,21 +39,14 @@ const Settings: React.FC = () => {
 
   const [showSubdomainModal, setShowSubdomainModal] = useState(false);
 
-  // GSTIN shown/edited directly on this page, linked to live business_info/profile via settings
-  const [gstinDraft, setGstinDraft] = useState(settings.gstinNumber ?? '');
-  const [gstinDraftError, setGstinDraftError] = useState<string | null>(null);
-  const [gstinDraftInitialized, setGstinDraftInitialized] = useState(false);
-
-  type DraftSettings = Pick<typeof settings, 'gstScheme' | 'taxType' | 'defaultTaxRate' | 'enableRounding' | 'roundingInterval'>;
+  // GST isn't configured here any more: 18% on tickets ≥ ₹500 is fixed by
+  // law, and inclusive/exclusive is chosen per event (see TaxTypeSelector).
+  type DraftSettings = Pick<typeof settings, 'enableRounding' | 'roundingInterval'>;
   const [draft, setDraft] = useState<DraftSettings>({
-    gstScheme: settings.gstScheme,
-    taxType: settings.taxType,
-    defaultTaxRate: settings.defaultTaxRate,
     enableRounding: settings.enableRounding,
     roundingInterval: settings.roundingInterval,
   });
   const [initialized, setInitialized] = useState(false);
-  const [taxRateInput, setTaxRateInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -62,51 +54,16 @@ const Settings: React.FC = () => {
   React.useEffect(() => {
     if (!loading && !initialized) {
       setDraft({
-        gstScheme: settings.gstScheme,
-        taxType: settings.taxType,
-        defaultTaxRate: settings.defaultTaxRate,
         enableRounding: settings.enableRounding,
         roundingInterval: settings.roundingInterval,
       });
-      setTaxRateInput(
-        settings.defaultTaxRate === 0 || settings.defaultTaxRate === undefined
-          ? ''
-          : String(settings.defaultTaxRate)
-      );
       setInitialized(true);
     }
   }, [loading, initialized, settings]);
 
-  React.useEffect(() => {
-    if (loading) return;
-    if (!gstinDraftInitialized || document.activeElement?.id !== 'settings-gstin-input') {
-      setGstinDraft(settings.gstinNumber ?? '');
-      setGstinDraftInitialized(true);
-    }
-  }, [settings.gstinNumber, loading, gstinDraftInitialized]);
-
-  const handleSchemeSelect = (value: 'none' | 'regular' | 'composition') => {
-    // No modal — user fills GSTIN in the field above, validated at Save time.
-    setDraft((prev) => ({ ...prev, gstScheme: value }));
-  };
-
   const handleSaveSettings = async () => {
     if (!profile?.companyId) {
       setSaveError('Company not found. Please try again.');
-      return;
-    }
-
-    // Validate GSTIN only if it was actually changed or is required by the chosen scheme
-    const trimmedGstin = gstinDraft.trim().toUpperCase();
-    const gstinChanged = trimmedGstin !== (profile?.gstinNumber ?? '');
-    const gstinRequired = draft.gstScheme === 'regular' || draft.gstScheme === 'composition';
-
-    if ((gstinChanged || gstinRequired) && trimmedGstin && !GSTIN_REGEX.test(trimmedGstin)) {
-      setGstinDraftError('Please enter a valid 15-character GSTIN.');
-      return;
-    }
-    if (gstinRequired && !trimmedGstin) {
-      setGstinDraftError('GSTIN is required for this GST scheme.');
       return;
     }
 
@@ -116,11 +73,6 @@ const Settings: React.FC = () => {
     try {
       const settingsRef = doc(db, 'companies', profile.companyId, 'settings', 'general');
       await setDoc(settingsRef, { ...draft }, { merge: true });
-
-      if (gstinChanged) {
-        const businessRef = doc(db, 'companies', profile.companyId, 'business_info', 'profile');
-        await setDoc(businessRef, { gstinNumber: trimmedGstin }, { merge: true });
-      }
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -138,7 +90,7 @@ const Settings: React.FC = () => {
         <BackButton title="Back" />
         <div className="absolute left-1/2 -translate-x-1/2 text-center flex flex-col items-center justify-center max-w-[70%]">
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">Company Settings</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tax and pricing rules</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Pricing rules</p>
         </div>
         <div className="w-[38px]"></div>
       </header>
@@ -147,113 +99,16 @@ const Settings: React.FC = () => {
         <div className="mx-auto max-w-3xl flex flex-col gap-3">
           <Card className="shadow-sm border-gray-200 dark:border-slate-800 bg-white dark:bg-[#1E293B]">
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Tax & Pricing</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">Pricing</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-4 py-2">
-                <div>
-                  <label htmlFor="settings-gstin-input" className="mb-1 block text-sm font-medium text-slate-800 dark:text-slate-100">
-                    GSTIN
-                  </label>
-                  <input
-                    id="settings-gstin-input"
-                    type="text"
-                    value={gstinDraft}
-                    maxLength={15}
-                    disabled={loading}
-                    onChange={(e) => {
-                      setGstinDraft(e.target.value.toUpperCase());
-                      setGstinDraftError(null);
-                    }}
-                    placeholder="15-character GSTIN"
-                    className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm uppercase text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
-                  />
-                  {gstinDraftError && (
-                    <p className="text-red-500 text-[11px] font-bold mt-1.5 mb-0">{gstinDraftError}</p>
-                  )}
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Linked with your business profile — updating it here updates Edit Profile too, and vice versa.
+                <div className="rounded-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">GST on tickets</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {GST_RATE}% GST is applied automatically to every ticket priced ₹{GST_EXEMPTION_THRESHOLD} and above; tickets below ₹{GST_EXEMPTION_THRESHOLD} are tax-free. You choose whether each event&apos;s ticket price includes GST when you create the event.
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-2">GST scheme</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { label: 'None', value: 'none' as const },
-                        { label: 'Regular GST', value: 'regular' as const },
-                        { label: 'Composition', value: 'composition' as const },
-                      ]
-                    ).map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        disabled={loading}
-                        onClick={() => handleSchemeSelect(opt.value)}
-                        className={`min-h-[42px] px-2 py-2 rounded-sm text-xs sm:text-sm font-semibold border transition-colors ${draft.gstScheme === opt.value
-                          ? 'bg-[#007A78] text-white border-[#007A78]'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                          }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {draft.gstScheme === 'regular' && (
-                  <>
-                    <div>
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-2">Tax calculation</p>
-                      <select
-                        value={draft.taxType}
-                        disabled={loading}
-                        onChange={(e) =>
-                          setDraft((prev) => ({ ...prev, taxType: e.target.value as 'inclusive' | 'exclusive' }))
-                        }
-                        className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
-                      >
-                        <option value="exclusive">Tax exclusive (ticket price excludes GST)</option>
-                        <option value="inclusive">Tax inclusive (ticket price includes GST)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-800 dark:text-slate-100">Tax rate (%)</label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={taxRateInput}
-                        disabled={loading}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          // allow empty, digits, and at most one decimal point
-                          if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
-                            setTaxRateInput(raw);
-                            const parsed = parseFloat(raw);
-                            setDraft((prev) => ({
-                              ...prev,
-                              defaultTaxRate: isNaN(parsed) ? 0 : Math.min(100, parsed),
-                            }));
-                          }
-                        }}
-                        onBlur={() => {
-                          const parsed = parseFloat(taxRateInput);
-                          if (isNaN(parsed)) {
-                            setTaxRateInput('');
-                            setDraft((prev) => ({ ...prev, defaultTaxRate: 0 }));
-                          } else {
-                            const clamped = Math.min(100, Math.max(0, parsed));
-                            setTaxRateInput(String(clamped));
-                            setDraft((prev) => ({ ...prev, defaultTaxRate: clamped }));
-                          }
-                        }}
-                        placeholder="0.00"
-                        className="w-full rounded-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-[#007A78] focus:ring-1 focus:ring-[#007A78]"
-                      />
-                    </div>
-                  </>
-                )}
 
                 <div className="flex items-center justify-between gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <div>

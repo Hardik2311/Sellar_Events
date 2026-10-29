@@ -5,7 +5,7 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { compressImageToTargetSize } from '../lib/imageCompression';
 import { stripHtmlTags } from '../lib/utils';
-import { formatTime, type AccessCodeEntry, type PublicEvent } from '../data/events';
+import { formatTime, applyReferralDiscount, type AccessCodeEntry, type ReferralCodeEntry, type PublicEvent } from '../data/events';
 import { formatRupees, formatShortDateRange } from '../lib/storefrontFormat';
 import QRCode from 'qrcode';
 import { loadTicketPdfHero } from '../lib/ticketPdf';
@@ -64,10 +64,6 @@ interface Props {
   onSuccess: () => void;
 }
 interface TaxSettings {
-  enableTax?: boolean;
-  gstScheme?: 'regular' | 'composition' | 'none';
-  taxType?: 'inclusive' | 'exclusive';
-  defaultTaxRate?: number;
   enableRounding?: boolean;
   roundingInterval?: number;
 }
@@ -96,6 +92,13 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false); // NEW
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null); // NEW
+  const [referralCodeInput, setReferralCodeInput] = useState('');
+
+  const matchedReferralEntry: ReferralCodeEntry | undefined =
+    event.referralCodesEnabled && referralCodeInput.trim()
+      ? event.referralCodes?.find((e) => e.code.trim().toUpperCase() === referralCodeInput.trim().toUpperCase())
+      : undefined;
+  const referralCodeInvalid = !!(event.referralCodesEnabled && referralCodeInput.trim() && !matchedReferralEntry);
 
   const [taxSettings, setTaxSettings] = useState<TaxSettings | null>(null);
   const customFields = event.customFields ?? [];
@@ -169,9 +172,6 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     };
     fetchTaxSettings();
   }, [event.companyId]);
-  const scheme = (taxSettings?.gstScheme || 'none').toLowerCase();
-  const taxType = (taxSettings?.taxType || 'inclusive').toLowerCase();
-  const taxRate = taxSettings?.defaultTaxRate || 0;
 
   const [pdfBannerDataUrl, setPdfBannerDataUrl] = useState<string | null>(null);
 
@@ -222,26 +222,16 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     return () => { cancelled = true; };
   }, [event.companyId, event.id, event.title, event.status]);
 
-  const { taxedBreakdown, totalTaxAmount, finalTotal, roundOffAmt } = React.useMemo(() => {
-    let tax = 0;
+  // No GST on manual UPI QR payments — the buyer pays the organizer directly,
+  // outside the platform, so they pay just the (discounted) ticket price.
+  // GST is only charged on gateway checkouts (see Checkout.tsx / pricing.js).
+  const { pricedBreakdown, finalTotal, roundOffAmt, totalReferralDiscount } = React.useMemo(() => {
+    let discount = 0;
     const items = breakdown.map((b) => {
-      let itemBase = b.subtotal;
-      let itemTax = 0;
-      let itemTotal = b.subtotal;
-
-      if (scheme === 'regular') {
-        if (taxType === 'exclusive') {
-          itemBase = b.subtotal;
-          itemTax = itemBase * (taxRate / 100);
-          itemTotal = itemBase + itemTax;
-        } else {
-          itemTotal = b.subtotal;
-          itemBase = itemTotal / (1 + taxRate / 100);
-          itemTax = itemTotal - itemBase;
-        }
-      }
-      tax += itemTax;
-      return { ...b, itemBase, itemTax, itemTotal };
+      const discountedUnit = matchedReferralEntry ? applyReferralDiscount(b.price, matchedReferralEntry) : b.price;
+      const unitDiscountAmount = Number((b.price - discountedUnit).toFixed(2));
+      discount += unitDiscountAmount * b.qty;
+      return { ...b, itemTotal: discountedUnit * b.qty, unitDiscountAmount };
     });
 
     const rawTotal = items.reduce((s, it) => s + it.itemTotal, 0);
@@ -250,12 +240,12 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       : rawTotal;
 
     return {
-      taxedBreakdown: items,
-      totalTaxAmount: tax,
+      pricedBreakdown: items,
       finalTotal: rounded,
       roundOffAmt: Number((rounded - rawTotal).toFixed(2)),
+      totalReferralDiscount: Number(discount.toFixed(2)),
     };
-  }, [breakdown, scheme, taxType, taxRate, taxSettings?.enableRounding, taxSettings?.roundingInterval]);
+  }, [breakdown, taxSettings?.enableRounding, taxSettings?.roundingInterval, matchedReferralEntry]);
 
   // QR encodes the actual amount owed — regenerated whenever the computed
   // total changes (tax settings finish loading, etc.) so the buyer's UPI app
@@ -317,7 +307,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       !consentChecked ||
       finalTotal <= 0 ||
       !attendeeDetailsComplete ||
-      !customFieldsValid
+      !customFieldsValid ||
+      referralCodeInvalid
     ) return;
     setSubmitting(true);
     setError(null);
@@ -349,6 +340,24 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
         // trust stale client state for whether sales are still open.
         if (data.manuallySoldOut) {
           throw new Error('This event is marked sold out and is no longer accepting bookings.');
+        }
+
+        // The discount baked into pricedBreakdown above was computed against
+        // the live `event` prop before this transaction — re-confirm the
+        // code still exists with the same terms against the freshly-read
+        // doc, so a code edited/removed mid-checkout can't leave a stale
+        // discount charged.
+        if (matchedReferralEntry) {
+          const freshReferralCodes = (data.referralCodes || []) as ReferralCodeEntry[];
+          const stillValid =
+            data.referralCodesEnabled &&
+            freshReferralCodes.some(
+              (e) =>
+                e.code.trim().toUpperCase() === matchedReferralEntry.code.trim().toUpperCase() &&
+                e.discountType === matchedReferralEntry.discountType &&
+                e.discountValue === matchedReferralEntry.discountValue
+            );
+          if (!stillValid) throw new Error('REFERRAL_CODE_CHANGED');
         }
 
         const currentTiers = (data.tiers || []) as { id: string; name: string; quantity: number; sold: number }[];
@@ -404,10 +413,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
 
         let index = 0;
         const created: PurchasedTicket[] = [];
-        taxedBreakdown.forEach((tier) => {
-          const unitBase = tier.qty > 0 ? tier.itemBase / tier.qty : 0;
-          const unitTax = tier.qty > 0 ? tier.itemTax / tier.qty : 0;
-          const unitTotal = unitBase + unitTax;
+        pricedBreakdown.forEach((tier) => {
+          const unitTotal = tier.qty > 0 ? tier.itemTotal / tier.qty : 0;
 
           for (let i = 0; i < tier.qty; i++) {
             const attendeeDoc = attendeeDocs[index];
@@ -423,10 +430,10 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               ticketId,
               status: 'valid',
               amountPaid: Number(unitTotal.toFixed(2)),
-              baseAmount: Number(unitBase.toFixed(2)),
-              taxAmount: Number(unitTax.toFixed(2)),
-              taxRate,
-              taxType: scheme === 'regular' ? (taxType === 'exclusive' ? 'Exclusive' : 'Inclusive') : scheme,
+              baseAmount: Number(unitTotal.toFixed(2)),
+              taxAmount: 0,
+              taxRate: 0,
+              taxType: 'none',
               customFieldAnswers: customAnswers,
               purchasedAt: serverTimestamp(),
               checkedInAt: null,
@@ -434,6 +441,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
               paymentMode: 'UPI',
               screenshotUrl,
               accessCode: accessCode || null,
+              referralCode: matchedReferralEntry?.code || null,
+              // null, not undefined — Firestore rejects undefined field values.
+              referralDiscountAmount: tier.unitDiscountAmount || null,
               bookingGroupId: bookingGroupIds[index],
               // Links every ticket in this purchase (any name) for "booked
               // together" check-in on the Attendees page.
@@ -467,7 +477,9 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           ? "This access code has already been used to book tickets and can't be used again."
           : e?.message === 'CODE_LIMIT_REACHED'
             ? 'This access code allows fewer tickets than you selected. Try a smaller quantity.'
-            : e?.message || 'Something went wrong while submitting. Please try again.'
+            : e?.message === 'REFERRAL_CODE_CHANGED'
+              ? 'That referral code just changed. Please re-enter it and try again.'
+              : e?.message || 'Something went wrong while submitting. Please try again.'
       );
     } finally {
       setSubmitting(false);
@@ -496,6 +508,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
           eventAgeLimit={event.ageLimit}
           eventHelplineNumber={event.helplineNumber}
           bookMoreTicketsUrl={bookMoreTicketsUrl}
+          autoDownload
         />
       </div>
     );
@@ -508,7 +521,8 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     !attendeeDetailsComplete ||
     !customFieldsValid ||
     submitting ||
-    isCompressing;
+    isCompressing ||
+    referralCodeInvalid;
 
   const submitCtaLabel = submitting ? 'Submitting…' : "I've paid, confirm";
   const totalTicketQty = breakdown.reduce((sum, b) => sum + b.qty, 0);
@@ -520,19 +534,43 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
     { id: 'manual-payment', label: 'Payment', complete: !!screenshot && consentChecked },
   ];
 
+  const referralCodeField = event.referralCodesEnabled && (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="manual-referral-code" className="text-[13px] font-medium text-[var(--brand-black)]">
+        Referral code (optional)
+      </label>
+      <input
+        id="manual-referral-code"
+        value={referralCodeInput}
+        onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+        placeholder="Enter code"
+        spellCheck={false}
+        className={`${brandInputClass()} ${brandFieldHeight} uppercase`}
+      />
+      {referralCodeInvalid && <p className={brandErrorClass}>Referral code not recognized.</p>}
+      {matchedReferralEntry && (
+        <p className="text-[13px] font-medium text-[var(--brand-teal)]">
+          {matchedReferralEntry.code} applied — {matchedReferralEntry.discountType === 'percent' ? `${matchedReferralEntry.discountValue}% off` : `₹${matchedReferralEntry.discountValue} off`} each ticket
+        </p>
+      )}
+    </div>
+  );
+
   const orderSummary = (
     <TicketOrderSummary
       eventTitle={stripHtmlTags(event.title)}
       dateLabel={`${formatShortDateRange(event.date, event.endDate)}, ${formatTime(event.time)}`}
       venueLabel={event.isOnline ? 'Online' : event.venue}
       lineItems={[
-        ...taxedBreakdown.map((b) => ({
+        ...pricedBreakdown.map((b) => ({
           id: b.id,
           label: `${b.qty} × ${b.name}`,
-          amountLabel: formatRupees(b.itemTotal),
+          // The listed ticket price — original, pre-discount — so the
+          // breakdown reads as a plain sum: price − discount = total.
+          amountLabel: formatRupees(b.price * b.qty),
         })),
-        ...(totalTaxAmount > 0
-          ? [{ id: 'tax', label: taxType === 'inclusive' ? 'Tax (included in price)' : 'Tax', amountLabel: formatRupees(totalTaxAmount, { zeroAsFree: false }), muted: true }]
+        ...(totalReferralDiscount > 0
+          ? [{ id: 'referral-discount', label: `Referral discount (${matchedReferralEntry?.code})`, amountLabel: `−${formatRupees(totalReferralDiscount, { zeroAsFree: false })}`, muted: true }]
           : []),
         ...(roundOffAmt !== 0
           ? [{ id: 'round-off', label: 'Round off', amountLabel: `${roundOffAmt < 0 ? '−' : ''}${formatRupees(Math.abs(roundOffAmt), { zeroAsFree: false })}`, muted: true }]
@@ -542,6 +580,7 @@ const ManualQRPaymentCard: React.FC<Props> = ({ event, breakdown, quantities, ac
       ctaLabel={submitCtaLabel}
       onCta={handleSubmit}
       ctaDisabled={submitDisabled}
+      extraContent={referralCodeField}
     />
   );
   const orderItemsLabel = breakdown.length === 1 ? `${breakdown[0].qty} × ${breakdown[0].name}` : `${totalTicketQty} tickets`;

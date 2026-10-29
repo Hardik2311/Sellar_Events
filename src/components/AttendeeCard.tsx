@@ -114,6 +114,7 @@ export const AttendeeCard: React.FC<AttendeeCardProps> = ({
     ticketId: attendee.ticketId,
     tierName: attendee.tierName,
     admits: groupInfo?.size,
+    ticketIds: groupInfo?.ticketIds,
     attendeeName: attendee.name,
     attendeeEmail: attendee.email,
     attendeePhone: attendee.phone,

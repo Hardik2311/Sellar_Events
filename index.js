@@ -118,7 +118,7 @@ const EVENT_FIELDS = [
   'status', 'featured', 'isPrivate', 'creditExpiresAt', 'everPublished', 'registrationMode',
   'rsvpLink', 'rsvpButtonLabel', 'customFields', 'titleStyle', 'descriptionStyle', 'consentText',
   'consentStyle', 'goodToKnowText', 'goodToKnowStyle', 'paymentCollectionMode', 'upiId',
-  'payeeName', 'maxTicketsPerOrder', 'arriveByTime', 'ageLimit', 'helplineNumber',
+  'payeeName', 'maxTicketsPerOrder', 'arriveByTime', 'ageLimit', 'helplineNumber', 'taxType',
 ];
 const TIER_FIELDS = ['id', 'name', 'price', 'quantity', 'sold', 'dummyRemaining', 'tierEndDate', 'tierEndTime'];
 // A private event shows only its access-code gate until the visitor's code is

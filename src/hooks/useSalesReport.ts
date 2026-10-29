@@ -4,6 +4,7 @@ import { useAttendees } from './useAttendees';
 import { fetchEventDashboardData } from '../lib/fetchEventDashboardData';
 import { CONFIRMED_TICKET_STATUSES, type Attendee } from '../types/attendee.types';
 import type { EventSummary } from '../types/event.types';
+import { findReferralCodeEntry } from '../data/events';
 
 const formatDateForInput = (d: Date) => d.toISOString().split('T')[0];
 
@@ -96,6 +97,25 @@ export function useSalesReport(companyId: string | undefined, initialEventId?: s
     return { filtered: list, summary: { total, ticketsSold: list.length } };
   }, [attendees, appliedFilters, searchQuery, sortConfig]);
 
+  // Grouped from the same filtered/confirmed attendees — never a stored
+  // counter, so refunds/cancellations drop out automatically.
+  const referralBreakdown = useMemo(() => {
+    const byCode = new Map<string, { code: string; label: string; ticketsSold: number; revenue: number; totalDiscount: number }>();
+    filtered.forEach((a) => {
+      const soldCode = a.referralCode?.trim().toUpperCase();
+      if (!soldCode) return;
+      // Sales under a renamed code's old name count towards its current name.
+      const labelMatch = findReferralCodeEntry(selectedEvent?.referralCodes, soldCode);
+      const code = labelMatch?.code ?? soldCode;
+      const entry = byCode.get(code) ?? { code, label: labelMatch?.label || code, ticketsSold: 0, revenue: 0, totalDiscount: 0 };
+      entry.ticketsSold += 1;
+      entry.revenue += a.amountPaid || 0;
+      entry.totalDiscount += a.referralDiscountAmount || 0;
+      byCode.set(code, entry);
+    });
+    return Array.from(byCode.values()).sort((a, b) => b.ticketsSold - a.ticketsSold);
+  }, [filtered, selectedEvent]);
+
   return {
     events, eventsLoading, eventSearch, setEventSearch,
     selectedEventId, setSelectedEventId, selectedEvent,
@@ -104,5 +124,6 @@ export function useSalesReport(companyId: string | undefined, initialEventId?: s
     searchQuery, setSearchQuery,
     sortConfig, handleSort,
     filtered, summary,
+    referralBreakdown,
   };
 }

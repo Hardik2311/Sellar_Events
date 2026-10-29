@@ -30,6 +30,8 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   accessCodes: d.accessCodes ?? [],
   creditExpiresAt: d.creditExpiresAt ?? null, // NEW
   manuallySoldOut: d.manuallySoldOut || false, // NEW
+  referralCodesEnabled: d.referralCodesEnabled || false, // NEW
+  referralCodes: d.referralCodes ?? [], // NEW
   everPublished: d.everPublished || false,
   tiers: (d.tiers || []).map((t: any) => ({
     id: t.id,
@@ -55,6 +57,7 @@ const mapDocToPublicEvent = (id: string, d: any, organizerName: string, companyI
   // See useOrganizerEvents.ts — missing/legacy field must default to manual_qr,
   // not 'gateway' (the unwired mock payment path).
   paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
+  taxType: d.taxType ?? null,
   //qrImageUrl: d.qrImageUrl ?? null,
   upiId: d.upiId || '',
   payeeName: d.payeeName || '',

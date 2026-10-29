@@ -5,6 +5,7 @@ import BackButton from '../components/ui/BackButton';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import FormField from '../components/ui/FormField';
 import PaymentModeSelector from '../components/PaymentModeSelector';
+import TaxTypeSelector from '../components/TaxTypeSelector';
 import { usePlatformFeeConfig } from '../hooks/usePlatformPayments';
 import { describeFee } from '../lib/platformFee';
 import { useEventCredits } from '../hooks/useEventCredits';
@@ -75,11 +76,15 @@ const INITIAL_STATE: EventFormState = {
   //qrImage: null,
   upiId: '',
   payeeName: '',
+  taxType: 'exclusive', // GST added on top by default; organizer can switch to inclusive
   isPrivate: false,
   maxTicketsPerOrder: null,
   arriveByTime: '',
   ageLimit: '',
   helplineNumber: '',
+  referralCodesEnabled: false,
+  referralDiscountType: 'percent',
+  referralDiscountValue: 10,
 };
 const stripHtml = (html: string) =>
   html
@@ -213,6 +218,8 @@ const CreateEvent: React.FC = () => {
     form.paymentCollectionMode !== 'gateway' ||
     (isGatewayEnabled && isPayoutReady);
 
+  const isTaxTypeMissing = form.registrationMode === 'tickets' && !form.taxType;
+
   // Ordered top-to-bottom to match the form's visual layout, so "scroll to
   // the first problem" lands on whichever one the user would hit first.
   const publishChecks: { field: string; valid: boolean; message: string }[] = [
@@ -227,6 +234,7 @@ const CreateEvent: React.FC = () => {
     { field: 'rsvp-link', valid: form.registrationMode === 'tickets' || isValidUrl(form.rsvpLink), message: 'Enter a valid RSVP link before publishing.' },
     { field: 'upi-id', valid: isManualQRReady, message: 'Enter a valid UPI ID before publishing.' },
     { field: 'payment-mode', valid: isGatewayReady, message: isGatewayEnabled ? 'Add your payout bank account in Settings → Event before publishing with the payment gateway.' : "Online payments aren't available yet. Switch to UPI QR (manual)." },
+    { field: 'tax-type', valid: !isTaxTypeMissing, message: 'Choose whether your ticket price includes GST before publishing.' },
   ];
 
   const isPublishable = publishChecks.every((c) => c.valid);
@@ -323,6 +331,9 @@ const CreateEvent: React.FC = () => {
         venue: form.isOnline ? null : form.venue,
         isOnline: form.isOnline,
         isPrivate: form.isPrivate,
+        referralCodesEnabled: form.referralCodesEnabled,
+        referralDiscountType: form.referralDiscountType,
+        referralDiscountValue: form.referralDiscountValue,
         maxTicketsPerOrder: form.maxTicketsPerOrder && form.maxTicketsPerOrder > 0 ? form.maxTicketsPerOrder : null,
         arriveByTime: form.arriveByTime || null,
         ageLimit: form.ageLimit.trim() || null,
@@ -346,6 +357,7 @@ const CreateEvent: React.FC = () => {
         goodToKnowText: form.goodToKnowText.trim() || null,
         goodToKnowStyle: form.goodToKnowText.trim() ? { ...DEFAULT_TEXT_STYLE, fontSize: form.goodToKnowFontSize } : null,
         paymentCollectionMode: form.registrationMode === 'tickets' ? form.paymentCollectionMode : null,
+        taxType: form.registrationMode === 'tickets' ? form.taxType : null,
         upiId: isManualQR ? form.upiId.trim() : null,
         payeeName: isManualQR ? form.payeeName.trim() : null,
         status,
@@ -784,6 +796,62 @@ const CreateEvent: React.FC = () => {
                     </div>
                   </FormField>
 
+                  {/* NEW — referral codes toggle: ON lets the organizer create discount codes to attribute sales to promoters */}
+                  <FormField label="Referral codes" htmlFor="referral-codes-enabled">
+                    <div className="rounded-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                      <div className="flex items-center justify-between p-3">
+                        <div className="pr-3">
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Enable referral codes</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">
+                            Let promoters sell with a discount code you create.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={form.referralCodesEnabled}
+                          onClick={() => update('referralCodesEnabled', !form.referralCodesEnabled)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.referralCodesEnabled ? 'bg-[#007A78] dark:bg-[#2DD4BF]' : 'bg-gray-300 dark:bg-slate-600'
+                            }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.referralCodesEnabled ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                          />
+                        </button>
+                      </div>
+                      {form.referralCodesEnabled && (
+                        <div className="flex items-center gap-2 border-t border-gray-200 dark:border-slate-700 p-3">
+                          <div className="flex overflow-hidden rounded-sm border border-gray-300 dark:border-slate-600">
+                            <button
+                              type="button"
+                              onClick={() => update('referralDiscountType', 'percent')}
+                              className={`px-3 py-1.5 text-xs font-medium ${form.referralDiscountType === 'percent' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                            >
+                              % off
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => update('referralDiscountType', 'flat')}
+                              className={`px-3 py-1.5 text-xs font-medium ${form.referralDiscountType === 'flat' ? 'bg-[#007A78] text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                            >
+                              ₹ off
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            max={form.referralDiscountType === 'percent' ? 100 : undefined}
+                            value={form.referralDiscountValue}
+                            onChange={(e) => update('referralDiscountValue', Number(e.target.value))}
+                            className="w-24 rounded-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-200"
+                          />
+                          <span className="text-xs text-gray-500 dark:text-slate-500">default for new codes</span>
+                        </div>
+                      )}
+                    </div>
+                  </FormField>
+
                   <FormField label="Max tickets per order" htmlFor="max-tickets-per-order">
                     <FloatingLabelInput
                       id="max-tickets-per-order"
@@ -904,6 +972,15 @@ const CreateEvent: React.FC = () => {
                           </p>
                         </div>
                       )}
+
+                      <div data-field-anchor="tax-type" tabIndex={-1}>
+                        <TaxTypeSelector
+                          id="tax-type"
+                          value={form.taxType}
+                          onChange={(taxType) => update('taxType', taxType)}
+                          showError={isTaxTypeMissing && !!saveError}
+                        />
+                      </div>
 
                       <TicketTierEditor
                         tiers={form.tiers}

@@ -300,6 +300,7 @@ const SuperAdminSendTickets: React.FC = () => {
         ticketId: p.ticketId,
         tierName: p.tierName,
         admits: p.admits,
+        ticketIds: p.memberIds,
         attendeeName: p.name,
         attendeeEmail: p.email,
         attendeePhone: p.phone,

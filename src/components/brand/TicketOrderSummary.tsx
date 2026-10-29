@@ -26,6 +26,8 @@ interface TicketOrderSummaryProps {
   onCta?: () => void;
   ctaDisabled?: boolean;
   className?: string;
+  /** Arbitrary content (e.g. a referral code field) rendered between the line items and the total row. */
+  extraContent?: React.ReactNode;
 }
 
 // The ticket-stub order summary on the checkout / manual-QR payment screens:
@@ -80,6 +82,7 @@ const TicketOrderSummary: React.FC<TicketOrderSummaryProps> = ({
   onCta,
   ctaDisabled,
   className = '',
+  extraContent,
 }) => (
   <div className={className}>
     <div className="overflow-hidden rounded-xl border border-[var(--brand-line)] bg-[var(--brand-surface)]">
@@ -110,6 +113,8 @@ const TicketOrderSummary: React.FC<TicketOrderSummaryProps> = ({
           </li>
         ))}
       </ul>
+
+      {extraContent && <div className="border-t border-[var(--brand-line)] px-5 py-4">{extraContent}</div>}
 
       <div className="flex items-baseline justify-between gap-4 bg-[var(--brand-discover-bg)] px-5 py-4">
         <span className="text-[15px] font-semibold text-[var(--brand-black)]">{totalTitle}</span>

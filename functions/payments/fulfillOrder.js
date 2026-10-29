@@ -193,13 +193,15 @@ const fulfillOrder = async (orderRef, payment) => {
                 paymentMode,
                 paymentMethod: "gateway",
                 accessCode: order.accessCode || null,
+                referralCode: order.referralCode || null,
+                // null, not undefined — Firestore rejects undefined field values.
+                referralDiscountAmount: item.unitDiscount || null,
                 bookingGroupId: groups[i],
                 orderId: orderRef.id,
                 razorpayOrderId: order.razorpayOrderId || null,
                 razorpayPaymentId: payment ? payment.id : null,
-                // Platform fee for this ticket, deducted from the organizer's
-                // payout (not charged to the buyer — amountPaid above is the
-                // ticket amount only).
+                // Buyer-paid platform fee for this ticket — NOT organizer revenue
+                // (amountPaid above stays the ticket amount only).
                 platformFee: item.unitPlatformFee || 0,
                 platformFeeGst: item.unitPlatformFeeGst || 0,
             });
@@ -208,6 +210,7 @@ const fulfillOrder = async (orderRef, payment) => {
                 tierName: item.tierName,
                 attendeeName: person.name,
                 accessCode: order.accessCode || undefined,
+                referralCode: order.referralCode || undefined,
                 attendeeEmail: person.email,
                 attendeePhone: person.phone,
                 amountPaid: item.unitTotal,

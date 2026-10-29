@@ -231,7 +231,7 @@ const SuperAdminPayments: React.FC = () => {
   // functions/payments/pricing.js).
   const preview = (() => {
     const price = parseNum(previewPrice) ?? 0;
-    const { platformFee, platformFeeGst } = computePlatformFee([{ unitTotal: price, qty: 1 }], effective);
+    const { platformFee, platformFeeGst } = computePlatformFee([{ unitBase: price, qty: 1 }], effective);
     const buyerPays = price;
     const gatewayCost = round2(buyerPays * GATEWAY_COST_PERCENT / 100 * 1.18);
     const tcs = previewHasGstin ? round2(price * effective.tcsPercent / 100) : 0;

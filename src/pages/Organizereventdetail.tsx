@@ -74,6 +74,7 @@ const useEvent = (companyId?: string, id?: string) => {
           // NEW
           registrationMode: d.registrationMode || 'tickets',
           paymentCollectionMode: d.paymentCollectionMode || 'manual_qr',
+          taxType: d.taxType ?? null,
           upiId: d.upiId || '',
           payeeName: d.payeeName || '',
           rsvpLink: d.rsvpLink || '',
@@ -89,6 +90,17 @@ const useEvent = (companyId?: string, id?: string) => {
           ageLimit: d.ageLimit ?? undefined,
           helplineNumber: d.helplineNumber ?? undefined,
           maxTicketsPerOrder: d.maxTicketsPerOrder ?? undefined,
+          // Previously missing from this local mapper (vs. useOrganizerEvents.ts's) —
+          // backfilled since the Referral Codes section below needs the first four.
+          accessCodes: d.accessCodes ?? [],
+          manuallySoldOut: d.manuallySoldOut || false,
+          creditExpiresAt: d.creditExpiresAt ?? null,
+          everPublished: d.everPublished || false,
+          ticketSeq: d.ticketSeq ?? undefined,
+          referralCodesEnabled: d.referralCodesEnabled || false,
+          referralCodes: d.referralCodes ?? [],
+          referralDiscountType: d.referralDiscountType || 'percent',
+          referralDiscountValue: typeof d.referralDiscountValue === 'number' ? d.referralDiscountValue : 10,
         });
       } else {
         setEvent(undefined);
@@ -226,6 +238,9 @@ const OrganizerEventDetail: React.FC = () => {
         coverImageMobile: coverImageMobileUrl,
         pastEventsGallery,
         isPrivate: updated.isPrivate,
+        referralCodesEnabled: updated.referralCodesEnabled,
+        referralDiscountType: updated.referralDiscountType,
+        referralDiscountValue: updated.referralDiscountValue,
         maxTicketsPerOrder:
           typeof updated.maxTicketsPerOrder === 'number' && updated.maxTicketsPerOrder > 0
             ? updated.maxTicketsPerOrder
@@ -249,6 +264,7 @@ const OrganizerEventDetail: React.FC = () => {
           ? { ...DEFAULT_TEXT_STYLE, ...event.goodToKnowStyle, fontSize: updated.goodToKnowFontSize }
           : null,
         paymentCollectionMode: updated.registrationMode === 'tickets' ? updated.paymentCollectionMode : null,
+        taxType: updated.registrationMode === 'tickets' ? updated.taxType : null,
         upiId: isManualQR ? updated.upiId.trim() : null,
         payeeName: isManualQR ? updated.payeeName.trim() : null,
       });
@@ -547,6 +563,7 @@ const OrganizerEventDetail: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
         </div>
       </main >
       {isEditOpen && can(Permission.EDIT_EVENT) && (

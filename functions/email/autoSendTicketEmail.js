@@ -98,7 +98,7 @@ const sendToRecipient = async (to, tickets, event) => {
         const p = passes[i];
         attachments.push({
             filename: `${p.ticketId}-ticket.pdf`.replace(/[^\w.\- ]/g, "_"),
-            content: buildTicketPdf(p, evData),
+            content: buildTicketPdf({ ...p, ticketIds: p.members.map((m) => m.ticketId) }, evData),
             contentType: "application/pdf",
         });
         const cid = `qr-${i}@outsold`;

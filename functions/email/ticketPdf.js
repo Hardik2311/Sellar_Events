@@ -399,8 +399,9 @@ const toPdfText = (value, allowRupee) => {
 
 /**
  * Builds one pass's ticket PDF (same layout as the in-app download).
- * @param {Object} ticket ticketId, tierName, admits, attendeeName, attendeeEmail,
- *   attendeePhone, amountPaid, paymentMode, purchasedAt (ms)
+ * @param {Object} ticket ticketId, tierName, admits, ticketIds (group pass: every
+ *   ticket number it covers), attendeeName, attendeeEmail, attendeePhone,
+ *   amountPaid, paymentMode, purchasedAt (ms)
  * @param {Object} event eventTitle, eventCategory, eventDate, eventTime, eventVenue,
  *   eventConsentText, eventGoodToKnowText, eventIsOnline, eventArriveBy,
  *   eventAgeLimit, eventHelplineNumber
@@ -427,6 +428,7 @@ const buildTicketPdf = (ticket, event) => {
         startTime ? { label: "Starts", value: startTime } : null;
     const admits = Math.max(1, ticket.admits || 1);
     const ticketId = txt(ticket.ticketId);
+    const ticketIds = ticket.ticketIds && ticket.ticketIds.length ? ticket.ticketIds.map(txt).filter(Boolean) : [ticketId];
     const holder = txt(ticket.attendeeName) || "Guest";
     const tierName = txt(ticket.tierName) || "General";
     const email = txt(ticket.attendeeEmail);
@@ -539,7 +541,8 @@ const buildTicketPdf = (ticket, event) => {
         const factsH = factRows.reduce((s, h) => s + h, 0) + 16 * (factRows.length - 1);
         const midH = 22 + 30 + 16 + factsH + 22;
 
-        const idLines = pen.font(PdfFont.Mono, 11).wrap(ticketId, CUT_QR_COL_W - 40, 2, 0.88);
+        // Every ticket number on the pass, not just the lead's that the QR encodes.
+        const idLines = pen.font(PdfFont.Mono, 11).wrap(ticketIds.join(", "), CUT_QR_COL_W - 40, 5, 0.88);
         const qrColH = 18 + QR_SIZE + 8 + idLines.length * 14 + 18;
 
         const contentH = Math.max(midH, qrColH);
@@ -621,6 +624,7 @@ const buildTicketPdf = (ticket, event) => {
             { label: paymentMode ? `Paid via ${paymentMode}` : "Amount paid", value: formatAmount(ticket.amountPaid, rupee) },
             { label: "Booked on", value: bookedOn },
             { label: "Contact", value: contact },
+            ...(ticketIds.length > 1 ? [{ label: "Ticket numbers", value: ticketIds.join(", "), wide: true }] : []),
         ];
         const gettingThere = [
             { label: "Venue", value: venue, wide: !ageLimit },

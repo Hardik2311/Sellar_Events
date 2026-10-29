@@ -26,6 +26,7 @@ export interface AcknowledgementTicketData {
   ticketId: string;
   tierName: string;
   admits?: number;      // group pass: one QR admits this many people
+  ticketIds?: string[]; // group pass: every ticket number it covers (QR encodes ticketId, the lead's)
   attendeeName: string;
   attendeeEmail?: string;
   attendeePhone?: string;
@@ -384,6 +385,7 @@ export const buildAcknowledgementPdf = async (
   const admits = Math.max(1, ticket.admits ?? 1);
   const isCancelled = !!ticket.isCancelled;
   const ticketId = txt(ticket.ticketId);
+  const ticketIds = ticket.ticketIds?.length ? ticket.ticketIds.map(txt).filter(Boolean) : [ticketId];
   const holder = txt(ticket.attendeeName) || 'Guest';
   const tierName = txt(ticket.tierName) || 'General';
   const email = txt(ticket.attendeeEmail);
@@ -508,7 +510,8 @@ export const buildAcknowledgementPdf = async (
     const factsH = factRows.reduce((s, h) => s + h, 0) + 16 * (factRows.length - 1);
     const midH = 22 + 30 + 16 + factsH + 22;
 
-    const idLines = pen.font(PdfFont.Mono, 11).wrap(ticketId, CUT_QR_COL_W - 40, 2, 0.88);
+    // Every ticket number on the pass, not just the lead's that the QR encodes.
+    const idLines = pen.font(PdfFont.Mono, 11).wrap(ticketIds.join(', '), CUT_QR_COL_W - 40, 5, 0.88);
     const qrColH = 18 + QR_SIZE + 8 + idLines.length * 14 + 18;
 
     const contentH = Math.max(midH, qrColH);
@@ -609,6 +612,7 @@ export const buildAcknowledgementPdf = async (
       { label: paymentMode ? `Paid via ${paymentMode}` : 'Amount paid', value: formatAmount(ticket.amountPaid, rupee) },
       { label: 'Booked on', value: bookedOn },
       { label: 'Contact', value: contact },
+      ...(ticketIds.length > 1 ? [{ label: 'Ticket numbers', value: ticketIds.join(', '), wide: true }] : []),
     ];
     const gettingThere: Fact[] = [
       { label: 'Venue', value: venue, wide: !ageLimit },
